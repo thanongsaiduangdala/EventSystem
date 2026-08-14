@@ -41,6 +41,9 @@ class EventQuestionFormState extends State<EventQuestionForm> {
 
   List<EventQuestionModel> _eventQuestions = [];
   bool _loadingEventQuestions = false;
+  final _eventQuestionSearchController = TextEditingController();
+  List<EventQuestionModel> _filteredEventQuestions = [];
+  int? _filterEventId; // null = "All Events"
 
   bool get _optionsRequired =>
       _selectedQuestionTypeId != null &&
@@ -62,6 +65,7 @@ class EventQuestionFormState extends State<EventQuestionForm> {
     for (final c in _optionControllers) {
       c.dispose();
     }
+    _eventQuestionSearchController.dispose();
     super.dispose();
   }
 
@@ -118,9 +122,19 @@ class EventQuestionFormState extends State<EventQuestionForm> {
   Future<void> _loadEventQuestions() async {
     setState(() => _loadingEventQuestions = true);
     try {
-      final data = await EventQuestionApiService.getAllEventQuestions();
+      final data = _filterEventId == null
+          ? await EventQuestionApiService.getAllEventQuestions()
+          : await EventQuestionApiService.getEventQuestionsByEvent(
+              _filterEventId!,
+            );
       if (!mounted) return;
-      setState(() => _eventQuestions = data);
+      setState(() {
+        _eventQuestions = data;
+        _filteredEventQuestions = data;
+      });
+      if (_eventQuestionSearchController.text.isNotEmpty) {
+        _filterEventQuestions(_eventQuestionSearchController.text);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -128,6 +142,22 @@ class EventQuestionFormState extends State<EventQuestionForm> {
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) setState(() => _loadingEventQuestions = false);
+    }
+  }
+
+  Future<void> _onEventFilterChanged(int? eventId) async {
+    setState(() => _filterEventId = eventId);
+    _eventQuestionSearchController.clear();
+    await _loadEventQuestions();
+  }
+
+  Future<void> _openEventFilterSearch() async {
+    final result = await showDialog<EventModel>(
+      context: context,
+      builder: (context) => EventSearchDialog(events: _events),
+    );
+    if (result != null) {
+      await _onEventFilterChanged(result.id);
     }
   }
 
@@ -141,6 +171,17 @@ class EventQuestionFormState extends State<EventQuestionForm> {
   String _questionTypeNameFor(int typeId) {
     final match = _questionTypes.where((t) => t.id == typeId);
     return match.isNotEmpty ? match.first.name : 'Type #$typeId';
+  }
+
+  void _filterEventQuestions(String query) {
+    final q = query.trim().toLowerCase();
+    setState(() {
+      _filteredEventQuestions = _eventQuestions.where((question) {
+        return question.id.toString().contains(q) ||
+            question.question.toLowerCase().contains(q) ||
+            _eventNameFor(question.eventId).toLowerCase().contains(q);
+      }).toList();
+    });
   }
 
   void _addOptionField([String text = '']) {
@@ -609,19 +650,30 @@ class EventQuestionFormState extends State<EventQuestionForm> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Row(
             children: [
-              const Expanded(
-                child: Text(
-                  'Event Questions',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+              Expanded(
+                child: InkWell(
+                  onTap: _openEventFilterSearch,
+                  child: InputDecorator(
+                    decoration: _decoration('Filter by Event'),
+                    child: Text(
+                      _filterEventId == null
+                          ? 'All Events -- tap to filter'
+                          : _eventNameFor(_filterEventId!),
+                      style: const TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
               ),
+              if (_filterEventId != null)
+                IconButton(
+                  icon: const Icon(Icons.clear, color: Colors.white70),
+                  tooltip: 'Clear event filter',
+                  onPressed: () => _onEventFilterChanged(null),
+                ),
+              const SizedBox(width: 8),
               IconButton(
                 icon: const Icon(Icons.refresh, color: Colors.white70),
                 onPressed: _loadEventQuestions,
@@ -633,10 +685,29 @@ class EventQuestionFormState extends State<EventQuestionForm> {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: TextField(
+            controller: _eventQuestionSearchController,
+            onChanged: _filterEventQuestions,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Search by ID or question',
+              hintStyle: const TextStyle(color: Colors.white54),
+              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.white24),
+              ),
+              focusedBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.white),
+              ),
+            ),
+          ),
+        ),
         Expanded(
           child: _loadingEventQuestions
               ? const Center(child: CircularProgressIndicator())
-              : _eventQuestions.isEmpty
+              : _filteredEventQuestions.isEmpty
               ? const Center(
                   child: Text(
                     'No event questions found',
@@ -644,9 +715,9 @@ class EventQuestionFormState extends State<EventQuestionForm> {
                   ),
                 )
               : ListView.builder(
-                  itemCount: _eventQuestions.length,
+                  itemCount: _filteredEventQuestions.length,
                   itemBuilder: (context, index) {
-                    final q = _eventQuestions[index];
+                    final q = _filteredEventQuestions[index];
                     return ListTile(
                       title: Text(
                         q.question,

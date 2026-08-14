@@ -81,7 +81,7 @@ class EventQuestionApiService {
 
   // ---------------- eventquestioninfo ----------------
 
-  static Future<List<EventQuestionModel>> getAllEventQuestions() async {
+static Future<List<EventQuestionModel>> getAllEventQuestions() async {
     final url = Uri.parse('$baseUrl/eventquestion/');
     final response = await http.get(url, headers: _authHeaders());
 
@@ -93,6 +93,28 @@ class EventQuestionApiService {
           .toList();
     } else {
       throw _handleError(response, 'Failed to load event questions');
+    }
+  }
+
+  /// Filters by event via GET /eventquestion/event/{event_id}.
+  /// Returns an empty list (not an error) when the backend responds 404
+  /// "no event questions for this event" -- that's a valid, non-error state.
+  static Future<List<EventQuestionModel>> getEventQuestionsByEvent(
+    int eventId,
+  ) async {
+    final url = Uri.parse('$baseUrl/eventquestion/event/$eventId');
+    final response = await http.get(url, headers: _authHeaders());
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final List<dynamic> rows = data['events'] as List<dynamic>;
+      return rows
+          .map((e) => EventQuestionModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } else if (response.statusCode == 404) {
+      return [];
+    } else {
+      throw _handleError(response, 'Failed to load event questions for event');
     }
   }
 
