@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:latlong2/latlong.dart';
-import '../map/location_picker_page.dart';
 import '../services/event_api_service.dart';
-import './SearchDialog/organizer_search_dialog.dart';
 
 class EventInfoForm extends StatefulWidget {
   const EventInfoForm({super.key});
@@ -17,29 +14,33 @@ class EventInfoFormState extends State<EventInfoForm> {
   final _nameController = TextEditingController();
   final _addressController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _latitudeController = TextEditingController();
+  final _longitudeController = TextEditingController();
 
   DateTime? _startDateTime;
   DateTime? _endDateTime;
-  LatLng? _selectedLocation;
 
   List<EventOrganizer> _organizers = [];
-  int? _selectedOrganizerId;
   bool _loadingOrganizers = false;
+  int? _selectedOrganizerId;
+
+  List<EventModel> _events = [];
+  bool _loadingEvents = false;
 
   bool _isSubmitting = false;
 
   bool _showingTable = false;
   int? _editingEventId;
 
-  List<EventModel> _events = [];
-  bool _loadingEvents = false;
   final _eventSearchController = TextEditingController();
   List<EventModel> _filteredEvents = [];
+  int? _filterOrganizerId; // null = "All Organizers"
 
   @override
   void initState() {
     super.initState();
     _loadOrganizers();
+    _loadEvents();
   }
 
   @override
@@ -47,36 +48,85 @@ class EventInfoFormState extends State<EventInfoForm> {
     _nameController.dispose();
     _addressController.dispose();
     _descriptionController.dispose();
+    _latitudeController.dispose();
+    _longitudeController.dispose();
     _eventSearchController.dispose();
     super.dispose();
   }
+
+  // ---------------- loading ----------------
+
+  Future<void> _loadOrganizers() async {
+    setState(() => _loadingOrganizers = true);
+    try {
+      final organizers = await EventApiService.getAllOrganizers();
+      if (!mounted) return;
+      setState(() {
+        _organizers = organizers;
+        if (_selectedOrganizerId != null &&
+            !_organizers.any((o) => o.id == _selectedOrganizerId)) {
+          _selectedOrganizerId = null;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load organizers: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _loadingOrganizers = false);
+    }
+  }
+
+  /// Called by the dashboard's refresh button (see MainPageDashboard._appbar).
+  Future<void> reloadOrganizers() => _loadOrganizers();
 
   Future<void> _loadEvents() async {
     setState(() => _loadingEvents = true);
     try {
       final events = await EventApiService.getAllEvents();
       if (!mounted) return;
-      setState(() {
-        _events = events;
-        _filteredEvents = events;
-      });
+      setState(() => _events = events);
+      _applyFilters();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ).showSnackBar(SnackBar(content: Text('Failed to load events: $e')));
     } finally {
       if (mounted) setState(() => _loadingEvents = false);
     }
   }
 
-  void _filterEvents(String query) {
-    final q = query.trim().toLowerCase();
+  Future<void> reloadEvents() => _loadEvents();
+
+  // ---------------- helpers ----------------
+
+  String _organizerNameFor(int organizerId) {
+    final match = _organizers.where((o) => o.id == organizerId);
+    return match.isNotEmpty ? match.first.name : 'Organizer #$organizerId';
+  }
+
+  void _applyFilters() {
+    final q = _eventSearchController.text.trim().toLowerCase();
     setState(() {
-      _filteredEvents = _events.where((e) {
-        return e.name.toLowerCase().contains(q) || e.id.toString().contains(q);
+      _filteredEvents = _events.where((event) {
+        final matchesOrganizer = _filterOrganizerId == null ||
+            event.organizerId == _filterOrganizerId;
+        final matchesQuery = q.isEmpty ||
+            event.id.toString().contains(q) ||
+            event.name.toLowerCase().contains(q) ||
+            event.address.toLowerCase().contains(q);
+        return matchesOrganizer && matchesQuery;
       }).toList();
     });
+  }
+
+  void _filterEvents(String query) => _applyFilters();
+
+  Future<void> _onOrganizerFilterChanged(int? organizerId) async {
+    setState(() => _filterOrganizerId = organizerId);
+    _applyFilters();
   }
 
   void _openTable() {
@@ -84,16 +134,84 @@ class EventInfoFormState extends State<EventInfoForm> {
     _loadEvents();
   }
 
+  String _two(int n) => n.toString().padLeft(2, '0');
+
+  String _formatForApi(DateTime dt) =>
+      '${dt.year}-${_two(dt.month)}-${_two(dt.day)} ${_two(dt.hour)}:${_two(dt.minute)}:00';
+
+  String _formatForDisplay(DateTime? dt) {
+    if (dt == null) return 'Tap to select';
+    return '${dt.year}-${_two(dt.month)}-${_two(dt.day)}  ${_two(dt.hour)}:${_two(dt.minute)}';
+  }
+
+  Future<DateTime?> _pickDateTime(DateTime? initial) async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial ?? now,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (date == null || !mounted) return null;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: initial != null
+          ? TimeOfDay.fromDateTime(initial)
+          : TimeOfDay.now(),
+    );
+    if (time == null) return null;
+
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  Future<void> _pickStart() async {
+    final picked = await _pickDateTime(_startDateTime);
+    if (picked != null) setState(() => _startDateTime = picked);
+  }
+
+  Future<void> _pickEnd() async {
+    final picked = await _pickDateTime(_endDateTime);
+    if (picked != null) setState(() => _endDateTime = picked);
+  }
+
+  // Self-contained organizer picker -- avoids depending on a SearchDialog
+  // file that's typed for EventModel, not EventOrganizer.
+  Future<void> _openOrganizerPicker() async {
+    final result = await showDialog<EventOrganizer>(
+      context: context,
+      builder: (context) => _OrganizerPickerDialog(organizers: _organizers),
+    );
+    if (result != null) {
+      setState(() => _selectedOrganizerId = result.id);
+    }
+  }
+
+  Future<void> _openOrganizerFilterPicker() async {
+    final result = await showDialog<EventOrganizer>(
+      context: context,
+      builder: (context) => _OrganizerPickerDialog(
+        organizers: _organizers,
+        allowClear: true,
+      ),
+    );
+    if (result != null) {
+      await _onOrganizerFilterChanged(result.id == -1 ? null : result.id);
+    }
+  }
+
   void _startEdit(EventModel event) {
     _nameController.text = event.name;
     _addressController.text = event.address;
     _descriptionController.text = event.description;
+    _latitudeController.text = event.latitude.toString();
+    _longitudeController.text = event.longitude.toString();
+
     setState(() {
       _editingEventId = event.id;
+      _selectedOrganizerId = event.organizerId;
       _startDateTime = event.start;
       _endDateTime = event.end;
-      _selectedLocation = LatLng(event.latitude, event.longitude);
-      _selectedOrganizerId = event.organizerId;
       _showingTable = false;
     });
   }
@@ -103,12 +221,14 @@ class EventInfoFormState extends State<EventInfoForm> {
     _nameController.clear();
     _addressController.clear();
     _descriptionController.clear();
+    _latitudeController.clear();
+    _longitudeController.clear();
+
     setState(() {
       _editingEventId = null;
+      _selectedOrganizerId = null;
       _startDateTime = null;
       _endDateTime = null;
-      _selectedLocation = null;
-      _selectedOrganizerId = null;
       _showingTable = false;
     });
   }
@@ -118,10 +238,7 @@ class EventInfoFormState extends State<EventInfoForm> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text(
-          'Delete event?',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Delete event?', style: TextStyle(color: Colors.white)),
         content: Text(
           'This will permanently delete "${event.name}".',
           style: const TextStyle(color: Colors.white70),
@@ -151,99 +268,35 @@ class EventInfoFormState extends State<EventInfoForm> {
     }
   }
 
-  Future<void> _openOrganizerSearch() async {
-    final result = await showDialog<EventOrganizer>(
-      context: context,
-      builder: (context) => OrganizerSearchDialog(organizers: _organizers),
-    );
-    if (result != null) {
-      setState(() => _selectedOrganizerId = result.id);
-    }
-  }
-
-  Future<void> _loadOrganizers() async {
-    setState(() => _loadingOrganizers = true);
-    try {
-      final organizers = await EventApiService.getAllOrganizers();
-      if (!mounted) return;
-      setState(() {
-        _organizers = organizers;
-        if (_selectedOrganizerId != null &&
-            !_organizers.any((o) => o.id == _selectedOrganizerId)) {
-          _selectedOrganizerId = null;
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load organizers: $e')));
-    } finally {
-      if (mounted) setState(() => _loadingOrganizers = false);
-    }
-  }
-
-  Future<void> reloadOrganizers() => _loadOrganizers();
-
-  Future<void> _pickDateTime({required bool isStart}) async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (date == null || !mounted) return;
-
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
-    if (time == null) return;
-
-    final combined = DateTime(
-      date.year,
-      date.month,
-      date.day,
-      time.hour,
-      time.minute,
-    );
-
-    setState(() {
-      if (isStart) {
-        _startDateTime = combined;
-      } else {
-        _endDateTime = combined;
-      }
-    });
-  }
-
-  String _formatDateTime(DateTime dt) {
-    return '${dt.year.toString().padLeft(4, '0')}-'
-        '${dt.month.toString().padLeft(2, '0')}-'
-        '${dt.day.toString().padLeft(2, '0')}-'
-        '${dt.hour.toString().padLeft(2, '0')}-'
-        '${dt.minute.toString().padLeft(2, '0')}-00';
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_startDateTime == null || _endDateTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select start and end date/time')),
-      );
-      return;
-    }
-    if (_selectedLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please pick a location on the map')),
-      );
-      return;
-    }
     if (_selectedOrganizerId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select an organizer')),
-      );
+      _snack('Please select an organizer');
+      return;
+    }
+    if (_startDateTime == null) {
+      _snack('Please select a start date/time');
+      return;
+    }
+    if (_endDateTime == null) {
+      _snack('Please select an end date/time');
+      return;
+    }
+    if (_endDateTime!.isBefore(_startDateTime!)) {
+      _snack('End date/time must be after the start');
+      return;
+    }
+
+    final latitude = double.tryParse(_latitudeController.text.trim());
+    final longitude = double.tryParse(_longitudeController.text.trim());
+    if (latitude == null || longitude == null) {
+      _snack('Latitude and Longitude must be valid numbers');
       return;
     }
 
@@ -253,42 +306,34 @@ class EventInfoFormState extends State<EventInfoForm> {
       if (_editingEventId == null) {
         final result = await EventApiService.createEvent(
           eventName: _nameController.text.trim(),
-          eventStartingYMDT: _formatDateTime(_startDateTime!),
-          eventEndingYMDT: _formatDateTime(_endDateTime!),
+          eventStartingYMDT: _formatForApi(_startDateTime!),
+          eventEndingYMDT: _formatForApi(_endDateTime!),
           eventAddress: _addressController.text.trim(),
-          latitude: _selectedLocation!.latitude,
-          longitude: _selectedLocation!.longitude,
+          latitude: latitude,
+          longitude: longitude,
           eventDescription: _descriptionController.text.trim(),
           eventOrganizerID: _selectedOrganizerId!,
         );
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['msg']?.toString() ?? 'Event created')),
-        );
+        _snack(result['msg']?.toString() ?? 'Event created');
       } else {
         await EventApiService.updateEvent(
           eventId: _editingEventId!,
           eventName: _nameController.text.trim(),
-          eventStartingYMDT: _formatDateTime(_startDateTime!),
-          eventEndingYMDT: _formatDateTime(_endDateTime!),
+          eventStartingYMDT: _formatForApi(_startDateTime!),
+          eventEndingYMDT: _formatForApi(_endDateTime!),
           eventAddress: _addressController.text.trim(),
-          latitude: _selectedLocation!.latitude,
-          longitude: _selectedLocation!.longitude,
+          latitude: latitude,
+          longitude: longitude,
           eventDescription: _descriptionController.text.trim(),
           eventOrganizerID: _selectedOrganizerId!,
         );
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Event updated')));
+        _snack('Event updated');
       }
 
       _startCreate();
+      _loadEvents();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      _snack('Error: $e');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -306,6 +351,13 @@ class EventInfoFormState extends State<EventInfoForm> {
       ),
     );
   }
+
+  String? _requiredValidator(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Required';
+    return null;
+  }
+
+  // ---------------- build ----------------
 
   @override
   Widget build(BuildContext context) {
@@ -330,85 +382,12 @@ class EventInfoFormState extends State<EventInfoForm> {
                   ),
                 ),
               ),
+
             TextFormField(
               controller: _nameController,
               style: const TextStyle(color: Colors.white),
               decoration: _decoration('Event Name'),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
-            ),
-            const SizedBox(height: 16),
-
-            InkWell(
-              onTap: () => _pickDateTime(isStart: true),
-              child: InputDecorator(
-                decoration: _decoration('Event Start'),
-                child: Text(
-                  _startDateTime == null
-                      ? 'Select date & time'
-                      : _formatDateTime(_startDateTime!),
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            InkWell(
-              onTap: () => _pickDateTime(isStart: false),
-              child: InputDecorator(
-                decoration: _decoration('Event End'),
-                child: Text(
-                  _endDateTime == null
-                      ? 'Select date & time'
-                      : _formatDateTime(_endDateTime!),
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            TextFormField(
-              controller: _addressController,
-              style: const TextStyle(color: Colors.white),
-              decoration: _decoration('Event Address'),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
-            ),
-            const SizedBox(height: 16),
-
-            InkWell(
-              onTap: () async {
-                final result = await Navigator.push<LatLng>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        LocationPickerPage(initialLocation: _selectedLocation),
-                  ),
-                );
-                if (result != null) {
-                  setState(() => _selectedLocation = result);
-                }
-              },
-              child: InputDecorator(
-                decoration: _decoration('Event Location'),
-                child: Text(
-                  _selectedLocation == null
-                      ? 'Tap to pick on map'
-                      : 'Lat: ${_selectedLocation!.latitude.toStringAsFixed(6)}, '
-                            'Lng: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            TextFormField(
-              controller: _descriptionController,
-              style: const TextStyle(color: Colors.white),
-              decoration: _decoration('Event Description'),
-              maxLines: 4,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+              validator: _requiredValidator,
             ),
             const SizedBox(height: 16),
 
@@ -417,19 +396,15 @@ class EventInfoFormState extends State<EventInfoForm> {
               children: [
                 Expanded(
                   child: InkWell(
-                    onTap: _loadingOrganizers ? null : _openOrganizerSearch,
+                    onTap: _loadingOrganizers ? null : _openOrganizerPicker,
                     child: InputDecorator(
-                      decoration: _decoration('Event Organizer'),
+                      decoration: _decoration('Organizer'),
                       child: Text(
                         _selectedOrganizerId == null
                             ? (_loadingOrganizers
-                                  ? 'Loading...'
-                                  : 'Tap to search organizer')
-                            : _organizers
-                                  .firstWhere(
-                                    (o) => o.id == _selectedOrganizerId,
-                                  )
-                                  .name,
+                                ? 'Loading...'
+                                : 'Tap to select organizer')
+                            : _organizerNameFor(_selectedOrganizerId!),
                         style: const TextStyle(color: Colors.white),
                       ),
                     ),
@@ -451,7 +426,104 @@ class EventInfoFormState extends State<EventInfoForm> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: _pickStart,
+                    child: InputDecorator(
+                      decoration: _decoration('Start Date/Time'),
+                      child: Text(
+                        _formatForDisplay(_startDateTime),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: _pickEnd,
+                    child: InputDecorator(
+                      decoration: _decoration('End Date/Time'),
+                      child: Text(
+                        _formatForDisplay(_endDateTime),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            TextFormField(
+              controller: _addressController,
+              style: const TextStyle(color: Colors.white),
+              decoration: _decoration('Address'),
+              validator: _requiredValidator,
+            ),
+            const SizedBox(height: 16),
+
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _latitudeController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _decoration('Latitude'),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Required';
+                      }
+                      if (double.tryParse(value.trim()) == null) {
+                        return 'Invalid number';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _longitudeController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _decoration('Longitude'),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Required';
+                      }
+                      if (double.tryParse(value.trim()) == null) {
+                        return 'Invalid number';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            TextFormField(
+              controller: _descriptionController,
+              style: const TextStyle(color: Colors.white),
+              decoration: _decoration('Description'),
+              maxLines: 4,
+              validator: _requiredValidator,
+            ),
+            const SizedBox(height: 16),
 
             SizedBox(
               width: double.infinity,
@@ -468,11 +540,7 @@ class EventInfoFormState extends State<EventInfoForm> {
                         width: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(
-                        _editingEventId == null
-                            ? 'Create Event'
-                            : 'Update Event',
-                      ),
+                    : Text(_editingEventId == null ? 'Create Event' : 'Update Event'),
               ),
             ),
             const SizedBox(height: 12),
@@ -510,27 +578,30 @@ class EventInfoFormState extends State<EventInfoForm> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _eventSearchController,
-                  onChanged: _filterEvents,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Search by ID or event name',
-                    hintStyle: const TextStyle(color: Colors.white54),
-                    prefixIcon: const Icon(Icons.search, color: Colors.white54),
-                    enabledBorder: const UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.white24),
-                    ),
-                    focusedBorder: const UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.white),
+                child: InkWell(
+                  onTap: _openOrganizerFilterPicker,
+                  child: InputDecorator(
+                    decoration: _decoration('Filter by Organizer'),
+                    child: Text(
+                      _filterOrganizerId == null
+                          ? 'All Organizers -- tap to filter'
+                          : _organizerNameFor(_filterOrganizerId!),
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ),
                 ),
               ),
+              if (_filterOrganizerId != null)
+                IconButton(
+                  icon: const Icon(Icons.clear, color: Colors.white70),
+                  tooltip: 'Clear organizer filter',
+                  onPressed: () => _onOrganizerFilterChanged(null),
+                ),
+              const SizedBox(width: 8),
               IconButton(
                 icon: const Icon(Icons.refresh, color: Colors.white70),
                 onPressed: _loadEvents,
@@ -542,50 +613,200 @@ class EventInfoFormState extends State<EventInfoForm> {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: TextField(
+            controller: _eventSearchController,
+            onChanged: _filterEvents,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Search by ID, name, or address',
+              hintStyle: const TextStyle(color: Colors.white54),
+              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.white24),
+              ),
+              focusedBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.white),
+              ),
+            ),
+          ),
+        ),
         Expanded(
           child: _loadingEvents
               ? const Center(child: CircularProgressIndicator())
               : _filteredEvents.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No events found',
-                    style: TextStyle(color: Colors.white54),
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: _filteredEvents.length,
-                  itemBuilder: (context, index) {
-                    final event = _filteredEvents[index];
-                    return ListTile(
-                      title: Text(
-                        event.name,
-                        style: const TextStyle(color: Colors.white),
+                  ? const Center(
+                      child: Text(
+                        'No events found',
+                        style: TextStyle(color: Colors.white54),
                       ),
-                      subtitle: Text(
-                        'ID: ${event.id}  •  ${event.address}',
-                        style: const TextStyle(color: Colors.white54),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.white70),
-                            onPressed: () => _startEdit(event),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.delete,
-                              color: Colors.redAccent,
+                    )
+                  : Material(
+                      color: Colors.transparent,
+                      child: ListView.builder(
+                        itemCount: _filteredEvents.length,
+                        itemBuilder: (context, index) {
+                          final event = _filteredEvents[index];
+                          return ListTile(
+                            title: Text(
+                              event.name,
+                              style: const TextStyle(color: Colors.white),
                             ),
-                            onPressed: () => _confirmDeleteEvent(event),
-                          ),
-                        ],
+                            subtitle: Text(
+                              'ID: ${event.id}  •  ${_organizerNameFor(event.organizerId)}  •  '
+                              '${_formatForDisplay(event.start)}  →  ${_formatForDisplay(event.end)}',
+                              style: const TextStyle(color: Colors.white54),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: Colors.white70),
+                                  onPressed: () => _startEdit(event),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                  onPressed: () => _confirmDeleteEvent(event),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
+                    ),
         ),
       ],
+    );
+  }
+}
+
+/// Lightweight searchable organizer picker. Kept private to this file since
+/// it's only used here -- the existing SearchDialog is typed for EventModel.
+class _OrganizerPickerDialog extends StatefulWidget {
+  final List<EventOrganizer> organizers;
+  final bool allowClear;
+
+  const _OrganizerPickerDialog({
+    required this.organizers,
+    this.allowClear = false,
+  });
+
+  @override
+  State<_OrganizerPickerDialog> createState() => _OrganizerPickerDialogState();
+}
+
+class _OrganizerPickerDialogState extends State<_OrganizerPickerDialog> {
+  final _searchController = TextEditingController();
+  late List<EventOrganizer> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.organizers;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    final q = query.trim().toLowerCase();
+    setState(() {
+      _filtered = widget.organizers.where((o) {
+        return q.isEmpty ||
+            o.name.toLowerCase().contains(q) ||
+            o.id.toString().contains(q);
+      }).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF1E1E1E),
+      child: SizedBox(
+        width: 400,
+        height: 480,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                onChanged: _onSearchChanged,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Search organizers',
+                  hintStyle: TextStyle(color: Colors.white54),
+                  prefixIcon: Icon(Icons.search, color: Colors.white54),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: _filtered.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No organizers found',
+                        style: TextStyle(color: Colors.white54),
+                      ),
+                    )
+                  : ListView(
+                      children: [
+                        if (widget.allowClear)
+                          ListTile(
+                            leading: const Icon(Icons.clear, color: Colors.white70),
+                            title: const Text(
+                              'All Organizers',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            onTap: () => Navigator.pop(
+                              context,
+                              EventOrganizer(
+                                id: -1,
+                                name: 'All Organizers',
+                                createdByAccountId: 0,
+                              ),
+                            ),
+                          ),
+                        for (final organizer in _filtered)
+                          ListTile(
+                            title: Text(
+                              organizer.name,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              'ID: ${organizer.id}',
+                              style: const TextStyle(color: Colors.white54),
+                            ),
+                            onTap: () => Navigator.pop(context, organizer),
+                          ),
+                      ],
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

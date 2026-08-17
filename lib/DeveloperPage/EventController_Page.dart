@@ -4,6 +4,7 @@ import 'package:reservation_system/EngLoStyle/eng_lao_style.dart';
 import 'event_info_form.dart';
 import 'ticket_type_form.dart';
 import 'event_question_form.dart';
+import 'event_image_form.dart';
 
 class EventControllerBody extends StatelessWidget {
   final int selectedNavIndex;
@@ -28,6 +29,8 @@ class EventControllerBody extends StatelessWidget {
         return TicketTypeForm(key: ticketTypeFormKey);
       case 2: // Event Question Info tab
         return EventQuestionForm(key: eventQuestionFormKey);
+      case 4: // Event Image Info tab
+        return const EventImageForm();
       case 7: // Event Organizer Info tab
         return const OrganizerTablePage();
       default:
