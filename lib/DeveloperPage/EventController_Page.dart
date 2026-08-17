@@ -5,6 +5,7 @@ import 'event_info_form.dart';
 import 'ticket_type_form.dart';
 import 'event_question_form.dart';
 import 'event_image_form.dart';
+import 'event_sponser_form.dart';
 
 class EventControllerBody extends StatelessWidget {
   final int selectedNavIndex;
@@ -31,6 +32,8 @@ class EventControllerBody extends StatelessWidget {
         return EventQuestionForm(key: eventQuestionFormKey);
       case 4: // Event Image Info tab
         return const EventImageForm();
+      case 5: // Event Sponsor Info tab
+        return const EventSponserForm();
       case 7: // Event Organizer Info tab
         return const OrganizerTablePage();
       default:
