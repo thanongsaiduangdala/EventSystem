@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'event_organizer_form.dart';
 
 class OrganizerControllerPage extends StatefulWidget {
   const OrganizerControllerPage({super.key});
@@ -9,34 +10,67 @@ class OrganizerControllerPage extends StatefulWidget {
 }
 
 class _OrganizerControllerPageState extends State<OrganizerControllerPage> {
-  @override
-
   int _selectedIndexId = 0;
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(body: _body(), bottomNavigationBar: _BTNNavBar());
-
-   
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: _body(),
+      bottomNavigationBar: _bottomNavBar(),
+    );
   }
 
-  widget _body(){
-    return  //<- return stuff at the bottom nav
+  Widget _body() {
+    switch (_selectedIndexId) {
+      case 0: // Event Organizer tab
+        return const EventOrganizerForm();
+      case 1: // Organizer member tab
+        return const Center(
+          child: Text(
+            'Organizer member -- coming soon',
+            style: TextStyle(color: Colors.white),
+          ),
+        );
+      case 2: // Event stuff tab
+        return const Center(
+          child: Text(
+            'Event stuff -- coming soon',
+            style: TextStyle(color: Colors.white),
+          ),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
   }
-  
-  void _onItemTapped(int index){
+
+  void _onItemTapped(int index) {
     setState(() {
       _selectedIndexId = index;
     });
   }
 
-  Widget _BTNNavBar(){
+  Widget _bottomNavBar() {
     return BottomNavigationBar(
+      selectedItemColor: Colors.blue,
+      unselectedItemColor: Colors.white,
+      backgroundColor: Colors.black87,
       currentIndex: _selectedIndexId,
       onTap: _onItemTapped,
-      items: [
-        BottomNavigationBarItem(icon: Icon(Icons.business), label: "Event Organizer"),
-        BottomNavigationBarItem(icon: Icon(Icons.person_2_outlined), label: "Organizer member"),
-        BottomNavigationBarItem(icon: Icon(Icons.group_work_outlined), label: "Event stuff"),
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.business),
+          label: "Event Organizer",
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person_2_outlined),
+          label: "Organizer member",
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.group_work_outlined),
+          label: "Event stuff",
+        ),
       ],
-      );
+    );
   }
 }

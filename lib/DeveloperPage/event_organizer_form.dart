@@ -1,6 +1,11 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
+import 'package:image_picker/image_picker.dart';
 import '../services/event_organizer_api_service.dart';
 import './SearchDialog/event_organizer_search_dialog.dart';
+import './SearchDialog/account_search_dialog.dart';
+import './square_crop_page.dart';
 
 class EventOrganizerForm extends StatefulWidget {
   const EventOrganizerForm({super.key});
@@ -13,9 +18,20 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
-  final _logoPathController = TextEditingController();
-  final _createdByController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _picker = ImagePicker();
+
+  // Verified-account picker (replaces manual "Created By Account ID" entry).
+  List<VerifiedAccount> _accounts = [];
+  bool _loadingAccounts = false;
+  int? _selectedAccountId;
+
+  // A newly picked (and possibly cropped) logo, held as bytes.
+  Uint8List? _pickedLogoBytes;
+  String? _pickedLogoName;
+  // The logo path already stored on the server, shown as a preview while
+  // editing if the user hasn't picked a replacement.
+  String? _existingLogoPath;
 
   bool _isSubmitting = false;
 
@@ -28,8 +44,6 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
   @override
   void dispose() {
     _nameController.dispose();
-    _logoPathController.dispose();
-    _createdByController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
@@ -53,6 +67,48 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
   }
 
   Future<void> reloadOrganizers() => _loadOrganizers();
+
+  Future<void> _loadAccounts() async {
+    setState(() => _loadingAccounts = true);
+    try {
+      final data = await EventOrganizerApiService.getVerifiedAccounts();
+      if (!mounted) return;
+      setState(() => _accounts = data);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _loadingAccounts = false);
+    }
+  }
+
+  /// Display label for a picked account. Falls back to a bare ID if the
+  /// account isn't in the currently loaded list yet (e.g. right after
+  /// jumping into "edit" before the accounts have finished loading).
+  String _accountLabelFor(int accountId) {
+    final match = _accounts.where((a) => a.id == accountId);
+    if (match.isEmpty) return 'Account #$accountId';
+    final a = match.first;
+    return a.fullName.isEmpty
+        ? 'Account #${a.id}'
+        : '${a.fullName} (ID: ${a.id})';
+  }
+
+  Future<void> _openAccountSearch() async {
+    if (_accounts.isEmpty) {
+      await _loadAccounts();
+    }
+    if (!mounted) return;
+    final result = await showDialog<VerifiedAccount>(
+      context: context,
+      builder: (context) => AccountSearchDialog(accounts: _accounts),
+    );
+    if (result != null) {
+      setState(() => _selectedAccountId = result.id);
+    }
+  }
 
   void _openTable() {
     setState(() => _showingTable = true);
@@ -78,27 +134,97 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
     }
   }
 
+  // ---------------- logo picking ----------------
+
+  Future<void> _pickImage() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+    );
+    if (picked == null) return;
+
+    final bytes = await picked.readAsBytes();
+    final decoded = img.decodeImage(bytes);
+
+    if (decoded != null && decoded.width != decoded.height) {
+      // Not square -- send the user to crop it before we accept it.
+      if (!mounted) return;
+      final cropped = await Navigator.of(context).push<Uint8List>(
+        MaterialPageRoute(builder: (_) => SquareCropPage(bytes: bytes)),
+      );
+      if (cropped == null) return; // user cancelled the crop
+      setState(() {
+        _pickedLogoBytes = cropped;
+        _pickedLogoName = picked.name;
+      });
+    } else {
+      setState(() {
+        _pickedLogoBytes = bytes;
+        _pickedLogoName = picked.name;
+      });
+    }
+  }
+
+  Widget _buildLogoPreview() {
+    Widget child;
+    if (_pickedLogoBytes != null) {
+      child = Image.memory(_pickedLogoBytes!, fit: BoxFit.cover);
+    } else if (_existingLogoPath != null && _existingLogoPath!.isNotEmpty) {
+      child = Image.network(
+        EventOrganizerApiService.fullImageUrl(_existingLogoPath!),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stack) => const Center(
+          child: Icon(Icons.broken_image_outlined, color: Colors.white38),
+        ),
+      );
+    } else {
+      child = const Center(
+        child: Icon(Icons.business_outlined, color: Colors.white38, size: 40),
+      );
+    }
+
+    // Square preview since the stored logo is always square.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 160,
+        width: 160,
+        color: const Color(0xFF1E1E1E),
+        child: child,
+      ),
+    );
+  }
+
   // ---------------- form actions ----------------
 
   void _startEdit(EventOrganizer org) {
     _nameController.text = org.name;
-    _logoPathController.text = org.logoPath ?? '';
-    _createdByController.text = org.createdByAccountId.toString();
     _descriptionController.text = org.description ?? '';
     setState(() {
       _editingOrganizerId = org.id;
+      _selectedAccountId = org.createdByAccountId;
+      _existingLogoPath = org.logoPath;
+      _pickedLogoBytes = null;
+      _pickedLogoName = null;
       _showingTable = false;
     });
+    // Make sure we have the account list loaded so the picker shows a real
+    // name instead of just "Account #<id>".
+    if (_accounts.isEmpty) {
+      _loadAccounts();
+    }
   }
 
   void _startCreate() {
     _formKey.currentState?.reset();
     _nameController.clear();
-    _logoPathController.clear();
-    _createdByController.clear();
     _descriptionController.clear();
     setState(() {
       _editingOrganizerId = null;
+      _selectedAccountId = null;
+      _existingLogoPath = null;
+      _pickedLogoBytes = null;
+      _pickedLogoName = null;
       _showingTable = false;
     });
   }
@@ -147,25 +273,37 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final createdByAccountId = int.tryParse(_createdByController.text.trim());
-    if (createdByAccountId == null) {
+    if (_selectedAccountId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Created By Account ID must be a number')),
+        const SnackBar(content: Text('Please select a verified account')),
       );
       return;
     }
+    final createdByAccountId = _selectedAccountId!;
+
+    final name = _nameController.text.trim();
+    final description = _descriptionController.text.trim().isEmpty
+        ? null
+        : _descriptionController.text.trim();
 
     setState(() => _isSubmitting = true);
 
     try {
       if (_editingOrganizerId == null) {
-        final result = await EventOrganizerApiService.createOrganizer(
-          name: _nameController.text.trim(),
-          logoPath: _logoPathController.text.trim(),
+        // New organizer: logo is mandatory, there's nothing to point
+        // EventOrganizerLogoPath at otherwise.
+        if (_pickedLogoBytes == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please upload an organizer logo')),
+          );
+          return;
+        }
+        final result = await EventOrganizerApiService.uploadOrganizer(
+          bytes: _pickedLogoBytes!,
+          filename: _pickedLogoName ?? 'logo.jpg',
+          name: name,
           createdByAccountId: createdByAccountId,
-          description: _descriptionController.text.trim().isEmpty
-              ? null
-              : _descriptionController.text.trim(),
+          description: description,
         );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -173,15 +311,31 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
             content: Text(result['msg']?.toString() ?? 'Organizer created'),
           ),
         );
+      } else if (_pickedLogoBytes != null) {
+        // Editing and picked a replacement file.
+        final result = await EventOrganizerApiService.replaceOrganizerLogo(
+          organizerId: _editingOrganizerId!,
+          name: name,
+          createdByAccountId: createdByAccountId,
+          description: description,
+          bytes: _pickedLogoBytes!,
+          filename: _pickedLogoName ?? 'logo.jpg',
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['msg']?.toString() ?? 'Organizer updated'),
+          ),
+        );
       } else {
+        // Editing, no new file picked: just update fields, keep the
+        // existing logo path.
         await EventOrganizerApiService.updateOrganizer(
           id: _editingOrganizerId!,
-          name: _nameController.text.trim(),
-          logoPath: _logoPathController.text.trim(),
+          name: name,
+          logoPath: _existingLogoPath ?? '',
           createdByAccountId: createdByAccountId,
-          description: _descriptionController.text.trim().isEmpty
-              ? null
-              : _descriptionController.text.trim(),
+          description: description,
         );
         if (!mounted) return;
         ScaffoldMessenger.of(
@@ -189,6 +343,7 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
         ).showSnackBar(const SnackBar(content: Text('Organizer updated')));
       }
 
+      await _loadOrganizers();
       _startCreate();
     } catch (e) {
       if (!mounted) return;
@@ -237,22 +392,6 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
                 ),
               ),
 
-            // Same popup search used everywhere else (searches ID + name)
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _openOrganizerSearch,
-                icon: const Icon(Icons.search, color: Colors.white70),
-                label: const Text('Search Organizer (ID or Name)'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
             TextFormField(
               controller: _nameController,
               style: const TextStyle(color: Colors.white),
@@ -262,25 +401,79 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
             ),
             const SizedBox(height: 16),
 
-            TextFormField(
-              controller: _logoPathController,
-              style: const TextStyle(color: Colors.white),
-              decoration: _decoration('Logo Path / URL'),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+            const Text(
+              'Organizer Logo (must be square)',
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 8),
+            _buildLogoPreview(),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _pickImage,
+              icon: const Icon(
+                Icons.photo_library_outlined,
+                color: Colors.white,
+              ),
+              label: Text(
+                _pickedLogoBytes == null && _existingLogoPath == null
+                    ? 'Choose Logo'
+                    : 'Choose Different Logo',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white24),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                "If the picked image isn't square, you'll be asked to crop it before it's used.",
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+              ),
             ),
             const SizedBox(height: 16),
 
-            TextFormField(
-              controller: _createdByController,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white),
-              decoration: _decoration('Created By Account ID'),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Required';
-                if (int.tryParse(v.trim()) == null) return 'Must be a number';
-                return null;
-              },
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: _loadingAccounts ? null : _openAccountSearch,
+                    child: InputDecorator(
+                      decoration: _decoration('Created By (Verified Account)'),
+                      child: Text(
+                        _selectedAccountId == null
+                            ? (_loadingAccounts
+                                  ? 'Loading...'
+                                  : 'Tap to search verified accounts')
+                            : _accountLabelFor(_selectedAccountId!),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _loadingAccounts ? null : _loadAccounts,
+                  icon: _loadingAccounts
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white70,
+                          ),
+                        )
+                      : const Icon(Icons.refresh, color: Colors.white70),
+                  tooltip: 'Refresh verified accounts',
+                ),
+              ],
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                'Only accounts with an accepted identity verification are shown.',
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+              ),
             ),
             const SizedBox(height: 16),
 
@@ -391,6 +584,37 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
                   itemBuilder: (context, index) {
                     final org = _organizers[index];
                     return ListTile(
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: (org.logoPath == null || org.logoPath!.isEmpty)
+                              ? Container(
+                                  color: const Color(0xFF1E1E1E),
+                                  child: const Icon(
+                                    Icons.business_outlined,
+                                    color: Colors.white38,
+                                    size: 20,
+                                  ),
+                                )
+                              : Image.network(
+                                  EventOrganizerApiService.fullImageUrl(
+                                    org.logoPath!,
+                                  ),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stack) =>
+                                      Container(
+                                        color: const Color(0xFF1E1E1E),
+                                        child: const Icon(
+                                          Icons.broken_image_outlined,
+                                          color: Colors.white38,
+                                          size: 20,
+                                        ),
+                                      ),
+                                ),
+                        ),
+                      ),
                       title: Text(
                         org.name,
                         style: const TextStyle(color: Colors.white),
