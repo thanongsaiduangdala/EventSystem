@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:reservation_system/DeveloperPage/organizer_controller_page.dart';
 import './EventController_Page.dart';
 import './event_info_form.dart';
 import './ticket_type_form.dart';
@@ -44,7 +45,7 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
       case 1:
         return const AccountBody();
       case 2:
-        return const OrganizationBody();
+        return OrganizerControllerPage();
       case 3:
         return const AttendeeBody();
       case 4:

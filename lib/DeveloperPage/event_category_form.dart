@@ -1,63 +1,55 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:image/image.dart' as img;
-import 'package:image_picker/image_picker.dart';
 import '../services/event_api_service.dart';
-import '../services/sponser_api_service.dart';
-import '../models/sponser_models.dart';
+import '../services/category_api_service.dart';
+import '../models/category_models.dart';
+import '../utils/category_icons.dart';
 import './SearchDialog/event_search_dialog.dart';
-import './SearchDialog/sponser_search_dialog.dart';
-import './square_crop_page.dart';
+import './SearchDialog/category_search_dialog.dart';
+import './SearchDialog/icon_picker_dialog.dart';
 
-class EventSponserForm extends StatefulWidget {
-  const EventSponserForm({super.key});
+class EventCategoryForm extends StatefulWidget {
+  const EventCategoryForm({super.key});
 
   @override
-  State<EventSponserForm> createState() => EventSponserFormState();
+  State<EventCategoryForm> createState() => EventCategoryFormState();
 }
 
-class EventSponserFormState extends State<EventSponserForm> {
+class EventCategoryFormState extends State<EventCategoryForm> {
   final _formKey = GlobalKey<FormState>();
 
-  final _sponserNameController = TextEditingController();
-  final _picker = ImagePicker();
-
-  // A newly picked (and possibly cropped) logo, held as bytes.
-  Uint8List? _pickedLogoBytes;
-  String? _pickedLogoName;
-  // The logo path already stored on the server, shown as a preview while
-  // editing if the user hasn't picked a replacement.
-  String? _existingLogoPath;
+  final _categoryNameController = TextEditingController();
+  // Stores a key into categoryIconOptions (e.g. "music"), not a file path/URL.
+  String? _selectedIconKey;
 
   List<EventModel> _events = [];
   int? _selectedEventId;
   bool _loadingEvents = false;
 
-  List<SponserModel> _sponsers = [];
-  bool _loadingSponsers = false;
+  List<CategoryModel> _categories = [];
+  bool _loadingCategories = false;
 
   bool _isSubmitting = false;
 
   bool _showingTable = false;
-  int? _editingEventSponserId; // the Event<->Sponsor link being edited
-  int? _editingSponserId; // the underlying sponsor being edited/reused
+  int? _editingEventCategoryId; // the Event<->Category link being edited
+  int? _editingCategoryId; // the underlying category being edited/reused
 
-  List<EventSponserModel> _links = [];
+  List<EventCategoryModel> _links = [];
   bool _loadingLinks = false;
   final _linkSearchController = TextEditingController();
-  List<EventSponserModel> _filteredLinks = [];
+  List<EventCategoryModel> _filteredLinks = [];
   int? _filterEventId; // null = "All Events"
 
   @override
   void initState() {
     super.initState();
     _loadEvents();
-    _loadSponsers();
+    _loadCategories();
   }
 
   @override
   void dispose() {
-    _sponserNameController.dispose();
+    _categoryNameController.dispose();
     _linkSearchController.dispose();
     super.dispose();
   }
@@ -88,28 +80,28 @@ class EventSponserFormState extends State<EventSponserForm> {
 
   Future<void> reloadEvents() => _loadEvents();
 
-  Future<void> _loadSponsers() async {
-    setState(() => _loadingSponsers = true);
+  Future<void> _loadCategories() async {
+    setState(() => _loadingCategories = true);
     try {
-      final sponsers = await SponserApiService.getAllSponsers();
+      final categories = await CategoryApiService.getAllCategories();
       if (!mounted) return;
-      setState(() => _sponsers = sponsers);
+      setState(() => _categories = categories);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load sponsors: $e')));
+      ).showSnackBar(SnackBar(content: Text('Failed to load categories: $e')));
     } finally {
-      if (mounted) setState(() => _loadingSponsers = false);
+      if (mounted) setState(() => _loadingCategories = false);
     }
   }
 
   // Backend only supports fetching every link, so pull the full list and
-  // filter locally by event and/or search text -- same approach as images.
+  // filter locally by event and/or search text -- same approach as sponsors.
   Future<void> _loadLinks() async {
     setState(() => _loadingLinks = true);
     try {
-      final data = await SponserApiService.getAllEventSponsers();
+      final data = await CategoryApiService.getAllEventCategories();
       if (!mounted) return;
       setState(() => _links = data);
       _applyFilters();
@@ -145,8 +137,8 @@ class EventSponserFormState extends State<EventSponserForm> {
     return match.isNotEmpty ? match.first.name : 'Event #$eventId';
   }
 
-  SponserModel? _sponserFor(int sponserId) {
-    final match = _sponsers.where((s) => s.id == sponserId);
+  CategoryModel? _categoryFor(int categoryId) {
+    final match = _categories.where((c) => c.id == categoryId);
     return match.isNotEmpty ? match.first : null;
   }
 
@@ -156,11 +148,11 @@ class EventSponserFormState extends State<EventSponserForm> {
       _filteredLinks = _links.where((link) {
         final matchesEvent =
             _filterEventId == null || link.eventId == _filterEventId;
-        final sponserName = _sponserFor(link.sponserId)?.name ?? '';
+        final categoryName = _categoryFor(link.categoryId)?.name ?? '';
         final matchesQuery =
             q.isEmpty ||
             link.id.toString().contains(q) ||
-            sponserName.toLowerCase().contains(q) ||
+            categoryName.toLowerCase().contains(q) ||
             _eventNameFor(link.eventId).toLowerCase().contains(q);
         return matchesEvent && matchesQuery;
       }).toList();
@@ -181,30 +173,36 @@ class EventSponserFormState extends State<EventSponserForm> {
     }
   }
 
-  Future<void> _openSponserSearch() async {
-    final result = await showDialog<SponserModel>(
+  Future<void> _openCategorySearch() async {
+    final result = await showDialog<CategoryModel>(
       context: context,
-      builder: (context) => SponserSearchDialog(sponsers: _sponsers),
+      builder: (context) => CategorySearchDialog(categories: _categories),
     );
     if (result != null) {
       setState(() {
-        _editingSponserId = result.id;
-        _sponserNameController.text = result.name;
-        _existingLogoPath = result.logoPath;
-        _pickedLogoBytes = null;
-        _pickedLogoName = null;
+        _editingCategoryId = result.id;
+        _categoryNameController.text = result.name;
+        _selectedIconKey = result.iconPath;
       });
     }
   }
 
-  void _clearSponserSelection() {
+  void _clearCategorySelection() {
     setState(() {
-      _editingSponserId = null;
-      _sponserNameController.clear();
-      _existingLogoPath = null;
-      _pickedLogoBytes = null;
-      _pickedLogoName = null;
+      _editingCategoryId = null;
+      _categoryNameController.clear();
+      _selectedIconKey = null;
     });
+  }
+
+  Future<void> _openIconPicker() async {
+    final result = await showDialog<CategoryIconOption>(
+      context: context,
+      builder: (context) => const IconPickerDialog(),
+    );
+    if (result != null) {
+      setState(() => _selectedIconKey = result.key);
+    }
   }
 
   void _openTable() {
@@ -212,78 +210,45 @@ class EventSponserFormState extends State<EventSponserForm> {
     _loadLinks();
   }
 
-  Future<void> _pickImage() async {
-    final picked = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 90,
-    );
-    if (picked == null) return;
-
-    final bytes = await picked.readAsBytes();
-    final decoded = img.decodeImage(bytes);
-
-    if (decoded != null && decoded.width != decoded.height) {
-      // Not square -- send the user to crop it before we accept it.
-      if (!mounted) return;
-      final cropped = await Navigator.of(context).push<Uint8List>(
-        MaterialPageRoute(builder: (_) => SquareCropPage(bytes: bytes)),
-      );
-      if (cropped == null) return; // user cancelled the crop
-      setState(() {
-        _pickedLogoBytes = cropped;
-        _pickedLogoName = picked.name;
-      });
-    } else {
-      setState(() {
-        _pickedLogoBytes = bytes;
-        _pickedLogoName = picked.name;
-      });
-    }
-  }
-
-  void _startEditLink(EventSponserModel link) {
-    final sponser = _sponserFor(link.sponserId);
-    _sponserNameController.text = sponser?.name ?? '';
+  void _startEditLink(EventCategoryModel link) {
+    final category = _categoryFor(link.categoryId);
+    _categoryNameController.text = category?.name ?? '';
 
     setState(() {
-      _editingEventSponserId = link.id;
-      _editingSponserId = link.sponserId;
+      _editingEventCategoryId = link.id;
+      _editingCategoryId = link.categoryId;
       _selectedEventId = link.eventId;
-      _existingLogoPath = sponser?.logoPath;
-      _pickedLogoBytes = null;
-      _pickedLogoName = null;
+      _selectedIconKey = category?.iconPath;
       _showingTable = false;
     });
   }
 
   void _startCreate() {
     _formKey.currentState?.reset();
-    _sponserNameController.clear();
+    _categoryNameController.clear();
 
     setState(() {
-      _editingEventSponserId = null;
-      _editingSponserId = null;
+      _editingEventCategoryId = null;
+      _editingCategoryId = null;
       _selectedEventId = null;
-      _existingLogoPath = null;
-      _pickedLogoBytes = null;
-      _pickedLogoName = null;
+      _selectedIconKey = null;
       _showingTable = false;
     });
   }
 
-  Future<void> _confirmDeleteLink(EventSponserModel link) async {
-    final sponser = _sponserFor(link.sponserId);
+  Future<void> _confirmDeleteLink(EventCategoryModel link) async {
+    final category = _categoryFor(link.categoryId);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
         title: const Text(
-          'Remove sponsor from event?',
+          'Remove category from event?',
           style: TextStyle(color: Colors.white),
         ),
         content: Text(
-          'This will remove "${sponser?.name ?? 'this sponsor'}" from '
-          '"${_eventNameFor(link.eventId)}". The sponsor itself is not deleted.',
+          'This will remove "${category?.name ?? 'this category'}" from '
+          '"${_eventNameFor(link.eventId)}". The category itself is not deleted.',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -300,7 +265,7 @@ class EventSponserFormState extends State<EventSponserForm> {
     );
     if (confirmed == true) {
       try {
-        await SponserApiService.deleteEventSponserLink(link.id);
+        await CategoryApiService.deleteEventCategoryLink(link.id);
         _loadLinks();
       } catch (e) {
         if (!mounted) return;
@@ -326,22 +291,28 @@ class EventSponserFormState extends State<EventSponserForm> {
       return;
     }
 
-    final name = _sponserNameController.text.trim();
+    if (_selectedIconKey == null) {
+      _snack('Please choose an icon');
+      return;
+    }
 
-    // Editing a reused sponsor changes the shared record everywhere it's
+    final name = _categoryNameController.text.trim();
+    final iconKey = _selectedIconKey!;
+
+    // Editing a reused category changes the shared record everywhere it's
     // used, not just this event link -- confirm before overwriting it.
-    if (_editingSponserId != null) {
+    if (_editingCategoryId != null) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           backgroundColor: const Color(0xFF1E1E1E),
           title: const Text(
-            'Update this sponsor?',
+            'Update this category?',
             style: TextStyle(color: Colors.white),
           ),
           content: Text(
-            'This changes the name/logo for '
-            '"${_sponserFor(_editingSponserId!)?.name ?? 'this sponsor'}" '
+            'This changes the name/icon for '
+            '"${_categoryFor(_editingCategoryId!)?.name ?? 'this category'}" '
             'everywhere it\'s used, not just this event. Continue?',
             style: const TextStyle(color: Colors.white70),
           ),
@@ -366,58 +337,40 @@ class EventSponserFormState extends State<EventSponserForm> {
     setState(() => _isSubmitting = true);
 
     try {
-      int sponserId;
+      int categoryId;
 
-      if (_editingSponserId == null) {
-        // New sponsor: logo is mandatory, there's nothing to point
-        // SponserLogoPath at otherwise.
-        if (_pickedLogoBytes == null) {
-          _snack('Please upload a sponsor logo');
-          return;
-        }
-        final result = await SponserApiService.uploadSponser(
-          bytes: _pickedLogoBytes!,
-          filename: _pickedLogoName ?? 'logo.jpg',
+      if (_editingCategoryId == null) {
+        final result = await CategoryApiService.createCategory(
           name: name,
+          iconPath: iconKey,
         );
-        sponserId = result['Sponser_ID'] as int;
-        _snack(result['msg']?.toString() ?? 'Sponsor created');
-      } else if (_pickedLogoBytes != null) {
-        // Editing an existing sponsor and picked a replacement file.
-        final result = await SponserApiService.replaceSponserLogo(
-          sponserId: _editingSponserId!,
-          name: name,
-          bytes: _pickedLogoBytes!,
-          filename: _pickedLogoName ?? 'logo.jpg',
-        );
-        sponserId = _editingSponserId!;
-        _snack(result['msg']?.toString() ?? 'Sponsor updated');
+        categoryId = result['CategoryID'] as int;
+        _snack(result['msg']?.toString() ?? 'Category created');
       } else {
-        // Editing, no new file picked: just rename, keep the existing path.
-        await SponserApiService.updateSponserNameOnly(
-          sponserId: _editingSponserId!,
+        await CategoryApiService.updateCategory(
+          categoryId: _editingCategoryId!,
           name: name,
-          logoPath: _existingLogoPath ?? '',
+          iconPath: iconKey,
         );
-        sponserId = _editingSponserId!;
-        _snack('Sponsor updated');
+        categoryId = _editingCategoryId!;
+        _snack('Category updated');
       }
 
-      // Create or update the Event<->Sponsor link.
-      if (_editingEventSponserId == null) {
-        await SponserApiService.linkEventSponser(
+      // Create or update the Event<->Category link.
+      if (_editingEventCategoryId == null) {
+        await CategoryApiService.linkEventCategory(
           eventId: _selectedEventId!,
-          sponserId: sponserId,
+          categoryId: categoryId,
         );
       } else {
-        await SponserApiService.updateEventSponserLink(
-          eventSponserId: _editingEventSponserId!,
+        await CategoryApiService.updateEventCategoryLink(
+          eventCategoryId: _editingEventCategoryId!,
           eventId: _selectedEventId!,
-          sponserId: sponserId,
+          categoryId: categoryId,
         );
       }
 
-      await _loadSponsers();
+      await _loadCategories();
       _startCreate();
     } catch (e) {
       _snack('Error: $e');
@@ -439,36 +392,6 @@ class EventSponserFormState extends State<EventSponserForm> {
     );
   }
 
-  Widget _buildLogoPreview() {
-    Widget child;
-    if (_pickedLogoBytes != null) {
-      child = Image.memory(_pickedLogoBytes!, fit: BoxFit.cover);
-    } else if (_existingLogoPath != null && _existingLogoPath!.isNotEmpty) {
-      child = Image.network(
-        SponserApiService.fullImageUrl(_existingLogoPath!),
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stack) => const Center(
-          child: Icon(Icons.broken_image_outlined, color: Colors.white38),
-        ),
-      );
-    } else {
-      child = const Center(
-        child: Icon(Icons.handshake_outlined, color: Colors.white38, size: 40),
-      );
-    }
-
-    // Square preview since the stored logo is always square.
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        height: 160,
-        width: 160,
-        color: const Color(0xFF1E1E1E),
-        child: child,
-      ),
-    );
-  }
-
   // ---------------- build ----------------
 
   @override
@@ -483,11 +406,11 @@ class EventSponserFormState extends State<EventSponserForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (_editingEventSponserId != null)
+            if (_editingEventCategoryId != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
-                  'Editing Sponsor Link ID: $_editingEventSponserId',
+                  'Editing Category Link ID: $_editingEventCategoryId',
                   style: const TextStyle(
                     color: Colors.amber,
                     fontWeight: FontWeight.bold,
@@ -537,89 +460,95 @@ class EventSponserFormState extends State<EventSponserForm> {
               children: [
                 Expanded(
                   child: InkWell(
-                    onTap: _loadingSponsers ? null : _openSponserSearch,
+                    onTap: _loadingCategories ? null : _openCategorySearch,
                     child: InputDecorator(
                       decoration: _decoration(
-                        'Use Existing Sponsor (optional)',
+                        'Use Existing Category (optional)',
                       ),
                       child: Text(
-                        _editingSponserId == null
-                            ? (_loadingSponsers
+                        _editingCategoryId == null
+                            ? (_loadingCategories
                                   ? 'Loading...'
-                                  : 'Tap to search existing sponsors')
-                            : (_sponserFor(_editingSponserId!)?.name ??
-                                  'Sponsor #$_editingSponserId'),
+                                  : 'Tap to search existing categories')
+                            : (_categoryFor(_editingCategoryId!)?.name ??
+                                  'Category #$_editingCategoryId'),
                         style: const TextStyle(color: Colors.white),
                       ),
                     ),
                   ),
                 ),
-                if (_editingSponserId != null)
+                if (_editingCategoryId != null)
                   IconButton(
                     icon: const Icon(Icons.clear, color: Colors.white70),
-                    tooltip: 'Clear selected sponsor',
-                    onPressed: _clearSponserSelection,
+                    tooltip: 'Clear selected category',
+                    onPressed: _clearCategorySelection,
                   ),
                 IconButton(
-                  onPressed: _loadingSponsers ? null : _loadSponsers,
-                  icon: IconButton(
-                    onPressed: _loadingSponsers ? null : _loadSponsers,
-                    icon: _loadingSponsers
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white70,
-                            ),
-                          )
-                        : const Icon(Icons.refresh, color: Colors.white70),
-                    tooltip: 'Refresh sponsor list',
-                  ),
-                  tooltip: 'Refresh sponsor list',
+                  onPressed: _loadingCategories ? null : _loadCategories,
+                  icon: _loadingCategories
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white70,
+                          ),
+                        )
+                      : const Icon(Icons.refresh, color: Colors.white70),
+                  tooltip: 'Refresh category list',
                 ),
               ],
             ),
             const SizedBox(height: 16),
 
             TextFormField(
-              controller: _sponserNameController,
+              controller: _categoryNameController,
               style: const TextStyle(color: Colors.white),
-              decoration: _decoration('Sponsor Name'),
+              decoration: _decoration('Category Name'),
               validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Sponsor name is required'
+                  ? 'Category name is required'
                   : null,
             ),
             const SizedBox(height: 16),
 
             const Text(
-              'Sponsor Logo (must be square)',
+              'Category Icon',
               style: TextStyle(color: Colors.white70),
             ),
             const SizedBox(height: 8),
-            _buildLogoPreview(),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _pickImage,
-              icon: const Icon(
-                Icons.photo_library_outlined,
-                color: Colors.white,
-              ),
-              label: Text(
-                _pickedLogoBytes == null && _existingLogoPath == null
-                    ? 'Choose Logo'
-                    : 'Choose Different Logo',
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white24),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: Text(
-                "If the picked image isn't square, you'll be asked to crop it before it's used.",
-                style: TextStyle(color: Colors.white38, fontSize: 12),
+            InkWell(
+              onTap: _openIconPicker,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                  horizontal: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _selectedIconKey == null
+                          ? Icons.category_outlined
+                          : iconForKey(_selectedIconKey!),
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      _selectedIconKey == null
+                          ? 'Tap to choose an icon'
+                          : labelForKey(_selectedIconKey!),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    const Spacer(),
+                    const Icon(Icons.chevron_right, color: Colors.white38),
+                  ],
+                ),
               ),
             ),
 
@@ -641,9 +570,9 @@ class EventSponserFormState extends State<EventSponserForm> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Text(
-                        _editingEventSponserId == null
-                            ? 'Add Sponsor to Event'
-                            : 'Update Sponsor',
+                        _editingEventCategoryId == null
+                            ? 'Add Category to Event'
+                            : 'Update Category',
                       ),
               ),
             ),
@@ -658,17 +587,17 @@ class EventSponserFormState extends State<EventSponserForm> {
                   side: const BorderSide(color: Colors.white24),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                child: const Text('View / Manage Event Sponsors'),
+                child: const Text('View / Manage Event Categories'),
               ),
             ),
 
-            if (_editingEventSponserId != null) ...[
+            if (_editingEventCategoryId != null) ...[
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: TextButton(
                   onPressed: _startCreate,
-                  child: const Text('Cancel Edit / Add New Sponsor'),
+                  child: const Text('Cancel Edit / Add New Category'),
                 ),
               ),
             ],
@@ -724,7 +653,7 @@ class EventSponserFormState extends State<EventSponserForm> {
             onChanged: _filterLinks,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              hintText: 'Search by ID or sponsor name',
+              hintText: 'Search by ID or category name',
               hintStyle: const TextStyle(color: Colors.white54),
               prefixIcon: const Icon(Icons.search, color: Colors.white54),
               enabledBorder: const UnderlineInputBorder(
@@ -742,7 +671,7 @@ class EventSponserFormState extends State<EventSponserForm> {
               : _filteredLinks.isEmpty
               ? const Center(
                   child: Text(
-                    'No event sponsors found',
+                    'No event categories found',
                     style: TextStyle(color: Colors.white54),
                   ),
                 )
@@ -752,41 +681,25 @@ class EventSponserFormState extends State<EventSponserForm> {
                     itemCount: _filteredLinks.length,
                     itemBuilder: (context, index) {
                       final link = _filteredLinks[index];
-                      final sponser = _sponserFor(link.sponserId);
+                      final category = _categoryFor(link.categoryId);
                       return ListTile(
                         leading: ClipRRect(
                           borderRadius: BorderRadius.circular(6),
-                          child: SizedBox(
+                          child: Container(
                             width: 48,
                             height: 48,
-                            child: (sponser == null || sponser.logoPath.isEmpty)
-                                ? Container(
-                                    color: const Color(0xFF1E1E1E),
-                                    child: const Icon(
-                                      Icons.handshake_outlined,
-                                      color: Colors.white38,
-                                      size: 20,
-                                    ),
-                                  )
-                                : Image.network(
-                                    SponserApiService.fullImageUrl(
-                                      sponser.logoPath,
-                                    ),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stack) =>
-                                        Container(
-                                          color: const Color(0xFF1E1E1E),
-                                          child: const Icon(
-                                            Icons.broken_image_outlined,
-                                            color: Colors.white38,
-                                            size: 20,
-                                          ),
-                                        ),
-                                  ),
+                            color: const Color(0xFF1E1E1E),
+                            child: Icon(
+                              category == null
+                                  ? Icons.category_outlined
+                                  : iconForKey(category.iconPath),
+                              color: Colors.white70,
+                              size: 24,
+                            ),
                           ),
                         ),
                         title: Text(
-                          sponser?.name ?? 'Sponsor #${link.sponserId}',
+                          category?.name ?? 'Category #${link.categoryId}',
                           style: const TextStyle(color: Colors.white),
                         ),
                         subtitle: Text(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:reservation_system/DeveloperPage/Table/organizer_table_page.dart';
+import 'package:reservation_system/DeveloperPage/event_category_form.dart';
+import 'package:reservation_system/DeveloperPage/event_organizer_form.dart';
 import 'package:reservation_system/EngLoStyle/eng_lao_style.dart';
 import 'event_info_form.dart';
 import 'ticket_type_form.dart';
@@ -30,12 +32,12 @@ class EventControllerBody extends StatelessWidget {
         return TicketTypeForm(key: ticketTypeFormKey);
       case 2: // Event Question Info tab
         return EventQuestionForm(key: eventQuestionFormKey);
-      case 4: // Event Image Info tab
+      case 3: // Event Image Info tab
         return const EventImageForm();
-      case 5: // Event Sponsor Info tab
+      case 4: // Event Sponsor Info tab
         return const EventSponserForm();
-      case 7: // Event Organizer Info tab
-        return const OrganizerTablePage();
+      case 5:
+        return const EventCategoryForm();
       default:
         return const Center(
           child: Text('Coming soon', style: TextStyle(color: Colors.white)),
@@ -71,10 +73,6 @@ class _EventControllerNavBarState extends State<EventControllerNavBar> {
         'icon': Icons.question_mark_outlined,
         'label': l10nOf(context).eventquestioninfo,
       },
-      {
-        'icon': Icons.merge_type_outlined,
-        'label': l10nOf(context).eventquestiontype,
-      },
       {'icon': Icons.image_outlined, 'label': l10nOf(context).eventimageinfo},
       {
         'icon': Icons.handshake_outlined,
@@ -83,10 +81,6 @@ class _EventControllerNavBarState extends State<EventControllerNavBar> {
       {
         'icon': Icons.category_outlined,
         'label': l10nOf(context).eventcategoryinfo,
-      },
-      {
-        'icon': Icons.business_outlined,
-        'label': l10nOf(context).eventorganizerinfo,
       },
     ];
 
