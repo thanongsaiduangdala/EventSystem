@@ -1,6 +1,7 @@
 import 'auth_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 
 class AccountStatus {
   final int id;
@@ -46,7 +47,7 @@ class AccountModel {
 }
 
 class AccountApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static String get baseUrl => ApiConfig.baseUrl;
 
   static Map<String, String> _authHeaders() {
     final headers = <String, String>{'Content-Type': 'application/json'};

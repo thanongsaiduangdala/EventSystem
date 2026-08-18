@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import '../config/api_config.dart';
 
 class EventOrganizer {
   final int id;
@@ -57,7 +58,7 @@ class VerifiedAccount {
 }
 
 class EventOrganizerApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static String get baseUrl => ApiConfig.baseUrl;
 
   /// Same convention as SponserApiService.fullImageUrl: paths already
   /// containing a scheme are returned as-is, everything else is resolved

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import '../config/api_config.dart';
 
 class EventImageModel {
   final int id;
@@ -31,7 +32,7 @@ class EventImageModel {
 }
 
 class EventImageApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static String get baseUrl => ApiConfig.baseUrl;
 
   static Map<String, String> _authHeaders() {
     final headers = <String, String>{'Content-Type': 'application/json'};

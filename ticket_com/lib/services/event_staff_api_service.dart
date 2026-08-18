@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import '../config/api_config.dart';
 
 class EventStaffModel {
   final int id;
@@ -48,7 +49,7 @@ class EventRoleModel {
 }
 
 class EventStaffApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static String get baseUrl => ApiConfig.baseUrl;
 
   static Map<String, String> _authHeaders() {
     final headers = <String, String>{'Content-Type': 'application/json'};

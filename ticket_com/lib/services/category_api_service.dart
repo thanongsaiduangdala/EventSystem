@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/category_models.dart';
+import '../config/api_config.dart';
 
 class CategoryApiService {
   // TODO: point this at the same base URL your other *ApiService classes use.
-  static const String baseUrl = 'http://localhost:8000';
+  static String get baseUrl => ApiConfig.baseUrl;
 
   static Uri _u(String path) => Uri.parse('$baseUrl$path');
 

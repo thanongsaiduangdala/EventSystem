@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import '../config/api_config.dart';
 
 class EventQuestionTypeModel {
   final int id;
@@ -54,7 +55,7 @@ class EventQuestionModel {
 }
 
 class EventQuestionApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static String get baseUrl => ApiConfig.baseUrl;
 
   static Map<String, String> _authHeaders() {
     final headers = <String, String>{'Content-Type': 'application/json'};
@@ -81,7 +82,7 @@ class EventQuestionApiService {
 
   // ---------------- eventquestioninfo ----------------
 
-static Future<List<EventQuestionModel>> getAllEventQuestions() async {
+  static Future<List<EventQuestionModel>> getAllEventQuestions() async {
     final url = Uri.parse('$baseUrl/eventquestion/');
     final response = await http.get(url, headers: _authHeaders());
 

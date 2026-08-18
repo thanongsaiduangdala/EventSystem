@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../config/api_config.dart';
 
 class UserSession {
   final int accountId;
@@ -40,7 +41,7 @@ class UserSession {
 }
 
 class AuthService {
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static String get baseUrl => ApiConfig.baseUrl;
 
   static const _sessionKey = 'user_session';
   static const _rememberKey = 'remember_me';

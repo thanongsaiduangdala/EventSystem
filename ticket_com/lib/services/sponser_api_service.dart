@@ -2,11 +2,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../models/sponser_models.dart';
+import '../config/api_config.dart';
 
 class SponserApiService {
   // TODO: point this at the same base URL / config your EventApiService and
   // EventImageApiService already use, so everything hits the same backend.
-  static const String baseUrl = 'http://localhost:8000';
+  static String get baseUrl => ApiConfig.baseUrl;
 
   static Uri _u(String path) => Uri.parse('$baseUrl$path');
 
@@ -38,9 +39,14 @@ class SponserApiService {
     required String filename,
     required String name,
   }) async {
-    final req = http.MultipartRequest('POST', _u('/eventsponser/sponser/upload'));
+    final req = http.MultipartRequest(
+      'POST',
+      _u('/eventsponser/sponser/upload'),
+    );
     req.fields['SponserName'] = name;
-    req.files.add(http.MultipartFile.fromBytes('logo', bytes, filename: filename));
+    req.files.add(
+      http.MultipartFile.fromBytes('logo', bytes, filename: filename),
+    );
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
     if (res.statusCode != 200) throw Exception(res.body);
@@ -54,12 +60,19 @@ class SponserApiService {
     Uint8List? bytes,
     String? filename,
   }) async {
-    final req = http.MultipartRequest('PUT', _u('/eventsponser/sponser/replace'));
+    final req = http.MultipartRequest(
+      'PUT',
+      _u('/eventsponser/sponser/replace'),
+    );
     req.fields['SponserID'] = sponserId.toString();
     req.fields['SponserName'] = name;
     if (bytes != null) {
       req.files.add(
-        http.MultipartFile.fromBytes('logo', bytes, filename: filename ?? 'logo.jpg'),
+        http.MultipartFile.fromBytes(
+          'logo',
+          bytes,
+          filename: filename ?? 'logo.jpg',
+        ),
       );
     }
     final streamed = await req.send();
@@ -97,7 +110,8 @@ class SponserApiService {
     final res = await http.get(_u('/eventsponser/eventsponser/all'));
     if (res.statusCode != 200) throw Exception(res.body);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
-    final list = (data['eventsponserinfo'] as List).cast<Map<String, dynamic>>();
+    final list = (data['eventsponserinfo'] as List)
+        .cast<Map<String, dynamic>>();
     return list.map((e) => EventSponserModel.fromJson(e)).toList();
   }
 
@@ -132,7 +146,9 @@ class SponserApiService {
   }
 
   static Future<void> deleteEventSponserLink(int eventSponserId) async {
-    final res = await http.delete(_u('/eventsponser/eventsponser/$eventSponserId'));
+    final res = await http.delete(
+      _u('/eventsponser/eventsponser/$eventSponserId'),
+    );
     if (res.statusCode != 200) throw Exception(res.body);
   }
 }
