@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'event_organizer_form.dart';
+import 'organizer_member_form.dart';
+import 'event_staff_form.dart';
 
 class OrganizerControllerPage extends StatefulWidget {
   const OrganizerControllerPage({super.key});
@@ -26,19 +28,9 @@ class _OrganizerControllerPageState extends State<OrganizerControllerPage> {
       case 0: // Event Organizer tab
         return const EventOrganizerForm();
       case 1: // Organizer member tab
-        return const Center(
-          child: Text(
-            'Organizer member -- coming soon',
-            style: TextStyle(color: Colors.white),
-          ),
-        );
+        return const OrganizerMemberForm();
       case 2: // Event stuff tab
-        return const Center(
-          child: Text(
-            'Event stuff -- coming soon',
-            style: TextStyle(color: Colors.white),
-          ),
-        );
+        return const EventStaffForm();
       default:
         return const SizedBox.shrink();
     }

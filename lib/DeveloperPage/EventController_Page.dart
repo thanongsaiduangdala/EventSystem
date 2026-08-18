@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:reservation_system/DeveloperPage/Table/organizer_table_page.dart';
-import 'package:reservation_system/DeveloperPage/event_category_form.dart';
-import 'package:reservation_system/DeveloperPage/event_organizer_form.dart';
-import 'package:reservation_system/EngLoStyle/eng_lao_style.dart';
+//import 'package:ticket_com/DeveloperPage/Table/organizer_table_page.dart';
+import 'package:ticket_com/DeveloperPage/event_category_form.dart';
+//import 'package:ticket_com/DeveloperPage/event_organizer_form.dart';
+import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'event_info_form.dart';
 import 'ticket_type_form.dart';
 import 'event_question_form.dart';

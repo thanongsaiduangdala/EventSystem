@@ -1,10 +1,10 @@
 //import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:reservation_system/LogSignPage/LoginPage.dart';
-import 'package:reservation_system/main.dart';
+import 'package:ticket_com/LogSignPage/LoginPage.dart';
+import 'package:ticket_com/main.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:reservation_system/EngLoStyle/eng_lao_style.dart';
+import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 
 class Signuppage extends StatefulWidget {
   const Signuppage({super.key});

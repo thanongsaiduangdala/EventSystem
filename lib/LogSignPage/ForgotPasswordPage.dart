@@ -2,8 +2,8 @@ import 'dart:convert';
 //import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:reservation_system/EngLoStyle/eng_lao_style.dart';
-import 'package:reservation_system/main.dart';
+import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
+import 'package:ticket_com/main.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});

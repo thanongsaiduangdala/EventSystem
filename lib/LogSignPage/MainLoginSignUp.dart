@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:reservation_system/EngLoStyle/eng_lao_style.dart';
-import 'package:reservation_system/LogSignPage/LoginPage.dart';
-import 'package:reservation_system/LogSignPage/SignUpPage.dart';
-import 'package:reservation_system/main.dart';
+import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
+import 'package:ticket_com/LogSignPage/LoginPage.dart';
+import 'package:ticket_com/LogSignPage/SignUpPage.dart';
+import 'package:ticket_com/main.dart';
 
 class Mainloginsignup extends StatefulWidget {
   const Mainloginsignup({super.key});

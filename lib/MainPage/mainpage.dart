@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:reservation_system/EngLoStyle/eng_lao_style.dart';
-import 'package:reservation_system/MainPage/Panel/MainPanel.dart';
-import 'package:reservation_system/MainPage/Panel/SettingPanel.dart';
-//import 'package:reservation_system/main.dart';
+import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
+import 'package:ticket_com/MainPage/Panel/MainPanel.dart';
+import 'package:ticket_com/MainPage/Panel/SettingPanel.dart';
+//import 'package:ticket_com/main.dart';
 
 class Mainpage extends StatefulWidget {
   const Mainpage({super.key});

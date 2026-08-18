@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:reservation_system/DeveloperPage/organizer_controller_page.dart';
+import 'package:ticket_com/DeveloperPage/account_controller_page.dart';
+import 'package:ticket_com/DeveloperPage/attendee_controller_page.dart';
+import 'package:ticket_com/DeveloperPage/organizer_controller_page.dart';
 import './EventController_Page.dart';
 import './event_info_form.dart';
 import './ticket_type_form.dart';
@@ -43,11 +45,11 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
           ticketTypeFormKey: _ticketTypeFormKey,
         );
       case 1:
-        return const AccountBody();
+        return AccountControllerPage();
       case 2:
         return OrganizerControllerPage();
       case 3:
-        return const AttendeeBody();
+        return AttendeeControllerPage();
       case 4:
         return const SponsorBody();
       default:
@@ -67,11 +69,11 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
           },
         );
       case 1:
-        return const AccountNavBar();
+        return null;
       case 2:
         return null;
       case 3:
-        return const AttendeeNavBar();
+        return null;
       case 4:
         return const SponsorNavBar();
       default:
@@ -203,20 +205,6 @@ class AccountBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Center(
       child: Text('Account content', style: TextStyle(color: Colors.white)),
-    );
-  }
-}
-
-class AccountNavBar extends StatelessWidget {
-  const AccountNavBar({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      backgroundColor: Colors.black87,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.list), label: 'List'),
-        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-      ],
     );
   }
 }

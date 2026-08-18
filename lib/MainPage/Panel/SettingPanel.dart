@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:reservation_system/services/auth_service.dart';
-import 'package:reservation_system/DeveloperPage/MainPageDashboard.dart';
-import 'package:reservation_system/LogSignPage/MainLoginSignUp.dart'; // adjust path
+import 'package:ticket_com/services/auth_service.dart';
+import 'package:ticket_com/DeveloperPage/MainPageDashboard.dart';
+import 'package:ticket_com/LogSignPage/MainLoginSignUp.dart'; // adjust path
 
 class SettingPanel extends StatefulWidget {
   const SettingPanel({super.key});

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:reservation_system/LogSignPage/MainLoginSignUp.dart';
-import 'package:reservation_system/DeveloperPage/MainPageDashboard.dart';
-import 'package:reservation_system/MainPage/mainpage.dart';
-import 'package:reservation_system/l10n/app_localizations.dart';
-import 'package:reservation_system/services/auth_service.dart';
+import 'package:ticket_com/LogSignPage/MainLoginSignUp.dart';
+//import 'package:ticket_com/DeveloperPage/MainPageDashboard.dart';
+import 'package:ticket_com/MainPage/mainpage.dart';
+import 'package:ticket_com/l10n/app_localizations.dart';
+import 'package:ticket_com/services/auth_service.dart';
 
 final ValueNotifier<Locale> appLocale = ValueNotifier(const Locale('en'));
 final GlobalKey<ScaffoldMessengerState> snackbarKey =
