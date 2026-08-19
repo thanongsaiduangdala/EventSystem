@@ -28,7 +28,7 @@ async def create_eventorganizer(req_data: AddEventOrganizerInfoRequest, current=
         con = getConnect()
         with con.cursor() as cur:
             sql = """
-                INSERT INTO eventorganizerInfo
+                INSERT INTO eventorganizerinfo
                 (EventOrganizerName, EventOrganizerLogoPath, CreatedByAccountID, EventOrganizerDiscription)
                 VALUES (%s, %s, %s, %s)
             """
@@ -64,7 +64,7 @@ async def upload_eventorganizer(
         con = getConnect()
         with con.cursor() as cur:
             sql = """
-                INSERT INTO eventorganizerInfo
+                INSERT INTO eventorganizerinfo
                 (EventOrganizerName, EventOrganizerLogoPath, CreatedByAccountID, EventOrganizerDiscription)
                 VALUES (%s, %s, %s, %s)
             """
@@ -103,7 +103,7 @@ async def replace_eventorganizer_logo(
         else:
             with con.cursor() as cur:
                 cur.execute(
-                    "SELECT EventOrganizerLogoPath FROM eventorganizerInfo WHERE EventOrganizerID = %s",
+                    "SELECT EventOrganizerLogoPath FROM eventorganizerinfo WHERE EventOrganizerID = %s",
                     (EventOrganizerID,),
                 )
                 row = cur.fetchone()
@@ -113,7 +113,7 @@ async def replace_eventorganizer_logo(
 
         with con.cursor() as cur:
             sql = """
-                UPDATE eventorganizerInfo
+                UPDATE eventorganizerinfo
                 SET EventOrganizerName = %s,
                     EventOrganizerLogoPath = %s,
                     CreatedByAccountID = %s,
@@ -146,7 +146,7 @@ async def get_all_EventOrganizers(current=Depends(require_developer)):
     try:
         con = getConnect()
         with con.cursor() as cur:
-            sql = "SELECT * FROM eventorganizerInfo"
+            sql = "SELECT * FROM eventorganizerinfo"
             cur.execute(sql)
             rows = cur.fetchall()
 
@@ -160,7 +160,7 @@ async def get_eventorganizer_by_id(event_organizer_id: int, current=Depends(requ
     try:
         con = getConnect()
         with con.cursor() as cur:
-            sql = "SELECT * FROM eventorganizerInfo WHERE EventOrganizerID = %s"
+            sql = "SELECT * FROM eventorganizerinfo WHERE EventOrganizerID = %s"
             cur.execute(sql, (event_organizer_id,))
             row = cur.fetchone()
 
@@ -180,7 +180,7 @@ async def update_eventorganizer(req_data: UpdateEventOrganizerInfoRequest,curren
         con = getConnect()
         with con.cursor() as cur:
             sql = """
-                UPDATE eventorganizerInfo
+                UPDATE eventorganizerinfo
                 SET EventOrganizerName = %s,
                     EventOrganizerLogoPath = %s,
                     CreatedByAccountID = %s,
@@ -213,7 +213,7 @@ async def delete_eventorganizer(event_organizer_id: int,current=Depends(require_
     try:
         con = getConnect()
         with con.cursor() as cur:
-            sql = "DELETE FROM eventorganizerInfo WHERE EventOrganizerID = %s"
+            sql = "DELETE FROM eventorganizerinfo WHERE EventOrganizerID = %s"
             cur.execute(sql, (event_organizer_id,))
 
             if cur.rowcount == 0:
