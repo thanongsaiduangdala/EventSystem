@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'auth_service.dart';
 import '../config/api_config.dart';
+import 'auth_service.dart';
 
 class EventQuestionTypeModel {
   final int id;
@@ -82,13 +82,13 @@ class EventQuestionApiService {
 
   // ---------------- eventquestioninfo ----------------
 
-  static Future<List<EventQuestionModel>> getAllEventQuestions() async {
+static Future<List<EventQuestionModel>> getAllEventQuestions() async {
     final url = Uri.parse('$baseUrl/eventquestion/');
     final response = await http.get(url, headers: _authHeaders());
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final List<dynamic> rows = data['events'] as List<dynamic>;
+      final List<dynamic> rows = data['eventquestions'] as List<dynamic>;
       return rows
           .map((e) => EventQuestionModel.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -108,7 +108,7 @@ class EventQuestionApiService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final List<dynamic> rows = data['events'] as List<dynamic>;
+      final List<dynamic> rows = data['eventquestions'] as List<dynamic>;
       return rows
           .map((e) => EventQuestionModel.fromJson(e as Map<String, dynamic>))
           .toList();

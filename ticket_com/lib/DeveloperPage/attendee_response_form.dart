@@ -3,6 +3,26 @@ import '../services/attendee_response_api_service.dart';
 import '../services/event_question_api_service.dart';
 import '../services/ticket_attendence_api_service.dart';
 
+// EventQuestionTypeID convention (matches eventquestiontype table):
+//   1 = Text
+//   2 = Checkbox   (multi-select, options come from EventQuestion.options)
+//   3 = Radio box  (single-select, options come from EventQuestion.options)
+//   4 = Text save as encrypted (plain text input; backend handles encryption)
+//   5 = Yes or No  (single-select, fixed two-option list, no DB options)
+//
+// attendeeAnswer is always stored as plain text. For choice-type questions
+// (2, 3, 5) it stores the 1-based index into the option list, comma-
+// separated for checkboxes (e.g. "1,3"). This mirrors the existing data in
+// attendeeresponse, where radio-box answers are stored as a single 1-based
+// index string.
+const int _typeText = 1;
+const int _typeCheckbox = 2;
+const int _typeRadio = 3;
+const int _typeEncryptedText = 4;
+const int _typeYesNo = 5;
+
+const List<String> _yesNoOptions = ['Yes', 'No'];
+
 class AttendeeResponseForm extends StatefulWidget {
   const AttendeeResponseForm({super.key});
 
@@ -22,6 +42,10 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
   List<TicketAttendeeModel> _attendees = [];
   int? _selectedAttendeeId;
   bool _loadingAttendees = false;
+
+  // Answer state for choice-type questions.
+  final Set<int> _selectedCheckboxIndices = {}; // 1-based option indices
+  int? _selectedRadioIndex; // 1-based option index
 
   bool _isSubmitting = false;
 
@@ -133,6 +157,21 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
 
   // ---------------- helpers ----------------
 
+  EventQuestionModel? _questionById(int? id) {
+    if (id == null) return null;
+    final match = _eventQuestions.where((q) => q.id == id);
+    return match.isNotEmpty ? match.first : null;
+  }
+
+  /// The option list to show for the currently selected question --
+  /// whatever's stored on the question for Checkbox/Radio, or the fixed
+  /// Yes/No pair for type 5 (which has no DB-backed options).
+  List<String> _optionsFor(EventQuestionModel? question) {
+    if (question == null) return const [];
+    if (question.questionTypeId == _typeYesNo) return _yesNoOptions;
+    return question.options ?? const [];
+  }
+
   String _questionLabelFor(int eventQuestionId) {
     final match = _eventQuestions.where((q) => q.id == eventQuestionId);
     return match.isNotEmpty
@@ -147,18 +186,114 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
         : 'Attendee #$attendeeId';
   }
 
+  /// Human-readable version of a stored answer, resolving choice-type
+  /// indices back into their option text wherever possible.
+  String _answerDisplayFor(AttendeeResponseModel r) {
+    final question = _questionById(r.eventQuestionId);
+    if (question == null) return r.attendeeAnswer;
+
+    final options = _optionsFor(question);
+    if (options.isEmpty) return r.attendeeAnswer;
+
+    switch (question.questionTypeId) {
+      case _typeCheckbox:
+        final indices = r.attendeeAnswer
+            .split(',')
+            .map((s) => int.tryParse(s.trim()))
+            .whereType<int>();
+        final labels = indices
+            .where((i) => i >= 1 && i <= options.length)
+            .map((i) => options[i - 1]);
+        return labels.isEmpty ? r.attendeeAnswer : labels.join(', ');
+      case _typeRadio:
+      case _typeYesNo:
+        final i = int.tryParse(r.attendeeAnswer.trim());
+        if (i != null && i >= 1 && i <= options.length) return options[i - 1];
+        return r.attendeeAnswer;
+      default:
+        return r.attendeeAnswer;
+    }
+  }
+
   void _filterResponses(String query) {
     final q = query.trim().toLowerCase();
     setState(() {
       _filteredResponses = _responses.where((response) {
         return response.id.toString().contains(q) ||
             response.attendeeAnswer.toLowerCase().contains(q) ||
+            _answerDisplayFor(response).toLowerCase().contains(q) ||
             _questionLabelFor(response.eventQuestionId)
                 .toLowerCase()
                 .contains(q) ||
             _attendeeLabelFor(response.attendeeId).toLowerCase().contains(q);
       }).toList();
     });
+  }
+
+  void _resetAnswerState() {
+    _answerController.clear();
+    _selectedCheckboxIndices.clear();
+    _selectedRadioIndex = null;
+  }
+
+  /// Parses a stored attendeeAnswer string into whichever answer-state
+  /// field matches the question's type, so editing an existing response
+  /// pre-selects the right checkboxes/radio option/text.
+  void _loadAnswerIntoState(EventQuestionModel? question, String answer) {
+    _resetAnswerState();
+    if (question == null) {
+      _answerController.text = answer;
+      return;
+    }
+    switch (question.questionTypeId) {
+      case _typeCheckbox:
+        for (final part in answer.split(',')) {
+          final i = int.tryParse(part.trim());
+          if (i != null) _selectedCheckboxIndices.add(i);
+        }
+        break;
+      case _typeRadio:
+      case _typeYesNo:
+        _selectedRadioIndex = int.tryParse(answer.trim());
+        break;
+      default:
+        _answerController.text = answer;
+    }
+  }
+
+  /// Builds the final attendeeAnswer string to send to the backend from
+  /// whichever answer-state field is active for the current question type.
+  /// Returns null (with a snackbar shown) if the answer is incomplete.
+  String? _buildAnswerOrShowError(EventQuestionModel question) {
+    switch (question.questionTypeId) {
+      case _typeCheckbox:
+        if (_selectedCheckboxIndices.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Select at least one option')),
+          );
+          return null;
+        }
+        final sorted = _selectedCheckboxIndices.toList()..sort();
+        return sorted.join(',');
+      case _typeRadio:
+      case _typeYesNo:
+        if (_selectedRadioIndex == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Select an option')),
+          );
+          return null;
+        }
+        return _selectedRadioIndex.toString();
+      default:
+        final text = _answerController.text.trim();
+        if (text.isEmpty) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Answer is required')));
+          return null;
+        }
+        return text;
+    }
   }
 
   Future<void> _openEventQuestionPicker() async {
@@ -168,7 +303,10 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
           _EventQuestionPickerDialog(eventQuestions: _eventQuestions),
     );
     if (result != null) {
-      setState(() => _selectedEventQuestionId = result.id);
+      setState(() {
+        _selectedEventQuestionId = result.id;
+        _resetAnswerState();
+      });
     }
   }
 
@@ -201,7 +339,8 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
   }
 
   void _startEdit(AttendeeResponseModel r) {
-    _answerController.text = r.attendeeAnswer;
+    final question = _questionById(r.eventQuestionId);
+    _loadAnswerIntoState(question, r.attendeeAnswer);
 
     setState(() {
       _editingResponseId = r.id;
@@ -213,7 +352,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
 
   void _startCreate() {
     _formKey.currentState?.reset();
-    _answerController.clear();
+    _resetAnswerState();
 
     setState(() {
       _editingResponseId = null;
@@ -233,7 +372,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
           style: TextStyle(color: Colors.white),
         ),
         content: Text(
-          'This will permanently delete "${r.attendeeAnswer}".',
+          'This will permanently delete "${_answerDisplayFor(r)}".',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -277,6 +416,12 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
       return;
     }
 
+    final question = _questionById(_selectedEventQuestionId);
+    if (question == null) return;
+
+    final answer = _buildAnswerOrShowError(question);
+    if (answer == null) return;
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -284,7 +429,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
         final result = await AttendeeResponseApiService.createAttendeeResponse(
           eventQuestionId: _selectedEventQuestionId!,
           attendeeId: _selectedAttendeeId!,
-          attendeeAnswer: _answerController.text.trim(),
+          attendeeAnswer: answer,
         );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -297,7 +442,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
           responseId: _editingResponseId!,
           eventQuestionId: _selectedEventQuestionId!,
           attendeeId: _selectedAttendeeId!,
-          attendeeAnswer: _answerController.text.trim(),
+          attendeeAnswer: answer,
         );
         if (!mounted) return;
         ScaffoldMessenger.of(
@@ -326,6 +471,116 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
       focusedBorder: const UnderlineInputBorder(
         borderSide: BorderSide(color: Colors.white),
       ),
+    );
+  }
+
+  // ---------------- answer widget ----------------
+
+  Widget _buildAnswerField() {
+    final question = _questionById(_selectedEventQuestionId);
+
+    if (question == null) {
+      return TextFormField(
+        enabled: false,
+        style: const TextStyle(color: Colors.white38),
+        decoration: _decoration('Select a question first'),
+      );
+    }
+
+    switch (question.questionTypeId) {
+      case _typeCheckbox:
+        return _buildCheckboxAnswer(question);
+      case _typeRadio:
+        return _buildRadioAnswer(question, 'Answer');
+      case _typeYesNo:
+        return _buildRadioAnswer(question, 'Answer');
+      case _typeEncryptedText:
+        return TextFormField(
+          controller: _answerController,
+          obscureText: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: _decoration('Answer (stored encrypted)'),
+          validator: (v) =>
+              (v == null || v.trim().isEmpty) ? 'Required' : null,
+        );
+      case _typeText:
+      default:
+        return TextFormField(
+          controller: _answerController,
+          style: const TextStyle(color: Colors.white),
+          decoration: _decoration('Answer'),
+          maxLines: 2,
+          validator: (v) =>
+              (v == null || v.trim().isEmpty) ? 'Required' : null,
+        );
+    }
+  }
+
+  Widget _buildCheckboxAnswer(EventQuestionModel question) {
+    final options = _optionsFor(question);
+    if (options.isEmpty) {
+      return const Text(
+        'This question has no options configured.',
+        style: TextStyle(color: Colors.redAccent),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Answer (select one or more)',
+            style: TextStyle(color: Colors.white70)),
+        ...options.asMap().entries.map((entry) {
+          final index = entry.key + 1; // 1-based
+          final label = entry.value;
+          return CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            checkColor: Colors.black,
+            activeColor: Colors.white,
+            title: Text(label, style: const TextStyle(color: Colors.white)),
+            value: _selectedCheckboxIndices.contains(index),
+            onChanged: (checked) {
+              setState(() {
+                if (checked == true) {
+                  _selectedCheckboxIndices.add(index);
+                } else {
+                  _selectedCheckboxIndices.remove(index);
+                }
+              });
+            },
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildRadioAnswer(EventQuestionModel question, String label) {
+    final options = _optionsFor(question);
+    if (options.isEmpty) {
+      return const Text(
+        'This question has no options configured.',
+        style: TextStyle(color: Colors.redAccent),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white70)),
+        ...options.asMap().entries.map((entry) {
+          final index = entry.key + 1; // 1-based
+          final optionLabel = entry.value;
+          return RadioListTile<int>(
+            contentPadding: EdgeInsets.zero,
+            activeColor: Colors.white,
+            title: Text(
+              optionLabel,
+              style: const TextStyle(color: Colors.white),
+            ),
+            value: index,
+            groupValue: _selectedRadioIndex,
+            onChanged: (value) => setState(() => _selectedRadioIndex = value),
+          );
+        }),
+      ],
     );
   }
 
@@ -433,14 +688,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
             ),
             const SizedBox(height: 16),
 
-            TextFormField(
-              controller: _answerController,
-              style: const TextStyle(color: Colors.white),
-              decoration: _decoration('Attendee Answer'),
-              maxLines: 2,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
-            ),
+            _buildAnswerField(),
             const SizedBox(height: 16),
 
             SizedBox(
@@ -570,7 +818,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
                     final r = _filteredResponses[index];
                     return ListTile(
                       title: Text(
-                        r.attendeeAnswer,
+                        _answerDisplayFor(r),
                         style: const TextStyle(color: Colors.white),
                       ),
                       subtitle: Text(

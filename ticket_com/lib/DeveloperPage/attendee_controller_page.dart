@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:ticket_com/DeveloperPage/attendee_response_form.dart';
 import 'ticket_attendence_form.dart';
 import 'orders_info_form.dart';
+import 'attendee_response_form.dart';
+import 'identity_verification_form.dart';
 
 class AttendeeControllerPage extends StatefulWidget {
   const AttendeeControllerPage({super.key});
@@ -13,7 +14,8 @@ class AttendeeControllerPage extends StatefulWidget {
 class _AttendeeControllerPageState extends State<AttendeeControllerPage> {
   final GlobalKey<TicketAttendenceFormState> _attendeeFormKey = GlobalKey();
   final GlobalKey<OrdersInfoFormState> _ordersFormKey = GlobalKey();
-  final GlobalKey<AttendeeResponseFormState> _responseFormkey = GlobalKey();
+  final GlobalKey<AttendeeResponseFormState> _responseFormKey = GlobalKey();
+  final GlobalKey<IdentityVerificationFormState> _identityFormKey = GlobalKey();
   int _selectedIndexId = 0;
 
   @override
@@ -32,7 +34,9 @@ class _AttendeeControllerPageState extends State<AttendeeControllerPage> {
       case 1:
         return OrdersInfoForm(key: _ordersFormKey);
       case 2:
-        return AttendeeResponseForm(key: _responseFormkey);
+        return AttendeeResponseForm(key: _responseFormKey);
+      case 3:
+        return IdentityVerificationForm(key: _identityFormKey);
       default:
         return const Center();
     }
@@ -49,6 +53,7 @@ class _AttendeeControllerPageState extends State<AttendeeControllerPage> {
       backgroundColor: Colors.black87,
       unselectedItemColor: Colors.grey,
       selectedItemColor: Colors.white,
+      type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndexId,
       onTap: _onItemTapped,
       items: const [
@@ -59,6 +64,14 @@ class _AttendeeControllerPageState extends State<AttendeeControllerPage> {
         BottomNavigationBarItem(
           icon: Icon(Icons.receipt_long_outlined),
           label: "order info",
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.question_answer_outlined),
+          label: "responses",
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.verified_user_outlined),
+          label: "identity verification",
         ),
       ],
     );

@@ -9,7 +9,7 @@ async def create_eventrole(req_data: AddEventRoleRequest):
         con = getConnect()
         with con.cursor() as cur:
             sql = """
-                INSERT INTO eventRole
+                INSERT INTO eventrole
                 (RoleName)
                 VALUES (%s)
             """
@@ -31,7 +31,7 @@ async def get_all_EventRoles():
     try:
         con = getConnect()
         with con.cursor() as cur:
-            sql = "SELECT * FROM eventRole"
+            sql = "SELECT * FROM eventrole"
             cur.execute(sql)
             rows = cur.fetchall()
 
@@ -45,7 +45,7 @@ async def get_eventrole_by_id(event_role_id: int):
     try:
         con = getConnect()
         with con.cursor() as cur:
-            sql = "SELECT * FROM eventRole WHERE EventRoleID = %s"
+            sql = "SELECT * FROM eventrole WHERE EventRoleID = %s"
             cur.execute(sql, (event_role_id,))
             row = cur.fetchone()
 
@@ -65,7 +65,7 @@ async def update_eventrole(req_data: UpdateEventRoleRequest):
         con = getConnect()
         with con.cursor() as cur:
             sql = """
-                UPDATE eventRole
+                UPDATE eventrole
                 SET RoleName = %s
                 WHERE EventRoleID = %s
             """
@@ -92,7 +92,7 @@ async def delete_eventrole(event_role_id: int):
     try:
         con = getConnect()
         with con.cursor() as cur:
-            sql = "DELETE FROM eventRole WHERE EventRoleID = %s"
+            sql = "DELETE FROM eventrole WHERE EventRoleID = %s"
             cur.execute(sql, (event_role_id,))
 
             if cur.rowcount == 0:

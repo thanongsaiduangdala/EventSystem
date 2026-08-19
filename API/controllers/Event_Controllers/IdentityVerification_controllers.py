@@ -1,7 +1,15 @@
+import os
+import uuid
 import pymysql
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile, File, status
 from DB.DBConnect import getConnect
 from models.schema import AddIdentityVerificationRequest, UpdateIdentityVerificationRequest
+
+# Relative to the backend's working directory / static file mount, matching
+# the same "<baseUrl>/static/<path>" convention CategoryIconPath already uses.
+DOCUMENT_UPLOAD_DIR = "static/identity_documents"
+ALLOWED_DOCUMENT_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+MAX_DOCUMENT_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 async def create_identityverification(req_data: AddIdentityVerificationRequest):
@@ -35,6 +43,44 @@ async def create_identityverification(req_data: AddIdentityVerificationRequest):
         raise
     except pymysql.MySQLError as err:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def upload_identity_document(file: UploadFile = File(...)):
+    """
+    Accepts a camera photo or gallery image for a verification record's
+    DocumentImageRedPath, saves it under the static file mount, and returns
+    the relative path to store on the record (consumed by
+    IdentityVerificationApiService.uploadDocumentImage on the Flutter side).
+    """
+    try:
+        ext = os.path.splitext(file.filename or "")[1].lower()
+        if ext not in ALLOWED_DOCUMENT_EXTENSIONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported file type. Allowed: jpg, jpeg, png, webp, heic",
+            )
+
+        contents = await file.read()
+        if len(contents) > MAX_DOCUMENT_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File too large (max 10MB)",
+            )
+
+        os.makedirs(DOCUMENT_UPLOAD_DIR, exist_ok=True)
+        new_filename = f"{uuid.uuid4().hex}{ext}"
+        dest_path = os.path.join(DOCUMENT_UPLOAD_DIR, new_filename)
+
+        with open(dest_path, "wb") as f:
+            f.write(contents)
+
+        relative_path = f"identity_documents/{new_filename}"
+        return {"msg": "Document uploaded successfully", "path": relative_path}
+
+    except HTTPException:
+        raise
+    except Exception as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"upload error": str(err)})
 
 
 async def get_all_identityverifications():
