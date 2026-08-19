@@ -1,3 +1,10 @@
 fastapi
 uvicorn[standard]
 python-dotenv
+python-jose[cryptography]
+bcrypt
+pymysql
+pydantic
+aiofiles
+Pillow
+python-multipart

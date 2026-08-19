@@ -1,3 +1,4 @@
+import os
 import pymysql
 from pymysql.cursors import DictCursor
 from pymysql.constants import CLIENT
@@ -5,10 +6,10 @@ from pymysql.constants import CLIENT
 def getConnect():
     try:
         db = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='Ilikeminecraft040610',
-            database='reservation_system',
+            host=os.environ.get('DB_HOST', 'localhost'),
+            user=os.environ.get('DB_USER', 'root'),
+            password=os.environ.get('DB_PASSWORD', ''),
+            database=os.environ.get('DB_NAME', 'reservation_system'),
             cursorclass=DictCursor,
             client_flag=CLIENT.FOUND_ROWS
         )

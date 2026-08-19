@@ -1,4 +1,17 @@
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_db
+    environment:
+      MYSQL_ROOT_PASSWORD: Ilikeminecraft040610
+      MYSQL_DATABASE: reservation_system
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./API/Mysql/code.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
   api:
     build: ./API
     container_name: fastapi_backend
@@ -8,4 +21,21 @@ services:
       - ./API:/app
     env_file:
       - ./API/.env
+    depends_on:
+      - mysql
     restart: unless-stopped
+
+  flutter-web:
+    build:
+      context: ./ticket_com
+      args:
+        API_BASE_URL: "http://localhost:8000"
+    container_name: flutter_frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
