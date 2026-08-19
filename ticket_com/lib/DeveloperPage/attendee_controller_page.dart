@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_com/DeveloperPage/attendee_response_form.dart';
 import 'ticket_attendence_form.dart';
 import 'orders_info_form.dart';
 
@@ -12,6 +13,7 @@ class AttendeeControllerPage extends StatefulWidget {
 class _AttendeeControllerPageState extends State<AttendeeControllerPage> {
   final GlobalKey<TicketAttendenceFormState> _attendeeFormKey = GlobalKey();
   final GlobalKey<OrdersInfoFormState> _ordersFormKey = GlobalKey();
+  final GlobalKey<AttendeeResponseFormState> _responseFormkey = GlobalKey();
   int _selectedIndexId = 0;
 
   @override
@@ -29,6 +31,8 @@ class _AttendeeControllerPageState extends State<AttendeeControllerPage> {
         return TicketAttendenceForm(key: _attendeeFormKey);
       case 1:
         return OrdersInfoForm(key: _ordersFormKey);
+      case 2:
+        return AttendeeResponseForm(key: _responseFormkey);
       default:
         return const Center();
     }
