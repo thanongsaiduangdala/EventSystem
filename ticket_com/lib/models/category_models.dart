@@ -1,20 +1,31 @@
+/// Shared models for categoryinfo and eventcategoryinfo.
+///
+/// Both category_api_service.dart and the forms (event_category_form.dart,
+/// account_category_info_form.dart) reference these types, so they live in
+/// one place to avoid duplicate-class import conflicts.
+
 class CategoryModel {
   final int id;
   final String name;
-  final String iconPath;
+  final String? iconPath;
 
-  CategoryModel({required this.id, required this.name, required this.iconPath});
+  CategoryModel({required this.id, required this.name, this.iconPath});
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
     return CategoryModel(
       id: json['CategoryID'] as int,
-      name: json['CategoryName']?.toString() ?? '',
-      iconPath: json['CategoryIconPath']?.toString() ?? '',
+      name: json['CategoryName'] as String,
+      iconPath: json['CategoryIconPath'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'CategoryID': id,
+        'CategoryName': name,
+        'CategoryIconPath': iconPath,
+      };
 }
 
-/// A link between an Event and a Category (the `eventcategoryinfo` join table).
 class EventCategoryModel {
   final int id;
   final int eventId;
@@ -33,4 +44,10 @@ class EventCategoryModel {
       categoryId: json['CategoryID'] as int,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'EventCategoryID': id,
+        'EventID': eventId,
+        'CategoryID': categoryId,
+      };
 }

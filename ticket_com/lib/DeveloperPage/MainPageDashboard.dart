@@ -5,6 +5,7 @@ import 'package:ticket_com/DeveloperPage/organizer_controller_page.dart';
 import './EventController_Page.dart';
 import './event_info_form.dart';
 import './ticket_type_form.dart';
+import './sponsor_controller_page.dart';
 
 class MainPageDashboard extends StatefulWidget {
   const MainPageDashboard({super.key});
@@ -36,6 +37,17 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
     Navigator.pop(context);
   }
 
+  /// Closes the drawer, then leaves the dashboard, returning to whatever
+  /// page pushed MainPageDashboard onto the navigator stack (e.g. your
+  /// mainpage.dart). If MainPageDashboard is the current root route (nothing
+  /// to pop back to), this just closes the drawer.
+  void _exitDashboard() {
+    Navigator.pop(context); // close the drawer
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context); // leave the dashboard
+    }
+  }
+
   Widget _currentBody() {
     switch (_selectedIndex) {
       case 0:
@@ -51,7 +63,7 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
       case 3:
         return AttendeeControllerPage();
       case 4:
-        return const SponsorBody();
+        return SponsorControllerPage();
       default:
         return const SizedBox.shrink();
     }
@@ -75,7 +87,7 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
       case 3:
         return null;
       case 4:
-        return const SponsorNavBar();
+        return null;
       default:
         return null;
     }
@@ -193,6 +205,12 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
             selectedTileColor: Colors.white10,
             onTap: () => _selectPage(4),
           ),
+          const Divider(color: Colors.white24, height: 32),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.white70),
+            title: const Text('Exit', style: TextStyle(color: Colors.white)),
+            onTap: _exitDashboard,
+          ),
         ],
       ),
     );
@@ -246,15 +264,6 @@ class AttendeeNavBar extends StatelessWidget {
   }
 }
 
-class SponsorBody extends StatelessWidget {
-  const SponsorBody({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Sponsor content', style: TextStyle(color: Colors.white)),
-    );
-  }
-}
 
 class SponsorNavBar extends StatelessWidget {
   const SponsorNavBar({super.key});

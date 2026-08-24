@@ -432,4 +432,17 @@ class UpdateAccountNoPasswordInfoRequest(BaseModel):
     Email: str
     StatusID: int
 
- 
+ # ---------- wishlistinfo ----------
+class AddWishlistRequest(BaseModel):
+    AccountID: int
+    EventID: int
+
+
+# ---------- accountcategoryinfo ----------
+class SetAccountCategoriesRequest(BaseModel):
+    AccountID: int
+    CategoryIDs: List[int]
+
+class AddAccountCategoryRequest(BaseModel):
+    AccountID: int
+    CategoryID: int

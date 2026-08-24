@@ -24,18 +24,23 @@ services:
     depends_on:
       - mysql
     restart: unless-stopped
+    command: uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 
-  flutter-web:
+  flutter-dev:
     build:
       context: ./ticket_com
-      args:
-        API_BASE_URL: "http://localhost:8000"
-    container_name: flutter_frontend
+      dockerfile: Dockerfile.dev
+    container_name: flutter_dev
+    volumes:
+      - ./ticket_com:/app
+    working_dir: /app
     ports:
-      - "8080:80"
+      - "8081:8081"
+    stdin_open: true
+    tty: true
+    command: flutter run -d web-server --web-hostname=0.0.0.0 --web-port=8081 --dart-define=API_BASE_URL=http://localhost:8000
     depends_on:
       - api
-    restart: unless-stopped
 
 volumes:
   mysql_data:

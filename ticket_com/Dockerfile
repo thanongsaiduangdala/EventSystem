@@ -1,11 +1,10 @@
-FROM ghcr.io/cirruslabs/flutter:stable AS build
+FROM ghcr.io/cirruslabs/flutter:stable
+
 WORKDIR /app
-COPY . .
+
+# Pre-fetch deps at build time so first `flutter run` is faster;
+# the volume mount will override this with your live code anyway.
+COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 
-ARG API_BASE_URL=http://localhost:8000
-RUN flutter build web --release --dart-define=API_BASE_URL=$API_BASE_URL
-
-FROM nginx:alpine
-COPY --from=build /app/build/web /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 8081
