@@ -6,6 +6,7 @@ import './EventController_Page.dart';
 import './event_info_form.dart';
 import './ticket_type_form.dart';
 import './sponsor_controller_page.dart';
+import './wish_and_category_controller_page.dart';
 
 class MainPageDashboard extends StatefulWidget {
   const MainPageDashboard({super.key});
@@ -28,6 +29,7 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
     'Organization',
     'Attendee',
     'Sponsor',
+    'Wishlist & Categories',
   ];
 
   void _selectPage(int index) {
@@ -64,6 +66,8 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
         return AttendeeControllerPage();
       case 4:
         return SponsorControllerPage();
+      case 5:
+        return const WishAndCategoryControllerPage();
       default:
         return const SizedBox.shrink();
     }
@@ -87,6 +91,8 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
       case 3:
         return null;
       case 4:
+        return null;
+      case 5:
         return null;
       default:
         return null;
@@ -204,6 +210,16 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
             selected: _selectedIndex == 4,
             selectedTileColor: Colors.white10,
             onTap: () => _selectPage(4),
+          ),
+          ListTile(
+            leading: const Icon(Icons.star_outline, color: Colors.white70),
+            title: const Text(
+              'Wishlist & Categories',
+              style: TextStyle(color: Colors.white),
+            ),
+            selected: _selectedIndex == 5,
+            selectedTileColor: Colors.white10,
+            onTap: () => _selectPage(5),
           ),
           const Divider(color: Colors.white24, height: 32),
           ListTile(

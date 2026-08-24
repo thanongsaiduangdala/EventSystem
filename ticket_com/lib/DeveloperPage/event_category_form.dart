@@ -690,9 +690,9 @@ class EventCategoryFormState extends State<EventCategoryForm> {
                             height: 48,
                             color: const Color(0xFF1E1E1E),
                             child: Icon(
-                              category == null
+                              category?.iconPath == null
                                   ? Icons.category_outlined
-                                  : iconForKey(category.iconPath),
+                                  : iconForKey(category!.iconPath!),
                               color: Colors.white70,
                               size: 24,
                             ),

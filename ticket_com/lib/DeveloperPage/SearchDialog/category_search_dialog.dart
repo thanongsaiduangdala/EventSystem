@@ -86,7 +86,9 @@ class _CategorySearchDialogState extends State<CategorySearchDialog> {
                               height: 36,
                               color: const Color(0xFF2A2A2A),
                               child: Icon(
-                                iconForKey(c.iconPath),
+                                c.iconPath == null
+                                    ? Icons.category_outlined
+                                    : iconForKey(c.iconPath!),
                                 color: Colors.white70,
                                 size: 20,
                               ),

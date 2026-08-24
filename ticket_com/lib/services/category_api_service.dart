@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import '../config/api_config.dart';
 import '../models/category_models.dart';
+export '../models/category_models.dart';
 
 /// ---------------------------------------------------------------------
 /// Route prefixes confirmed against EventCategory_router.py:
