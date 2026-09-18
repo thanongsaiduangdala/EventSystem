@@ -252,6 +252,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noInterestingEvents => 'No interesting events right now';
 
   @override
+  String get mostJoinedEvents => 'Most Joined Events';
+
+  @override
+  String get noMostJoinedEvents => 'No joined events yet';
+
+  @override
   String get searchResults => 'Search Results';
 
   @override
@@ -276,4 +282,85 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noTicketsYet => 'You haven\'t bought any tickets yet';
+
+  @override
+  String get aboutEvent => 'About this event';
+
+  @override
+  String get tickets => 'Tickets';
+
+  @override
+  String get buyTicket => 'Buy Ticket';
+
+  @override
+  String get total => 'Total';
+
+  @override
+  String get attending => 'attending';
+
+  @override
+  String get priceFrom => 'from';
+
+  @override
+  String get noTicketsAvailable => 'No tickets available yet';
+
+  @override
+  String get pleaseLogInToBuy => 'Please log in to buy tickets';
+
+  @override
+  String get selectTicketFirst => 'Please select a ticket first';
+
+  @override
+  String get orderPlaced => 'Ticket order placed successfully';
+
+  @override
+  String get eventDetails => 'Event Details';
+
+  @override
+  String get going => 'Going';
+
+  @override
+  String get invite => 'Invite';
+
+  @override
+  String get organizer => 'Organizer';
+
+  @override
+  String get follow => 'Follow';
+
+  @override
+  String get readMore => 'Read More';
+
+  @override
+  String get checkout => 'Checkout';
+
+  @override
+  String get orderSummary => 'Order Summary';
+
+  @override
+  String get paymentMethod => 'Payment Method';
+
+  @override
+  String get paymentProof => 'Payment Proof / Reference';
+
+  @override
+  String get paymentProofHint =>
+      'Enter the transaction ID or reference from your bank transfer';
+
+  @override
+  String get dontLeavePaymentProofEmpty => 'Don\'t leave payment proof empty';
+
+  @override
+  String get attendeeInfo => 'Attendee Information';
+
+  @override
+  String get forYourself => 'This ticket is for me';
+
+  @override
+  String get confirmOrder => 'Confirm Order';
+
+  @override
+  String ticketSlot(Object number, Object type) {
+    return 'Ticket $number · $type';
+  }
 }

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'package:ticket_com/HomePage/event_card.dart';
+import 'package:ticket_com/HomePage/event_detail_page.dart';
 import 'package:ticket_com/HomePage/event_filter.dart';
 import 'package:ticket_com/HomePage/event_list_page.dart';
 import 'package:ticket_com/HomePage/nearby_event_card.dart';
@@ -230,6 +231,12 @@ class _HomePageState extends State<HomePage> {
       if (pick.isNotEmpty) return pick;
     }
     return _randomOrder;
+  }
+
+  List<EventModel> get _allMostJoinedEvents {
+    final list = List<EventModel>.of(_events)
+      ..sort((a, b) => _popularity(b).compareTo(_popularity(a)));
+    return list;
   }
 
   bool get _isFiltering =>
@@ -592,6 +599,18 @@ class _HomePageState extends State<HomePage> {
             _padded(_emptyState(context, l10n.noInterestingEvents))
           else
             _horizontalEvents(_allInterestingEvents),
+          const SizedBox(height: 20),
+          _sectionHeader(
+            context,
+            l10n.mostJoinedEvents,
+            onSeeAll: () =>
+                _openAllEvents(l10n.mostJoinedEvents, _allMostJoinedEvents),
+          ),
+          const SizedBox(height: 12),
+          if (_allMostJoinedEvents.isEmpty)
+            _padded(_emptyState(context, l10n.noMostJoinedEvents))
+          else
+            _horizontalEvents(_allMostJoinedEvents),
           const SizedBox(height: 24),
         ],
       ],
@@ -689,6 +708,7 @@ class _HomePageState extends State<HomePage> {
       attend: _wishCounts[event.id] ?? 0,
       saved: _myWishByEvent.containsKey(event.id),
       onSaveTap: () => _toggleWish(event),
+      onTap: () => _openEventDetail(event),
     );
   }
 
@@ -1066,6 +1086,7 @@ class _HomePageState extends State<HomePage> {
               attend: _wishCounts[event.id] ?? 0,
               saved: _myWishByEvent.containsKey(event.id),
               onSaveTap: () => _toggleWish(event),
+              onTap: () => _openEventDetail(event),
             ),
           );
         },
@@ -1096,6 +1117,7 @@ class _HomePageState extends State<HomePage> {
               organizerName: _organizerById[event.organizerId]?.name,
               saved: _myWishByEvent.containsKey(event.id),
               onSaveTap: () => _toggleWish(event),
+              onTap: () => _openEventDetail(event),
             ),
           );
         },
@@ -1121,9 +1143,36 @@ class _HomePageState extends State<HomePage> {
           wishCounts: _wishCounts,
           savedIds: _myWishByEvent.keys.toSet(),
           onToggleWish: _toggleWish,
+          onEventTap: _openEventDetail,
         ),
       ),
     );
+  }
+
+  void _openEventDetail(EventModel event) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EventDetailPage(
+          event: event,
+          image: _imageByEvent[event.id],
+          organizer: _organizerById[event.organizerId],
+          attend: _wishCounts[event.id] ?? 0,
+          saved: _myWishByEvent.containsKey(event.id),
+          onToggleWish: _toggleWish,
+          minPrice: _minPriceByEvent[event.id],
+          categories: _categoriesForEvent(event.id),
+        ),
+      ),
+    );
+  }
+
+  List<CategoryModel> _categoriesForEvent(int eventId) {
+    return [
+      for (final id in (_eventCategories[eventId] ?? const <int>[]))
+        if (_categories.any((c) => c.id == id))
+          _categories.firstWhere((c) => c.id == id),
+    ];
   }
 
   Widget _emptyState(BuildContext context, String message) {

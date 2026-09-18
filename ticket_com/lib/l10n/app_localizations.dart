@@ -572,6 +572,18 @@ abstract class AppLocalizations {
   /// **'No interesting events right now'**
   String get noInterestingEvents;
 
+  /// No description provided for @mostJoinedEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Most Joined Events'**
+  String get mostJoinedEvents;
+
+  /// No description provided for @noMostJoinedEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'No joined events yet'**
+  String get noMostJoinedEvents;
+
   /// No description provided for @searchResults.
   ///
   /// In en, this message translates to:
@@ -619,6 +631,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You haven\'t bought any tickets yet'**
   String get noTicketsYet;
+
+  /// No description provided for @aboutEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'About this event'**
+  String get aboutEvent;
+
+  /// No description provided for @tickets.
+  ///
+  /// In en, this message translates to:
+  /// **'Tickets'**
+  String get tickets;
+
+  /// No description provided for @buyTicket.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy Ticket'**
+  String get buyTicket;
+
+  /// No description provided for @total.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get total;
+
+  /// No description provided for @attending.
+  ///
+  /// In en, this message translates to:
+  /// **'attending'**
+  String get attending;
+
+  /// No description provided for @priceFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'from'**
+  String get priceFrom;
+
+  /// No description provided for @noTicketsAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No tickets available yet'**
+  String get noTicketsAvailable;
+
+  /// No description provided for @pleaseLogInToBuy.
+  ///
+  /// In en, this message translates to:
+  /// **'Please log in to buy tickets'**
+  String get pleaseLogInToBuy;
+
+  /// No description provided for @selectTicketFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Please select a ticket first'**
+  String get selectTicketFirst;
+
+  /// No description provided for @orderPlaced.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket order placed successfully'**
+  String get orderPlaced;
+
+  /// No description provided for @eventDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Event Details'**
+  String get eventDetails;
+
+  /// No description provided for @going.
+  ///
+  /// In en, this message translates to:
+  /// **'Going'**
+  String get going;
+
+  /// No description provided for @invite.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite'**
+  String get invite;
+
+  /// No description provided for @organizer.
+  ///
+  /// In en, this message translates to:
+  /// **'Organizer'**
+  String get organizer;
+
+  /// No description provided for @follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow'**
+  String get follow;
+
+  /// No description provided for @readMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Read More'**
+  String get readMore;
+
+  /// No description provided for @checkout.
+  ///
+  /// In en, this message translates to:
+  /// **'Checkout'**
+  String get checkout;
+
+  /// No description provided for @orderSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Order Summary'**
+  String get orderSummary;
+
+  /// No description provided for @paymentMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Method'**
+  String get paymentMethod;
+
+  /// No description provided for @paymentProof.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Proof / Reference'**
+  String get paymentProof;
+
+  /// No description provided for @paymentProofHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the transaction ID or reference from your bank transfer'**
+  String get paymentProofHint;
+
+  /// No description provided for @dontLeavePaymentProofEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t leave payment proof empty'**
+  String get dontLeavePaymentProofEmpty;
+
+  /// No description provided for @attendeeInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Attendee Information'**
+  String get attendeeInfo;
+
+  /// No description provided for @forYourself.
+  ///
+  /// In en, this message translates to:
+  /// **'This ticket is for me'**
+  String get forYourself;
+
+  /// No description provided for @confirmOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Order'**
+  String get confirmOrder;
+
+  /// No description provided for @ticketSlot.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket {number} · {type}'**
+  String ticketSlot(Object number, Object type);
 }
 
 class _AppLocalizationsDelegate

@@ -253,6 +253,12 @@ class AppLocalizationsLo extends AppLocalizations {
   String get noInterestingEvents => 'ຍັງບໍ່ມີອີເວັນທີ່ໜ້າສົນໃຈ';
 
   @override
+  String get mostJoinedEvents => 'ອີເວັນທີ່ມີຜູ້ເຂົ້າຮ່ວມຫຼາຍທີ່ສຸດ';
+
+  @override
+  String get noMostJoinedEvents => 'ຍັງບໍ່ມີອີເວັນທີ່ມີຜູ້ເຂົ້າຮ່ວມ';
+
+  @override
   String get searchResults => 'ຜົນການຄົ້ນຫາ';
 
   @override
@@ -277,4 +283,85 @@ class AppLocalizationsLo extends AppLocalizations {
 
   @override
   String get noTicketsYet => 'ທ່ານຍັງບໍ່ໄດ້ຊື້ປີ້ຫຍັງເທື່ອ';
+
+  @override
+  String get aboutEvent => 'ກ່ຽວກັບອີເວັນນີ້';
+
+  @override
+  String get tickets => 'ປີ້';
+
+  @override
+  String get buyTicket => 'ຊື້ປີ້';
+
+  @override
+  String get total => 'ລວມທັງໝົດ';
+
+  @override
+  String get attending => 'ເຂົ້າຮ່ວມ';
+
+  @override
+  String get priceFrom => 'ຈາກ';
+
+  @override
+  String get noTicketsAvailable => 'ຍັງບໍ່ມີປີ້';
+
+  @override
+  String get pleaseLogInToBuy => 'ກະລຸນາເຂົ້າສູ່ລະບົບເພື່ອຊື້ປີ້';
+
+  @override
+  String get selectTicketFirst => 'ກະລຸນາເລືອກປີ້ກ່ອນ';
+
+  @override
+  String get orderPlaced => 'ສັ່ງຊື້ປີ້ສຳເລັດ';
+
+  @override
+  String get eventDetails => 'ລາຍລະອຽດອີເວັນ';
+
+  @override
+  String get going => 'ກຳລັງເຂົ້າຮ່ວມ';
+
+  @override
+  String get invite => 'ຊວນ';
+
+  @override
+  String get organizer => 'ຜູ້ຈັດງານ';
+
+  @override
+  String get follow => 'ຕິດຕາມ';
+
+  @override
+  String get readMore => 'ອ່ານເພີ່ມເຕີມ';
+
+  @override
+  String get checkout => 'ກວດສອບຄຳສັ່ງ';
+
+  @override
+  String get orderSummary => 'ສະຫຼຸບຄຳສັ່ງ';
+
+  @override
+  String get paymentMethod => 'ວິທີການຊຳລະ';
+
+  @override
+  String get paymentProof => 'ຫຼັກຖານການຊຳລະ / ເລກອ້າງອີງ';
+
+  @override
+  String get paymentProofHint => 'ໃສ່ເລກອ້າງອີງການໂອນເງິນຈາກທະນາຄານ';
+
+  @override
+  String get dontLeavePaymentProofEmpty =>
+      'ກະລຸນາຢ່າປ່ອຍຊ່ອງຫຼັກຖານການຊຳລະວ່າງ';
+
+  @override
+  String get attendeeInfo => 'ຂໍ້ມູນຜູ້ເຂົ້າຮ່ວມ';
+
+  @override
+  String get forYourself => 'ປີ້ນີ້ສຳລັບຂ້ອຍ';
+
+  @override
+  String get confirmOrder => 'ຢືນຢັນຄຳສັ່ງ';
+
+  @override
+  String ticketSlot(Object number, Object type) {
+    return 'ປີ້ທີ່ $number · $type';
+  }
 }
