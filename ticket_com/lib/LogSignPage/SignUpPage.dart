@@ -5,6 +5,7 @@ import 'package:ticket_com/main.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
+import 'package:ticket_com/utils/category_colors.dart';
 
 class Signuppage extends StatefulWidget {
   const Signuppage({super.key});
@@ -178,8 +179,8 @@ class _SignuppageState extends State<Signuppage> {
     return SingleChildScrollView(
       child: Padding(
         padding: EdgeInsets.only(
-          left: 40,
-          right: 40,
+          left: 24,
+          right: 24,
           top: 10,
           bottom: MediaQuery.of(context).viewInsets.bottom + 20,
         ),
@@ -197,23 +198,28 @@ class _SignuppageState extends State<Signuppage> {
             ),
             Text(
               l10nOf(context).signUp,
-              style: TextStyle(fontSize: 30, letterSpacing: _letterSpacing(5)),
+              style: TextStyle(
+                fontSize: 30,
+                letterSpacing: _letterSpacing(5),
+                fontWeight: FontWeight.w800,
+                color: kAccent,
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             _txtFirstName(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _txtLastName(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _txtPhone(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _txtEmail(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _txtPassword(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _txtConfirmPassword(),
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
             _btnSignUp(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _loginText(),
             const SizedBox(height: 20),
           ],
@@ -226,8 +232,8 @@ class _SignuppageState extends State<Signuppage> {
     return SingleChildScrollView(
       child: Padding(
         padding: EdgeInsets.only(
-          left: 40,
-          right: 40,
+          left: 24,
+          right: 24,
           top: 10,
           bottom: MediaQuery.of(context).viewInsets.bottom + 20,
         ),
@@ -244,15 +250,15 @@ class _SignuppageState extends State<Signuppage> {
               ),
             ),
             const SizedBox(height: 20),
-            const Icon(
-              Icons.email_outlined,
-              size: 60,
-              color: Color.fromARGB(255, 182, 61, 61),
-            ),
+            const Icon(Icons.email_outlined, size: 60, color: kAccent),
             const SizedBox(height: 20),
             Text(
               l10nOf(context).pleaseEnterValidEmail,
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF212121),
+              ),
             ),
             const SizedBox(height: 12),
             Text(
@@ -265,7 +271,7 @@ class _SignuppageState extends State<Signuppage> {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color.fromARGB(255, 117, 27, 27),
+                color: kAccent,
               ),
             ),
             const SizedBox(height: 12),
@@ -300,6 +306,7 @@ class _SignuppageState extends State<Signuppage> {
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 12,
+                color: Color(0xFF212121),
               ),
               decoration: InputDecoration(
                 counterText: "",
@@ -310,19 +317,19 @@ class _SignuppageState extends State<Signuppage> {
                   fontSize: 28,
                 ),
                 errorText: _otpError ? l10nOf(context).wrongCodeETC : null,
+                filled: true,
+                fillColor: Colors.white,
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
-                    color: _otpError ? Colors.red : Colors.grey,
+                    color: _otpError ? Colors.red : Colors.grey[300]!,
                     width: _otpError ? 2 : 1,
                   ),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
-                    color: _otpError
-                        ? Colors.red
-                        : const Color.fromARGB(255, 182, 61, 61),
+                    color: _otpError ? Colors.red : kAccent,
                     width: 2,
                   ),
                 ),
@@ -331,7 +338,7 @@ class _SignuppageState extends State<Signuppage> {
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 52,
               child: ElevatedButton(
                 onPressed: () async {
                   if (_otpController.text.trim().isEmpty ||
@@ -405,8 +412,9 @@ class _SignuppageState extends State<Signuppage> {
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.zero,
                   foregroundColor: Colors.white,
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(26),
                   ),
                 ),
                 child: Ink(
@@ -414,34 +422,38 @@ class _SignuppageState extends State<Signuppage> {
                     gradient: const LinearGradient(
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
-                      colors: [
-                        Color.fromARGB(255, 182, 61, 61),
-                        Color.fromARGB(255, 117, 27, 27),
-                        Color.fromARGB(255, 34, 7, 7),
-                      ],
+                      colors: [kAccent, Color(0xFF8E2DE2)],
                     ),
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(26),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x335B4DFF),
+                        blurRadius: 12,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Center(
                     child: Text(
                       l10nOf(context).verify,
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 18,
                         letterSpacing: letterSpacingMain(5),
                         color: Colors.white,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             TextButton(
               onPressed: _goBack,
               child: Text(
                 l10nOf(context).backToSignUp,
-                style: TextStyle(
-                  color: Color.fromARGB(255, 182, 61, 61),
+                style: const TextStyle(
+                  color: kAccent,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -457,67 +469,88 @@ class _SignuppageState extends State<Signuppage> {
     return appLocale.value.languageCode == 'lo' ? 0 : spacing;
   }
 
-  Widget _txtFirstName() {
-    return TextField(
-      controller: _firstNameController,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-      onChanged: (_) => setState(() => _firstNameError = false),
-      decoration: InputDecoration(
-        labelText: l10nOf(context).firstName,
-        labelStyle: TextStyle(color: _firstNameError ? Colors.red : null),
-        errorText: _firstNameError
-            ? l10nOf(context).dontLeaveFirstNameEmpty
-            : null,
-        enabledBorder: _firstNameError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(),
-        focusedBorder: _firstNameError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.blue),
-              ),
-        suffixIcon: _firstNameError
-            ? const Icon(Icons.error_outline, color: Colors.red)
-            : null,
+  InputBorder _fieldBorder({required bool error, required bool focused}) {
+    const defaultColor = Color(0xFFE0E0E0);
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(
+        color: error ? Colors.red : (focused ? kAccent : defaultColor),
+        width: error || focused ? 2 : 1,
       ),
     );
   }
 
-  Widget _txtLastName() {
+  Widget _txtField({
+    required TextEditingController controller,
+    required String label,
+    required TextStyle style,
+    bool? error,
+    String? errorText,
+    TextInputType? keyboardType,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+    bool obscureText = false,
+    VoidCallback? onChanged,
+  }) {
     return TextField(
-      controller: _lastNameController,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-      onChanged: (_) => setState(() => _lastNameError = false),
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      style: style,
+      onChanged: (_) => onChanged?.call(),
       decoration: InputDecoration(
-        labelText: l10nOf(context).lastName,
-        labelStyle: TextStyle(color: _lastNameError ? Colors.red : null),
-        errorText: _lastNameError
-            ? l10nOf(context).dontLeaveLastNameEmpty
-            : null,
-        enabledBorder: _lastNameError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(),
-        focusedBorder: _lastNameError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.blue),
-              ),
-        suffixIcon: _lastNameError
-            ? const Icon(Icons.error_outline, color: Colors.red)
-            : null,
+        labelText: label,
+        labelStyle: TextStyle(
+          color: error == true ? Colors.red : Colors.grey[600],
+          fontWeight: FontWeight.w500,
+        ),
+        errorText: error == true ? errorText : null,
+        errorMaxLines: 2,
+        filled: true,
+        fillColor: Colors.white,
+        prefixIcon: prefixIcon,
+        enabledBorder: _fieldBorder(error: error == true, focused: false),
+        focusedBorder: _fieldBorder(error: error == true, focused: true),
+        suffixIcon: suffixIcon,
       ),
+    );
+  }
+
+  Widget _txtFirstName() {
+    return _txtField(
+      controller: _firstNameController,
+      label: l10nOf(context).firstName,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF212121),
+      ),
+      error: _firstNameError,
+      errorText: l10nOf(context).dontLeaveFirstNameEmpty,
+      prefixIcon: const Icon(Icons.person_outline, color: Colors.grey),
+      suffixIcon: _firstNameError
+          ? const Icon(Icons.error_outline, color: Colors.red)
+          : null,
+      onChanged: () => setState(() => _firstNameError = false),
+    );
+  }
+
+  Widget _txtLastName() {
+    return _txtField(
+      controller: _lastNameController,
+      label: l10nOf(context).lastName,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF212121),
+      ),
+      error: _lastNameError,
+      errorText: l10nOf(context).dontLeaveLastNameEmpty,
+      prefixIcon: const Icon(Icons.person_outline, color: Colors.grey),
+      suffixIcon: _lastNameError
+          ? const Icon(Icons.error_outline, color: Colors.red)
+          : null,
+      onChanged: () => setState(() => _lastNameError = false),
     );
   }
 
@@ -534,7 +567,11 @@ class _SignuppageState extends State<Signuppage> {
     return TextField(
       controller: _phoneController,
       keyboardType: TextInputType.phone,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF212121),
+      ),
       onChanged: (_) => setState(() {
         _phoneError = false;
         _phoneDuplicateError = false;
@@ -542,23 +579,24 @@ class _SignuppageState extends State<Signuppage> {
       decoration: InputDecoration(
         labelText: l10nOf(context).phoneNumber,
         labelStyle: TextStyle(
-          color: (_phoneError || _phoneDuplicateError) ? Colors.red : null,
+          color: (_phoneError || _phoneDuplicateError)
+              ? Colors.red
+              : Colors.grey[600],
+          fontWeight: FontWeight.w500,
         ),
         errorText: phoneErrorText,
-        enabledBorder: (_phoneError || _phoneDuplicateError)
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(),
-        focusedBorder: (_phoneError || _phoneDuplicateError)
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.blue),
-              ),
+        errorMaxLines: 2,
+        filled: true,
+        fillColor: Colors.white,
+        prefixIcon: const Icon(Icons.phone_outlined, color: Colors.grey),
+        enabledBorder: _fieldBorder(
+          error: _phoneError || _phoneDuplicateError,
+          focused: false,
+        ),
+        focusedBorder: _fieldBorder(
+          error: _phoneError || _phoneDuplicateError,
+          focused: true,
+        ),
         suffixIcon: (_phoneError || _phoneDuplicateError)
             ? const Icon(Icons.error_outline, color: Colors.red)
             : null,
@@ -579,7 +617,11 @@ class _SignuppageState extends State<Signuppage> {
     return TextField(
       controller: _emailController,
       keyboardType: TextInputType.emailAddress,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF212121),
+      ),
       onChanged: (_) => setState(() {
         _emailError = false;
         _emailDuplicateError = false;
@@ -587,23 +629,24 @@ class _SignuppageState extends State<Signuppage> {
       decoration: InputDecoration(
         labelText: l10nOf(context).email,
         labelStyle: TextStyle(
-          color: (_emailError || _emailDuplicateError) ? Colors.red : null,
+          color: (_emailError || _emailDuplicateError)
+              ? Colors.red
+              : Colors.grey[600],
+          fontWeight: FontWeight.w500,
         ),
         errorText: emailErrorText,
-        enabledBorder: (_emailError || _emailDuplicateError)
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(),
-        focusedBorder: (_emailError || _emailDuplicateError)
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.blue),
-              ),
+        errorMaxLines: 2,
+        filled: true,
+        fillColor: Colors.white,
+        prefixIcon: const Icon(Icons.mail_outline, color: Colors.grey),
+        enabledBorder: _fieldBorder(
+          error: _emailError || _emailDuplicateError,
+          focused: false,
+        ),
+        focusedBorder: _fieldBorder(
+          error: _emailError || _emailDuplicateError,
+          focused: true,
+        ),
         suffixIcon: (_emailError || _emailDuplicateError)
             ? const Icon(Icons.error_outline, color: Colors.red)
             : null,
@@ -621,43 +664,38 @@ class _SignuppageState extends State<Signuppage> {
     return TextField(
       controller: _passwordController,
       obscureText: showText,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF212121),
+      ),
       onChanged: (_) => setState(() => _passwordError = false),
       decoration: InputDecoration(
         labelText: l10nOf(context).password,
-        labelStyle: TextStyle(color: _passwordError ? Colors.red : null),
-        errorText: passwordErrorText,
-        enabledBorder: _passwordError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(),
-        focusedBorder: _passwordError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.blue),
-              ),
-        suffixIconConstraints: const BoxConstraints(
-          minWidth: 40,
-          minHeight: 40,
+        labelStyle: TextStyle(
+          color: _passwordError ? Colors.red : Colors.grey[600],
+          fontWeight: FontWeight.w500,
         ),
+        errorText: passwordErrorText,
+        errorMaxLines: 2,
+        filled: true,
+        fillColor: Colors.white,
+        prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
+        enabledBorder: _fieldBorder(error: _passwordError, focused: false),
+        focusedBorder: _fieldBorder(error: _passwordError, focused: true),
         suffixIcon: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (_passwordError)
-              const Icon(Icons.error_outline, color: Colors.red),
+              const Icon(Icons.error_outline, color: Colors.red, size: 20),
             IconButton(
               onPressed: () => setState(() => showText = !showText),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               icon: Icon(
                 showText ? Icons.visibility : Icons.visibility_off,
-                size: 30,
-                color: Colors.blue,
+                size: 22,
+                color: kAccent,
               ),
             ),
           ],
@@ -676,35 +714,36 @@ class _SignuppageState extends State<Signuppage> {
     return TextField(
       controller: _confirmPasswordController,
       obscureText: showConfirmText,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF212121),
+      ),
       onChanged: (_) => setState(() => _confirmPasswordError = false),
       decoration: InputDecoration(
         labelText: l10nOf(context).confirmPassword,
-        labelStyle: TextStyle(color: _confirmPasswordError ? Colors.red : null),
+        labelStyle: TextStyle(
+          color: _confirmPasswordError ? Colors.red : Colors.grey[600],
+          fontWeight: FontWeight.w500,
+        ),
         errorText: confirmErrorText,
-        enabledBorder: _confirmPasswordError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(),
-        focusedBorder: _confirmPasswordError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.blue),
-              ),
-        suffixIconConstraints: const BoxConstraints(
-          minWidth: 40,
-          minHeight: 40,
+        errorMaxLines: 2,
+        filled: true,
+        fillColor: Colors.white,
+        prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
+        enabledBorder: _fieldBorder(
+          error: _confirmPasswordError,
+          focused: false,
+        ),
+        focusedBorder: _fieldBorder(
+          error: _confirmPasswordError,
+          focused: true,
         ),
         suffixIcon: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (_confirmPasswordError)
-              const Icon(Icons.error_outline, color: Colors.red),
+              const Icon(Icons.error_outline, color: Colors.red, size: 20),
             IconButton(
               onPressed: () =>
                   setState(() => showConfirmText = !showConfirmText),
@@ -712,8 +751,8 @@ class _SignuppageState extends State<Signuppage> {
               constraints: const BoxConstraints(),
               icon: Icon(
                 showConfirmText ? Icons.visibility : Icons.visibility_off,
-                size: 30,
-                color: Colors.blue,
+                size: 22,
+                color: kAccent,
               ),
             ),
           ],
@@ -725,26 +764,32 @@ class _SignuppageState extends State<Signuppage> {
   Widget _btnSignUp() {
     return SizedBox(
       width: double.infinity,
-      height: 50,
+      height: 52,
       child: ElevatedButton(
         onPressed: _isSendingOtp ? null : _goToConfirmation,
         style: ElevatedButton.styleFrom(
           padding: EdgeInsets.zero,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(26),
+          ),
         ),
         child: Ink(
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: [
-                Color.fromARGB(255, 182, 61, 61),
-                Color.fromARGB(255, 117, 27, 27),
-                Color.fromARGB(255, 34, 7, 7),
-              ],
+              colors: [kAccent, Color(0xFF8E2DE2)],
             ),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x335B4DFF),
+                blurRadius: 12,
+                offset: Offset(0, 4),
+              ),
+            ],
           ),
           child: Center(
             child: _isSendingOtp
@@ -759,9 +804,10 @@ class _SignuppageState extends State<Signuppage> {
                 : Text(
                     l10nOf(context).signUp,
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 18,
                       letterSpacing: _letterSpacing(5),
                       color: Colors.white,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
           ),
@@ -792,7 +838,7 @@ class _SignuppageState extends State<Signuppage> {
                 expand: false,
                 builder: (context, scrollController) => Container(
                   decoration: const BoxDecoration(
-                    color: Colors.white,
+                    color: Color(0xFFF5F6FA),
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(20),
                     ),
@@ -808,7 +854,7 @@ class _SignuppageState extends State<Signuppage> {
           child: Text(
             l10nOf(context).signInLink,
             style: const TextStyle(
-              color: Color.fromARGB(255, 182, 61, 61),
+              color: kAccent,
               fontWeight: FontWeight.bold,
             ),
           ),

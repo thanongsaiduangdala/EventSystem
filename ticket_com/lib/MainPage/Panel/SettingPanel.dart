@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/DeveloperPage/MainPageDashboard.dart';
 import 'package:ticket_com/LogSignPage/MainLoginSignUp.dart'; // adjust path
+import 'package:ticket_com/utils/category_colors.dart';
 
 class SettingPanel extends StatefulWidget {
   const SettingPanel({super.key});
@@ -64,76 +66,238 @@ class _SettingPanelState extends State<SettingPanel> {
     final roleName = _roleName;
     final canAdmin = session?.isSuperAdmin ?? false;
 
-    return Container(
-      color: Colors.black,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (session != null)
-            ListTile(
-              leading: const Icon(Icons.person, color: Colors.white70),
-              title: Text(
-                '${session.firstname} ${session.lastname}',
-                style: const TextStyle(color: Colors.white),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F6FA),
+        body: ListView(
+          padding: EdgeInsets.zero,
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            _header(context),
+            const SizedBox(height: 16),
+            if (session != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _profileCard(session, roleName),
               ),
-              subtitle: Text(
-                session.email,
-                style: const TextStyle(color: Colors.white54),
-              ),
-              trailing: roleName == null
-                  ? null
-                  : Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF3D5AFE),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        roleName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
+            if (session != null) const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _actionsCard(canAdmin),
             ),
-          const Divider(color: Colors.white24),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _header(BuildContext context) {
+    final topPad = MediaQuery.paddingOf(context).top;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, topPad + 16, 16, 0),
+      child: const Text(
+        'Settings',
+        style: TextStyle(
+          color: Color(0xFF212121),
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _profileCard(dynamic session, String? roleName) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x18000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [kAccent, Color(0xFF8E2DE2)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.person, color: Colors.white, size: 30),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${session.firstname} ${session.lastname}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF212121),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  session.email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF757575),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (roleName != null) ...[
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: kAccent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                roleName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _actionsCard(bool canAdmin) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x18000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
           if (canAdmin)
-            ListTile(
-              leading: _checkingDeveloper
+            _actionTile(
+              icon: Icons.admin_panel_settings,
+              iconColor: kAccent,
+              title: 'Admin Dashboard',
+              subtitle: 'Manage events, accounts & content',
+              titleColor: const Color(0xFF212121),
+              subtitleColor: const Color(0xFF757575),
+              trailing: _checkingDeveloper
                   ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: kAccent,
                       ),
                     )
-                  : const Icon(Icons.admin_panel_settings, color: Colors.white70),
-              title: const Text(
-                'Admin Dashboard',
-                style: TextStyle(color: Colors.white),
-              ),
-              subtitle: const Text(
-                'Manage events, accounts & content',
-                style: TextStyle(color: Colors.white54),
-              ),
+                  : const Icon(Icons.chevron_right, color: Colors.black26),
               onTap: _checkingDeveloper ? null : _openDeveloperDashboard,
             ),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.redAccent),
-            title: const Text(
-              'Logout',
-              style: TextStyle(color: Colors.redAccent),
-            ),
+          if (canAdmin) const _CardDivider(),
+          _actionTile(
+            icon: Icons.logout,
+            iconColor: Colors.redAccent,
+            title: 'Logout',
+            titleColor: Colors.redAccent,
+            trailing: const Icon(Icons.chevron_right, color: Colors.black26),
             onTap: _logout,
           ),
         ],
       ),
+    );
+  }
+
+  Widget _actionTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required Color titleColor,
+    String? subtitle,
+    Color? subtitleColor,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: iconColor, size: 22),
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: titleColor,
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle,
+              style: TextStyle(
+                color: subtitleColor,
+                fontSize: 12.5,
+              ),
+            ),
+      trailing: trailing,
+    );
+  }
+}
+
+class _CardDivider extends StatelessWidget {
+  const _CardDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(
+      height: 1,
+      indent: 16,
+      endIndent: 16,
+      color: Color(0x14000000),
     );
   }
 }

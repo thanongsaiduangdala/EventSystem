@@ -5,6 +5,7 @@ import 'package:ticket_com/LogSignPage/ForgotPasswordPage.dart';
 import 'package:ticket_com/LogSignPage/SignUpPage.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/MainPage/mainpage.dart';
+import 'package:ticket_com/utils/category_colors.dart';
 //import 'package:ticket_com/main.dart';
 
 class Loginpage extends StatefulWidget {
@@ -40,8 +41,8 @@ class _LoginpageState extends State<Loginpage> {
   Widget _body() {
     return Padding(
       padding: EdgeInsets.only(
-        left: 40,
-        right: 40,
+        left: 24,
+        right: 24,
         top: 10,
         bottom: MediaQuery.of(context).viewInsets.bottom + 20,
       ),
@@ -59,17 +60,22 @@ class _LoginpageState extends State<Loginpage> {
           ),
           Text(
             l10nOf(context).login,
-            style: TextStyle(fontSize: 30, letterSpacing: letterSpacingMain(5)),
+            style: TextStyle(
+              fontSize: 30,
+              letterSpacing: letterSpacingMain(5),
+              fontWeight: FontWeight.w800,
+              color: kAccent,
+            ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           _txtEmail(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           _txtPassword(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           _lblRememberMeForgot(),
-          const SizedBox(height: 80),
+          const SizedBox(height: 32),
           _btnLogin(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           _signUpText(),
           const SizedBox(height: 20),
         ],
@@ -81,30 +87,42 @@ class _LoginpageState extends State<Loginpage> {
     setState(() => showText = !showText);
   }
 
+  InputBorder _fieldBorder({required bool error, required bool focused}) {
+    const defaultColor = Color(0xFFE0E0E0);
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(
+        color: error
+            ? Colors.red
+            : (focused ? kAccent : defaultColor),
+        width: error || focused ? 2 : 1,
+      ),
+    );
+  }
+
   Widget _txtEmail() {
     return TextField(
       controller: _emailController,
       keyboardType: TextInputType.emailAddress,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF212121),
+      ),
       onChanged: (_) => setState(() => _emailError = false),
       decoration: InputDecoration(
         labelText: l10nOf(context).email,
-        labelStyle: TextStyle(color: _emailError ? Colors.red : null),
+        labelStyle: TextStyle(
+          color: _emailError ? Colors.red : Colors.grey[600],
+          fontWeight: FontWeight.w500,
+        ),
         errorText: _emailError ? _emailErrorText : null,
-        enabledBorder: _emailError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(),
-        focusedBorder: _emailError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.blue),
-              ),
+        errorMaxLines: 2,
+        filled: true,
+        fillColor: Colors.white,
+        prefixIcon: const Icon(Icons.mail_outline, color: Colors.grey),
+        enabledBorder: _fieldBorder(error: _emailError, focused: false),
+        focusedBorder: _fieldBorder(error: _emailError, focused: true),
         suffixIcon: _emailError
             ? const Icon(Icons.error_outline, color: Colors.red)
             : null,
@@ -116,43 +134,38 @@ class _LoginpageState extends State<Loginpage> {
     return TextField(
       controller: _passwordController,
       obscureText: showText,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF212121),
+      ),
       onChanged: (_) => setState(() => _passwordError = false),
       decoration: InputDecoration(
         labelText: l10nOf(context).password,
-        labelStyle: TextStyle(color: _passwordError ? Colors.red : null),
-        errorText: _passwordError ? _passwordErrorText : null,
-        enabledBorder: _passwordError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(),
-        focusedBorder: _passwordError
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.red, width: 2),
-              )
-            : const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.blue),
-              ),
-        suffixIconConstraints: const BoxConstraints(
-          minWidth: 40,
-          minHeight: 40,
+        labelStyle: TextStyle(
+          color: _passwordError ? Colors.red : Colors.grey[600],
+          fontWeight: FontWeight.w500,
         ),
+        errorText: _passwordError ? _passwordErrorText : null,
+        errorMaxLines: 2,
+        filled: true,
+        fillColor: Colors.white,
+        prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
+        enabledBorder: _fieldBorder(error: _passwordError, focused: false),
+        focusedBorder: _fieldBorder(error: _passwordError, focused: true),
         suffixIcon: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (_passwordError)
-              const Icon(Icons.error_outline, color: Colors.red),
+              const Icon(Icons.error_outline, color: Colors.red, size: 20),
             IconButton(
               onPressed: showTextPassword,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               icon: Icon(
                 showText ? Icons.visibility : Icons.visibility_off,
-                size: 30,
-                color: Colors.blue,
+                size: 22,
+                color: kAccent,
               ),
             ),
           ],
@@ -172,7 +185,10 @@ class _LoginpageState extends State<Loginpage> {
               width: 24,
               child: Checkbox(
                 value: rememberMeValue,
-                activeColor: Colors.purple,
+                activeColor: kAccent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(5),
+                ),
                 onChanged: (bool? value) {
                   setState(() => rememberMeValue = value ?? false);
                 },
@@ -202,7 +218,7 @@ class _LoginpageState extends State<Loginpage> {
                 expand: false,
                 builder: (context, scrollController) => Container(
                   decoration: const BoxDecoration(
-                    color: Colors.white,
+                    color: Color(0xFFF5F6FA),
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(20),
                     ),
@@ -223,7 +239,7 @@ class _LoginpageState extends State<Loginpage> {
           child: Text(
             l10nOf(context).forgotPassword,
             style: const TextStyle(
-              color: Colors.purple,
+              color: kAccent,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -287,40 +303,18 @@ class _LoginpageState extends State<Loginpage> {
     }
   }
 
-  Widget _infoRow(IconData icon, String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 20, color: Color.fromARGB(255, 117, 27, 27)),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
-            ),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
   Widget _btnLogin() {
     return SizedBox(
       width: double.infinity,
-      height: 50,
+      height: 52,
       child: ElevatedButton(
         onPressed: _doLogin,
         style: ElevatedButton.styleFrom(
           padding: EdgeInsets.zero,
           foregroundColor: Colors.white,
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(26),
           ),
         ),
         child: Ink(
@@ -328,21 +322,25 @@ class _LoginpageState extends State<Loginpage> {
             gradient: const LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: [
-                Color.fromARGB(255, 182, 61, 61),
-                Color.fromARGB(255, 117, 27, 27),
-                Color.fromARGB(255, 34, 7, 7),
-              ],
+              colors: [kAccent, Color(0xFF8E2DE2)],
             ),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x335B4DFF),
+                blurRadius: 12,
+                offset: Offset(0, 4),
+              ),
+            ],
           ),
           child: Center(
             child: Text(
               l10nOf(context).login,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 18,
                 letterSpacing: letterSpacingMain(5),
                 color: Colors.white,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -373,7 +371,7 @@ class _LoginpageState extends State<Loginpage> {
                 expand: false,
                 builder: (context, scrollController) => Container(
                   decoration: const BoxDecoration(
-                    color: Colors.white,
+                    color: Color(0xFFF5F6FA),
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(20),
                     ),
@@ -389,7 +387,7 @@ class _LoginpageState extends State<Loginpage> {
           child: Text(
             l10nOf(context).signUpLink,
             style: const TextStyle(
-              color: Color.fromARGB(255, 182, 61, 61),
+              color: kAccent,
               fontWeight: FontWeight.bold,
             ),
           ),

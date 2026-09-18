@@ -166,6 +166,7 @@ class _TicketPanelState extends State<TicketPanel> {
 
       if (!mounted) return;
       setState(() {
+        _loading = false;
         _events = bought;
         _imageByEvent = imageByEvent;
         _organizerById = {for (final o in organizers) o.id: o};
@@ -402,9 +403,11 @@ class _TicketPanelState extends State<TicketPanel> {
       child: Column(
         children: [
           _searchBar(context),
-          const SizedBox(height: 12),
-          _categoryPills(context),
           const SizedBox(height: 16),
+          if (_categoryChips.isNotEmpty) ...[
+            _categoryPills(context),
+            const SizedBox(height: 16),
+          ],
           _calendarCard(),
           const SizedBox(height: 16),
           _toggle(context),
@@ -487,7 +490,6 @@ class _TicketPanelState extends State<TicketPanel> {
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         children: [
-          _pillItem(context, null, null, kAccent, Icons.all_inclusive, null),
           for (final chip in _categoryChips) ...[
             const SizedBox(width: 8),
             _pillItem(
