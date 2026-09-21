@@ -787,6 +787,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ticket {number} · {type}'**
   String ticketSlot(Object number, Object type);
+
+  /// No description provided for @oneTicketPerPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'One ticket per person'**
+  String get oneTicketPerPerson;
+
+  /// No description provided for @oneTicketPerPersonInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'This event only allows one ticket per person. Bring your national ID or passport to the entrance.'**
+  String get oneTicketPerPersonInfo;
+
+  /// No description provided for @nationalId.
+  ///
+  /// In en, this message translates to:
+  /// **'National ID / Passport No.'**
+  String get nationalId;
+
+  /// No description provided for @nationalIdHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the number shown on your ID'**
+  String get nationalIdHint;
+
+  /// No description provided for @nationalIdRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'National ID or passport number is required'**
+  String get nationalIdRequired;
+
+  /// No description provided for @nationalIdRepeated.
+  ///
+  /// In en, this message translates to:
+  /// **'This National ID is already used for another ticket in this order'**
+  String get nationalIdRepeated;
+
+  /// No description provided for @nationalIdAlreadyUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'This National ID already has a ticket for this event'**
+  String get nationalIdAlreadyUsed;
+
+  /// No description provided for @answerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your answer'**
+  String get answerLabel;
+
+  /// No description provided for @questionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This question is required'**
+  String get questionRequired;
+
+  /// No description provided for @person.
+  ///
+  /// In en, this message translates to:
+  /// **'Person'**
+  String get person;
 }
 
 class _AppLocalizationsDelegate

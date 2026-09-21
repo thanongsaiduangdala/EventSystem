@@ -45,6 +45,7 @@ class AddEventInfoRequest(BaseModel):
     EventOrganizerID: int
     Longitude: float
     Latitude: float
+    OnePerPerson: bool = False
 
 class UpdateEventInfoRequest(BaseModel):
     EventID: int
@@ -56,6 +57,7 @@ class UpdateEventInfoRequest(BaseModel):
     EventOrganizerID: int
     Longitude: float
     Latitude: float
+    OnePerPerson: bool = False
 
 class AddTicketTypeRequest(BaseModel):
     EventID: int
@@ -323,8 +325,9 @@ class AddTicketAttendenceRequest(BaseModel):
     LastName: str
     PhoneNum: str
     Email: str
- 
- 
+    NationalID: Optional[str] = None
+
+
 class UpdateTicketAttendenceRequest(BaseModel):
     attendeeID: int
     TicketTypeID: int
@@ -333,6 +336,7 @@ class UpdateTicketAttendenceRequest(BaseModel):
     LastName: str
     PhoneNum: str
     Email: str
+    NationalID: Optional[str] = None
 
  # ---------- teamrole ----------
 class AddTeamRoleRequest(BaseModel):

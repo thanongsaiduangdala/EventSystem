@@ -363,4 +363,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String ticketSlot(Object number, Object type) {
     return 'Ticket $number · $type';
   }
+
+  @override
+  String get oneTicketPerPerson => 'One ticket per person';
+
+  @override
+  String get oneTicketPerPersonInfo =>
+      'This event only allows one ticket per person. Bring your national ID or passport to the entrance.';
+
+  @override
+  String get nationalId => 'National ID / Passport No.';
+
+  @override
+  String get nationalIdHint => 'Enter the number shown on your ID';
+
+  @override
+  String get nationalIdRequired => 'National ID or passport number is required';
+
+  @override
+  String get nationalIdRepeated =>
+      'This National ID is already used for another ticket in this order';
+
+  @override
+  String get nationalIdAlreadyUsed =>
+      'This National ID already has a ticket for this event';
+
+  @override
+  String get answerLabel => 'Your answer';
+
+  @override
+  String get questionRequired => 'This question is required';
+
+  @override
+  String get person => 'Person';
 }

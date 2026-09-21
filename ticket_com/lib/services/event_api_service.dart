@@ -39,6 +39,7 @@ class EventModel {
   final double longitude;
   final String description;
   final int organizerId;
+  final bool onePerPerson;
 
   EventModel({
     required this.id,
@@ -50,9 +51,11 @@ class EventModel {
     required this.longitude,
     required this.description,
     required this.organizerId,
+    this.onePerPerson = false,
   });
 
   factory EventModel.fromJson(Map<String, dynamic> json) {
+    final rawFlag = json['OnePerPerson'];
     return EventModel(
       id: json['EventID'] as int,
       name: json['EventName'] as String,
@@ -63,6 +66,7 @@ class EventModel {
       longitude: double.parse(json['Longitude'].toString()),
       description: json['EventDescription'] as String,
       organizerId: json['EventOrganizerID'] as int,
+      onePerPerson: rawFlag == 1 || rawFlag == true,
     );
   }
 }
@@ -131,6 +135,7 @@ class EventApiService {
     required double longitude,
     required String eventDescription,
     required int eventOrganizerID,
+    bool onePerPerson = false,
   }) async {
     final url = Uri.parse('$baseUrl/event/update');
     final response = await http.put(
@@ -146,6 +151,7 @@ class EventApiService {
         'Latitude': latitude,
         'Longitude': longitude,
         'EventDescription': eventDescription,
+        'OnePerPerson': onePerPerson,
       }),
     );
     if (response.statusCode != 200) {
@@ -170,6 +176,7 @@ class EventApiService {
     required double longitude,
     required String eventDescription,
     required int eventOrganizerID,
+    bool onePerPerson = false,
   }) async {
     final url = Uri.parse('$baseUrl/event/create');
 
@@ -185,6 +192,7 @@ class EventApiService {
         'Longitude': longitude,
         'EventDescription': eventDescription,
         'EventOrganizerID': eventOrganizerID,
+        'OnePerPerson': onePerPerson,
       }),
     );
 

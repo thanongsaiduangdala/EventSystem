@@ -11,6 +11,7 @@ class TicketAttendeeModel {
   final String lastName;
   final String phoneNum;
   final String email;
+  final String? nationalId;
 
   TicketAttendeeModel({
     required this.id,
@@ -20,6 +21,7 @@ class TicketAttendeeModel {
     required this.lastName,
     required this.phoneNum,
     required this.email,
+    this.nationalId,
   });
 
   factory TicketAttendeeModel.fromJson(Map<String, dynamic> json) {
@@ -31,6 +33,7 @@ class TicketAttendeeModel {
       lastName: json['LastName'] as String,
       phoneNum: json['PhoneNum'] as String,
       email: json['Email'] as String,
+      nationalId: json['NationalID'] as String?,
     );
   }
 }
@@ -99,6 +102,7 @@ class TicketAttendenceApiService {
     required String lastName,
     required String phoneNum,
     required String email,
+    String? nationalId,
   }) async {
     final url = Uri.parse('$baseUrl/ticketattendence/attendee/create');
 
@@ -112,6 +116,7 @@ class TicketAttendenceApiService {
         'LastName': lastName,
         'PhoneNum': phoneNum,
         'Email': email,
+        'NationalID': nationalId,
       }),
     );
 
@@ -130,6 +135,7 @@ class TicketAttendenceApiService {
     required String lastName,
     required String phoneNum,
     required String email,
+    String? nationalId,
   }) async {
     final url = Uri.parse('$baseUrl/ticketattendence/attendee/update');
     final response = await http.put(
@@ -143,6 +149,7 @@ class TicketAttendenceApiService {
         'LastName': lastName,
         'PhoneNum': phoneNum,
         'Email': email,
+        'NationalID': nationalId,
       }),
     );
     if (response.statusCode != 200) {

@@ -364,4 +364,36 @@ class AppLocalizationsLo extends AppLocalizations {
   String ticketSlot(Object number, Object type) {
     return 'ປີ້ທີ່ $number · $type';
   }
+
+  @override
+  String get oneTicketPerPerson => 'ໜຶ່ງປີ້ຕໍ່ຄົນ';
+
+  @override
+  String get oneTicketPerPersonInfo =>
+      'ອີເວັນນີ້ອະນຸຍາດໃຫ້ຊື້ພຽງໜຶ່ງປີ້ຕໍ່ຄົນ. ກະລຸນານຳບັດປະຈຳຕົວ ຫຼື ໜັງສືຜ່ານແດນມາສະແດງທີ່ທາງເຂົ້າ.';
+
+  @override
+  String get nationalId => 'ເລກບັດປະຈຳຕົວ / ໜັງສືຜ່ານແດນ';
+
+  @override
+  String get nationalIdHint => 'ໃສ່ເລກທີ່ປະກົດຢູ່ບັດຂອງທ່ານ';
+
+  @override
+  String get nationalIdRequired => 'ກະລຸນາໃສ່ເລກບັດປະຈຳຕົວ ຫຼື ໜັງສືຜ່ານແດນ';
+
+  @override
+  String get nationalIdRepeated =>
+      'ເລກບັດປະຈຳຕົວນີ້ຖືກໃຊ້ແລ້ວສຳລັບປີ້ອື່ນໃນຄຳສັ່ງນີ້';
+
+  @override
+  String get nationalIdAlreadyUsed => 'ເລກບັດປະຈຳຕົວນີ້ມີປີ້ສຳລັບອີເວັນນີ້ແລ້ວ';
+
+  @override
+  String get answerLabel => 'ຄຳຕອບຂອງທ່ານ';
+
+  @override
+  String get questionRequired => 'ກະລຸນາຕອບຄຳຖາມນີ້';
+
+  @override
+  String get person => 'ຄົນ';
 }

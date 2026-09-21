@@ -11,8 +11,8 @@ async def create_event(req_data: AddEventInfoRequest, current=Depends(require_pe
             sql = """
                 INSERT INTO eventinfo
                 (EventName, EventStartingYMDT, EventEndingYMDT, EventAddress,
-                 Latitude, Longitude, EventDescription, EventOrganizerID)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                 Latitude, Longitude, EventDescription, EventOrganizerID, OnePerPerson)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             cur.execute(sql, (
                 req_data.EventName,
@@ -23,6 +23,7 @@ async def create_event(req_data: AddEventInfoRequest, current=Depends(require_pe
                 req_data.Longitude,
                 req_data.EventDescription,
                 req_data.EventOrganizerID,
+                1 if req_data.OnePerPerson else 0,
             ))
             con.commit()
             event_id = cur.lastrowid
@@ -41,7 +42,8 @@ async def get_all_events(current=Depends(require_permission("view_events"))):
         with con.cursor() as cur:
             cur.execute("""
                 SELECT EventID, EventName, EventStartingYMDT, EventEndingYMDT,
-                       EventAddress, Latitude, Longitude, EventDescription, EventOrganizerID
+                       EventAddress, Latitude, Longitude, EventDescription, EventOrganizerID,
+                       OnePerPerson
                 FROM eventinfo
             """)
             events = cur.fetchall()
@@ -58,7 +60,8 @@ async def get_event_by_id(event_id: int, current=Depends(require_permission("vie
         with con.cursor() as cur:
             cur.execute("""
                 SELECT EventID, EventName, EventStartingYMDT, EventEndingYMDT,
-                       EventAddress, Latitude, Longitude, EventDescription, EventOrganizerID
+                       EventAddress, Latitude, Longitude, EventDescription, EventOrganizerID,
+                       OnePerPerson
                 FROM eventinfo
                 WHERE EventID = %s
             """, (event_id,))
@@ -88,7 +91,8 @@ async def update_event(req_data: UpdateEventInfoRequest, current=Depends(require
                     Latitude = %s,
                     Longitude = %s,
                     EventDescription = %s,
-                    EventOrganizerID = %s
+                    EventOrganizerID = %s,
+                    OnePerPerson = %s
                 WHERE EventID = %s
             """
             cur.execute(sql, (
@@ -100,6 +104,7 @@ async def update_event(req_data: UpdateEventInfoRequest, current=Depends(require
                 req_data.Longitude,
                 req_data.EventDescription,
                 req_data.EventOrganizerID,
+                1 if req_data.OnePerPerson else 0,
                 req_data.EventID
 
             ))

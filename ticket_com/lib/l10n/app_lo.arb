@@ -117,5 +117,15 @@
     "attendeeInfo": "ຂໍ້ມູນຜູ້ເຂົ້າຮ່ວມ",
     "forYourself": "ປີ້ນີ້ສຳລັບຂ້ອຍ",
     "confirmOrder": "ຢືນຢັນຄຳສັ່ງ",
-    "ticketSlot": "ປີ້ທີ່ {number} · {type}"
+    "ticketSlot": "ປີ້ທີ່ {number} · {type}",
+    "oneTicketPerPerson": "ໜຶ່ງປີ້ຕໍ່ຄົນ",
+    "oneTicketPerPersonInfo": "ອີເວັນນີ້ອະນຸຍາດໃຫ້ຊື້ພຽງໜຶ່ງປີ້ຕໍ່ຄົນ. ກະລຸນານຳບັດປະຈຳຕົວ ຫຼື ໜັງສືຜ່ານແດນມາສະແດງທີ່ທາງເຂົ້າ.",
+    "nationalId": "ເລກບັດປະຈຳຕົວ / ໜັງສືຜ່ານແດນ",
+    "nationalIdHint": "ໃສ່ເລກທີ່ປະກົດຢູ່ບັດຂອງທ່ານ",
+    "nationalIdRequired": "ກະລຸນາໃສ່ເລກບັດປະຈຳຕົວ ຫຼື ໜັງສືຜ່ານແດນ",
+    "nationalIdRepeated": "ເລກບັດປະຈຳຕົວນີ້ຖືກໃຊ້ແລ້ວສຳລັບປີ້ອື່ນໃນຄຳສັ່ງນີ້",
+    "nationalIdAlreadyUsed": "ເລກບັດປະຈຳຕົວນີ້ມີປີ້ສຳລັບອີເວັນນີ້ແລ້ວ",
+    "answerLabel": "ຄຳຕອບຂອງທ່ານ",
+    "questionRequired": "ກະລຸນາຕອບຄຳຖາມນີ້",
+    "person": "ຄົນ"
 }

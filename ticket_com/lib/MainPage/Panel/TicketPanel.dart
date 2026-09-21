@@ -184,7 +184,10 @@ class _TicketPanelState extends State<TicketPanel> {
     }
   }
 
-  static Future<T> _optional<T>(Future<T> Function() load, T fallback) async {
+  static Future<T> _optional<T>(
+    Future<T> Function() load,
+    T fallback,
+  ) async {
     try {
       return await load();
     } catch (_) {
@@ -801,9 +804,10 @@ class _TicketPanelState extends State<TicketPanel> {
                   Icons.people,
                   '$attend attending',
                 ),
-                const Spacer(),
-                if (organizer.isNotEmpty)
-                  Flexible(
+                if (organizer.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerRight,
                     child: Text(
                       organizer,
                       maxLines: 1,
@@ -817,6 +821,7 @@ class _TicketPanelState extends State<TicketPanel> {
                       ),
                     ),
                   ),
+                ],
               ],
             ),
           ),

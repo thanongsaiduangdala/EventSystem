@@ -188,6 +188,7 @@ CREATE TABLE `eventinfo` (
   `Longitude` decimal(9,6) NOT NULL,
   `EventDescription` text NOT NULL,
   `EventOrganizerID` int NOT NULL,
+  `OnePerPerson` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`EventID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -198,7 +199,7 @@ CREATE TABLE `eventinfo` (
 
 LOCK TABLES `eventinfo` WRITE;
 /*!40000 ALTER TABLE `eventinfo` DISABLE KEYS */;
-INSERT INTO `eventinfo` VALUES (1,'That Luang to Mekong Marathon','2026-10-01 06:00:00','2026-10-01 13:00:00','That Luang',17.975649,102.633682,'Marathon from That Luang to Mekong and back. They is 10km and 21km',1),(4,'Pilot Training part 1','2026-05-12 09:00:00','2026-05-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2),(5,'Pilot Training part 2','2026-11-12 06:00:00','2026-11-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2),(6,'Marathon','2026-08-15 04:20:00','2026-08-16 22:20:00','ThatLuangpart1',17.976542,102.635899,'Marathon from Mekong to ThatLuang and back that is 10 km  or 21km.',1),(8,'MarathonPart2','2026-08-20 06:00:00','2026-08-06 16:00:00','ThatLuang',17.975707,102.633619,'Marathon from Thatluang to Mekong and back. For those who want to do either 10km or 21km.',1),(9,'PilotTrainingPart3','2026-08-15 10:00:00','2026-08-08 20:00:00','Wattay Airport',17.973006,102.567955,'sdkjaslkdjlksada',2);
+INSERT INTO `eventinfo` VALUES (1,'That Luang to Mekong Marathon','2026-10-01 06:00:00','2026-10-01 13:00:00','That Luang',17.975649,102.633682,'Marathon from That Luang to Mekong and back. They is 10km and 21km',1,0),(4,'Pilot Training part 1','2026-05-12 09:00:00','2026-05-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2,0),(5,'Pilot Training part 2','2026-11-12 06:00:00','2026-11-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2,0),(6,'Marathon','2026-08-15 04:20:00','2026-08-16 22:20:00','ThatLuangpart1',17.976542,102.635899,'Marathon from Mekong to ThatLuang and back that is 10 km  or 21km.',1,0),(8,'MarathonPart2','2026-08-20 06:00:00','2026-08-06 16:00:00','ThatLuang',17.975707,102.633619,'Marathon from Thatluang to Mekong and back. For those who want to do either 10km or 21km.',1,0),(9,'PilotTrainingPart3','2026-08-15 10:00:00','2026-08-08 20:00:00','Wattay Airport',17.973006,102.567955,'sdkjaslkdjlksada',2,0);
 /*!40000 ALTER TABLE `eventinfo` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -532,6 +533,7 @@ CREATE TABLE `ticketattendence` (
   `LastName` varchar(50) NOT NULL,
   `PhoneNum` varchar(20) NOT NULL,
   `Email` varchar(255) NOT NULL,
+  `NationalID` varchar(50) DEFAULT NULL,
   PRIMARY KEY (`attendeeID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -542,7 +544,7 @@ CREATE TABLE `ticketattendence` (
 
 LOCK TABLES `ticketattendence` WRITE;
 /*!40000 ALTER TABLE `ticketattendence` DISABLE KEYS */;
-INSERT INTO `ticketattendence` VALUES (1,1,1,'Steve','Universe','020565654','steve@gmail.com');
+INSERT INTO `ticketattendence` VALUES (1,1,1,'Steve','Universe','020565654','steve@gmail.com',NULL);
 /*!40000 ALTER TABLE `ticketattendence` ENABLE KEYS */;
 UNLOCK TABLES;
 

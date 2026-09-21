@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'package:ticket_com/HomePage/checkout_page.dart';
@@ -13,10 +14,6 @@ const Color _kLavender = Color(0xFFEFEEFC);
 const Color _kTextDark = Color(0xFF212121);
 const Color _kTextGrey = Color(0xFF757575);
 
-/// Full event info page opened when a user taps an event card. Shows every
-/// detail about the event and lets the signed-in user buy tickets: an order
-/// is created and one ticket attendee row is added for every ticket quantity
-/// selected.
 class EventDetailPage extends StatefulWidget {
   const EventDetailPage({
     super.key,
@@ -49,6 +46,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
   List<TicketTypeModel> _ticketTypes = [];
   List<PaymentType> _paymentTypes = [];
+  List<EventImageModel> _heroImages = [];
+  final PageController _heroController = PageController();
+  Timer? _carouselTimer;
+  int _currentImage = 0;
 
   @override
   void initState() {
@@ -56,8 +57,55 @@ class _EventDetailPageState extends State<EventDetailPage> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _carouselTimer?.cancel();
+    _heroController.dispose();
+    super.dispose();
+  }
+
+  void _startCarousel() {
+    _carouselTimer?.cancel();
+    _carouselTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!_heroController.hasClients) return;
+      final next = (_currentImage + 1) % _heroImages.length;
+      _heroController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  void _stopCarousel() {
+    _carouselTimer?.cancel();
+    _carouselTimer = null;
+  }
+
+  List<EventImageModel> get _viewerImages {
+    if (_heroImages.isNotEmpty) return _heroImages;
+    final image = widget.image;
+    if (image == null) return const [];
+    return [image];
+  }
+
+  void _openImageViewer(int initialIndex) {
+    final images = _viewerImages;
+    if (images.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            _ImageViewerPage(images: images, initialIndex: initialIndex),
+      ),
+    );
+  }
+
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _heroImages = [];
+      _currentImage = 0;
+    });
 
     final tickets = await _optional(
       () => TicketTypeApiService.getTicketTypesByEvent(widget.event.id),
@@ -67,6 +115,18 @@ class _EventDetailPageState extends State<EventDetailPage> {
       OrdersApiService.getAllPaymentTypes,
       const <PaymentType>[],
     );
+    final images = await _optional(
+      EventImageApiService.getAllEventImages,
+      const <EventImageModel>[],
+    );
+    final heroImages =
+        images.where((img) => img.eventId == widget.event.id).toList()
+          ..sort((a, b) {
+            if (a.isThumbnail != b.isThumbnail) {
+              return a.isThumbnail ? -1 : 1;
+            }
+            return a.id.compareTo(b.id);
+          });
 
     if (!mounted) return;
     final sorted = List<TicketTypeModel>.of(tickets)
@@ -74,8 +134,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
     setState(() {
       _ticketTypes = sorted;
       _paymentTypes = paymentTypes;
+      if (heroImages.isNotEmpty) _heroImages = heroImages;
       _loading = false;
     });
+    if (heroImages.length > 1) _startCarousel();
   }
 
   static Future<T> _optional<T>(Future<T> Function() load, T fallback) async {
@@ -84,14 +146,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
     } catch (_) {
       return fallback;
     }
-  }
-
-  /// Price shown on the buy button: the cheapest available ticket (or FREE).
-  String get _displayPrice {
-    if (_ticketTypes.isNotEmpty) return _formatKip(_ticketTypes.first.priceInKip);
-    final minPrice = widget.minPrice;
-    if (minPrice != null && minPrice > 0) return _formatKip(minPrice);
-    return 'FREE';
   }
 
   Future<void> _buy() async {
@@ -104,9 +158,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       return;
     }
     if (_ticketTypes.isEmpty) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.noTicketsAvailable)),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(l10n.noTicketsAvailable)));
       return;
     }
     if (_paymentTypes.isEmpty) {
@@ -120,10 +172,12 @@ class _EventDetailPageState extends State<EventDetailPage> {
       context,
       MaterialPageRoute(
         builder: (_) => CheckoutPage(
+          eventId: widget.event.id,
           eventName: widget.event.name,
           ticketTypes: _ticketTypes,
           paymentTypes: _paymentTypes,
           session: session,
+          onePerPerson: widget.event.onePerPerson,
         ),
       ),
     );
@@ -134,18 +188,13 @@ class _EventDetailPageState extends State<EventDetailPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: _kIndigo),
-            )
+          ? const Center(child: CircularProgressIndicator(color: _kIndigo))
           : Stack(
               children: [
                 ListView(
                   padding: EdgeInsets.zero,
                   physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    _heroWithPill(context),
-                    _body(context),
-                  ],
+                  children: [_heroWithPill(context), _body(context)],
                 ),
                 Positioned(
                   left: 16,
@@ -175,17 +224,19 @@ class _EventDetailPageState extends State<EventDetailPage> {
         children: [
           _heroImage(),
           Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.black.withValues(alpha: 0.28),
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.42),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: const [0.0, 0.55, 1.0],
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.black.withValues(alpha: 0.28),
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.42),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0.0, 0.55, 1.0],
+                  ),
                 ),
               ),
             ),
@@ -212,21 +263,70 @@ class _EventDetailPageState extends State<EventDetailPage> {
               ],
             ),
           ),
-          Positioned(
-            top: topPad + 12,
-            right: 12,
-            child: _saveButton(),
-          ),
+          Positioned(top: topPad + 12, right: 12, child: _saveButton()),
         ],
       ),
     );
   }
 
   Widget _heroImage() {
+    if (_heroImages.length > 1) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Listener(
+            onPointerDown: (_) => _stopCarousel(),
+            onPointerUp: (_) => _startCarousel(),
+            child: PageView.builder(
+              controller: _heroController,
+              itemCount: _heroImages.length,
+              onPageChanged: (index) => setState(() => _currentImage = index),
+              itemBuilder: (context, index) => GestureDetector(
+                onTap: () => _openImageViewer(index),
+                child: _networkImage(
+                  EventImageApiService.fullImageUrl(
+                    _heroImages[index].imagePath,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 14,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 0; i < _heroImages.length; i++)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: i == _currentImage ? 18 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: i == _currentImage ? Colors.white : Colors.white54,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     final image = widget.image;
     if (image == null) return _placeholderImage();
+    return GestureDetector(
+      onTap: () => _openImageViewer(0),
+      child: _networkImage(EventImageApiService.fullImageUrl(image.imagePath)),
+    );
+  }
+
+  Widget _networkImage(String url) {
     return Image.network(
-      EventImageApiService.fullImageUrl(image.imagePath),
+      url,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => _placeholderImage(),
       loadingBuilder: (context, child, progress) {
@@ -291,12 +391,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       clipBehavior: Clip.none,
       children: [
         _hero(context),
-        Positioned(
-          left: 20,
-          right: 20,
-          bottom: -4,
-          child: _goingPill(context),
-        ),
+        Positioned(left: 20, right: 20, bottom: -4, child: _goingPill(context)),
       ],
     );
   }
@@ -377,11 +472,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2),
                 ),
-                child: const Icon(
-                  Icons.person,
-                  color: Colors.white,
-                  size: 18,
-                ),
+                child: const Icon(Icons.person, color: Colors.white, size: 18),
               ),
             ),
         ],
@@ -414,10 +505,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
           _organizerRow(context),
           const SizedBox(height: 26),
           _aboutSection(context),
-          if (_ticketTypes.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            _ticketsSection(context),
-          ],
           const SizedBox(height: 140),
         ],
       ),
@@ -464,8 +551,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
     return Row(
       children: [
         _iconTile(
-          const Icon(Icons.calendar_today_outlined,
-              color: _kIndigo, size: 20),
+          const Icon(Icons.calendar_today_outlined, color: _kIndigo, size: 20),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -482,8 +568,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
     return Row(
       children: [
         _iconTile(
-          const Icon(Icons.location_on_outlined,
-              color: _kIndigo, size: 20),
+          const Icon(Icons.location_on_outlined, color: _kIndigo, size: 20),
         ),
         const SizedBox(width: 14),
         Expanded(child: _twoLineText(widget.event.address, '')),
@@ -613,11 +698,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       description,
       maxLines: 4,
       overflow: TextOverflow.clip,
-      style: const TextStyle(
-        color: _kTextGrey,
-        fontSize: 14,
-        height: 1.55,
-      ),
+      style: const TextStyle(color: _kTextGrey, fontSize: 14, height: 1.55),
     );
     if (_aboutExpanded) return text;
     return ShaderMask(
@@ -629,79 +710,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
       ).createShader(rect),
       blendMode: BlendMode.dstIn,
       child: text,
-    );
-  }
-
-  // ---------------- tickets ----------------
-
-  /// Informational list of ticket types and prices. The actual ticket
-  /// selection happens inside the checkout flow.
-  Widget _ticketsSection(BuildContext context) {
-    final l10n = l10nOf(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.tickets,
-          style: const TextStyle(
-            color: _kTextDark,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (_ticketTypes.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              l10n.noTicketsAvailable,
-              style: const TextStyle(color: _kTextGrey),
-            ),
-          )
-        else
-          for (var i = 0; i < _ticketTypes.length; i++) ...[
-            if (i > 0) const SizedBox(height: 10),
-            _ticketRow(_ticketTypes[i]),
-          ],
-      ],
-    );
-  }
-
-  Widget _ticketRow(TicketTypeModel ticket) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: _kLavender,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  ticket.typeName,
-                  style: const TextStyle(
-                    color: _kTextDark,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  _formatKip(ticket.priceInKip),
-                  style: const TextStyle(
-                    color: _kIndigo,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -724,7 +732,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
               const SizedBox(width: 20),
               Expanded(
                 child: Text(
-                  '${l10n.buyTicket.toUpperCase()} $_displayPrice',
+                  l10n.buyTicket.toUpperCase(),
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
@@ -759,12 +767,27 @@ class _EventDetailPageState extends State<EventDetailPage> {
   // ---------------- formatting ----------------
 
   static const List<String> _months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
   static const List<String> _weekdays = [
-    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
     'Sunday',
   ];
 
@@ -777,15 +800,112 @@ class _EventDetailPageState extends State<EventDetailPage> {
       '${_weekdays[start.weekday - 1]}, ${_formatTime(start)} - ${_formatTime(end)}';
 
   static String _formatTime(DateTime d) => '${_two(d.hour)}:${_two(d.minute)}';
+}
 
-  static String _formatKip(int value) {
-    final s = value.toString();
-    final buf = StringBuffer();
-    for (var i = 0; i < s.length; i++) {
-      buf.write(s[i]);
-      final remaining = s.length - 1 - i;
-      if (remaining > 0 && remaining % 3 == 0) buf.write(',');
-    }
-    return '$buf KIP';
+class _ImageViewerPage extends StatefulWidget {
+  const _ImageViewerPage({required this.images, required this.initialIndex});
+
+  final List<EventImageModel> images;
+  final int initialIndex;
+
+  @override
+  State<_ImageViewerPage> createState() => _ImageViewerPageState();
+}
+
+class _ImageViewerPageState extends State<_ImageViewerPage> {
+  late final PageController _controller;
+  late int _current;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.initialIndex;
+    _controller = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final topPad = MediaQuery.paddingOf(context).top;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _controller,
+            itemCount: widget.images.length,
+            onPageChanged: (index) => setState(() => _current = index),
+            itemBuilder: (context, index) => LayoutBuilder(
+              builder: (context, constraints) => InteractiveViewer(
+                minScale: 1,
+                maxScale: 5,
+                child: Center(
+                  child: Image.network(
+                    EventImageApiService.fullImageUrl(
+                      widget.images[index].imagePath,
+                    ),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => const Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white54,
+                      size: 64,
+                    ),
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return const Center(
+                        child: CircularProgressIndicator(color: Colors.white70),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: topPad + 12,
+            left: 12,
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                  color: Colors.black38,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close, color: Colors.white, size: 20),
+              ),
+            ),
+          ),
+          if (widget.images.length > 1)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.paddingOf(context).bottom + 20,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < widget.images.length; i++)
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: i == _current ? 18 : 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: i == _current ? Colors.white : Colors.white54,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

@@ -117,5 +117,15 @@
     "attendeeInfo": "Attendee Information",
     "forYourself": "This ticket is for me",
     "confirmOrder": "Confirm Order",
-    "ticketSlot": "Ticket {number} · {type}"
+    "ticketSlot": "Ticket {number} · {type}",
+    "oneTicketPerPerson": "One ticket per person",
+    "oneTicketPerPersonInfo": "This event only allows one ticket per person. Bring your national ID or passport to the entrance.",
+    "nationalId": "National ID / Passport No.",
+    "nationalIdHint": "Enter the number shown on your ID",
+    "nationalIdRequired": "National ID or passport number is required",
+    "nationalIdRepeated": "This National ID is already used for another ticket in this order",
+    "nationalIdAlreadyUsed": "This National ID already has a ticket for this event",
+    "answerLabel": "Your answer",
+    "questionRequired": "This question is required",
+    "person": "Person"
 }

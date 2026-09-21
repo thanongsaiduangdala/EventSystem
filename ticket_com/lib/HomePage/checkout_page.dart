@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'package:ticket_com/l10n/app_localizations.dart';
+import 'package:ticket_com/services/attendee_response_api_service.dart';
 import 'package:ticket_com/services/auth_service.dart';
+import 'package:ticket_com/services/event_question_api_service.dart';
 import 'package:ticket_com/services/orders_api_service.dart';
 import 'package:ticket_com/services/ticket_attendence_api_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
@@ -11,6 +13,24 @@ const Color _kLavender = Color(0xFFEFEEFC);
 const Color _kTextDark = Color(0xFF212121);
 const Color _kTextGrey = Color(0xFF757575);
 
+// EventQuestionTypeID convention (matches eventquestiontype table):
+//   1 = Text
+//   2 = Checkbox   (multi-select, options come from EventQuestion.options)
+//   3 = Radio box  (single-select, options come from EventQuestion.options)
+//   4 = Text save as encrypted (plain text input; backend handles encryption)
+//   5 = Yes or No  (single-select, fixed two-option list, no DB options)
+//
+// attendeeAnswer is always stored as plain text. For choice-type questions
+// (2, 3, 5) it stores the 1-based index into the option list, comma-
+// separated for checkboxes (e.g. "1,3").
+const int _typeText = 1;
+const int _typeCheckbox = 2;
+const int _typeRadio = 3;
+const int _typeEncryptedText = 4;
+const int _typeYesNo = 5;
+
+const List<String> _yesNoOptions = ['Yes', 'No'];
+
 /// Checkout screen opened when a signed-in user taps "Buy Ticket" on an event.
 /// Lets the buyer pick ticket types (e.g. Normal / 10km / 21km) and quantities,
 /// choose a payment method, enter the proof-of-payment reference, and fill out
@@ -19,19 +39,57 @@ const Color _kTextGrey = Color(0xFF757575);
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({
     super.key,
+    required this.eventId,
     required this.eventName,
     required this.ticketTypes,
     required this.paymentTypes,
     required this.session,
+    this.onePerPerson = false,
   });
 
+  final int eventId;
   final String eventName;
   final List<TicketTypeModel> ticketTypes;
   final List<PaymentType> paymentTypes;
   final UserSession session;
+  final bool onePerPerson;
 
   @override
   State<CheckoutPage> createState() => _CheckoutPageState();
+}
+
+/// Holds the buyer's answer to one event question for one attendee slot.
+class _QuestionAnswer {
+  _QuestionAnswer(this.question);
+
+  final EventQuestionModel question;
+  final TextEditingController textController = TextEditingController();
+  final Set<int> checkbox = {}; // 1-based option indices, per response convention
+  int? selected; // 1-based option index (radio / yes-no)
+  bool error = false;
+
+  void dispose() => textController.dispose();
+
+  /// The answer string in the storage convention, or null/empty if unanswered.
+  String? get value {
+    switch (question.questionTypeId) {
+      case _typeCheckbox:
+        if (checkbox.isEmpty) return null;
+        final sorted = checkbox.toList()..sort();
+        return sorted.join(',');
+      case _typeRadio:
+      case _typeYesNo:
+        return selected?.toString();
+      default:
+        final text = textController.text.trim();
+        return text.isEmpty ? null : text;
+    }
+  }
+
+  List<String> get options {
+    if (question.questionTypeId == _typeYesNo) return _yesNoOptions;
+    return question.options ?? const [];
+  }
 }
 
 class _AttendeeSlot {
@@ -43,16 +101,39 @@ class _AttendeeSlot {
   final lnController = TextEditingController();
   final phoneController = TextEditingController();
   final emailController = TextEditingController();
+  final idController = TextEditingController();
+  final answers = <_QuestionAnswer>[];
   bool fnError = false;
   bool lnError = false;
   bool phoneError = false;
   bool emailError = false;
+  bool idError = false;
+
+  /// Keeps the per-question answers in sync with the event's question list.
+  void syncQuestions(List<EventQuestionModel> questions) {
+    final ids = questions.map((q) => q.id).toSet();
+    for (final a in List<_QuestionAnswer>.of(answers)) {
+      if (!ids.contains(a.question.id)) {
+        a.dispose();
+        answers.remove(a);
+      }
+    }
+    for (final q in questions) {
+      if (!answers.any((a) => a.question.id == q.id)) {
+        answers.add(_QuestionAnswer(q));
+      }
+    }
+  }
 
   void dispose() {
     fnController.dispose();
     lnController.dispose();
     phoneController.dispose();
     emailController.dispose();
+    idController.dispose();
+    for (final a in answers) {
+      a.dispose();
+    }
   }
 }
 
@@ -60,6 +141,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   late int _paymentTypeId;
   final Map<int, int> _qtyByType = {};
   List<_AttendeeSlot> _slots = [];
+  List<EventQuestionModel> _questions = [];
+  int _currentSlot = 0;
   final _proofController = TextEditingController();
   bool _proofError = false;
   bool _submitting = false;
@@ -74,6 +157,30 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
     _syncSlots();
     if (_slots.isNotEmpty) _fillSelf(_slots.first, true);
+    _loadQuestions();
+  }
+
+  Future<void> _loadQuestions() async {
+    if (widget.eventId <= 0) return;
+    List<EventQuestionModel> questions;
+    try {
+      questions = await EventQuestionApiService.getEventQuestionsByEvent(
+        widget.eventId,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to load event questions')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _questions = questions;
+      for (final slot in _slots) {
+        slot.syncQuestions(questions);
+      }
+    });
   }
 
   @override
@@ -139,6 +246,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (!used.contains(j)) removed.add(_slots[j]);
     }
     _slots = desired;
+    for (final slot in _slots) {
+      slot.syncQuestions(_questions);
+    }
+    if (_currentSlot >= _slots.length) {
+      _currentSlot = _slots.isEmpty ? 0 : _slots.length - 1;
+    }
     if (removed.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         for (final slot in removed) {
@@ -150,21 +263,39 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   void _fillSelf(_AttendeeSlot slot, bool value) {
     setState(() {
+      for (final s in _slots) {
+        if (value && s != slot && s.forSelf) {
+          s.forSelf = false;
+          s.fnController.clear();
+          s.lnController.clear();
+          s.phoneController.clear();
+          s.emailController.clear();
+          s.idController.clear();
+          s.fnError = false;
+          s.lnError = false;
+          s.phoneError = false;
+          s.emailError = false;
+          s.idError = false;
+        }
+      }
       slot.forSelf = value;
       if (value) {
         slot.fnController.text = widget.session.firstname;
         slot.lnController.text = widget.session.lastname;
         slot.phoneController.text = widget.session.phoneNum;
         slot.emailController.text = widget.session.email;
+        slot.idController.clear();
         slot.fnError = false;
         slot.lnError = false;
         slot.phoneError = false;
         slot.emailError = false;
+        slot.idError = false;
       } else {
         slot.fnController.clear();
         slot.lnController.clear();
         slot.phoneController.clear();
         slot.emailController.clear();
+        slot.idController.clear();
       }
     });
   }
@@ -194,23 +325,38 @@ class _CheckoutPageState extends State<CheckoutPage> {
   bool _validate() {
     final proof = _proofController.text.trim();
     var valid = true;
+    var firstBadSlot = -1;
     setState(() {
       _proofError = proof.isEmpty;
       if (_proofError) valid = false;
-      for (final slot in _slots) {
+      final seenIds = <String>{};
+      for (var s = 0; s < _slots.length; s++) {
+        final slot = _slots[s];
         slot.fnError = slot.fnController.text.trim().isEmpty;
         slot.lnError = slot.lnController.text.trim().isEmpty;
         final phone = slot.phoneController.text.trim();
         slot.phoneError = phone.isEmpty || !_isPhone(phone);
         final email = slot.emailController.text.trim();
         slot.emailError = email.isEmpty || !_isEmail(email);
+        final id = slot.idController.text.trim();
+        final normalized = id.replaceAll(' ', '').toUpperCase();
+        slot.idError = widget.onePerPerson &&
+            (id.isEmpty || !seenIds.add(normalized));
+        for (final a in slot.answers) {
+          a.error = a.question.isRequire && (a.value?.isEmpty ?? true);
+        }
+        final hasQuestionError = slot.answers.any((a) => a.error);
         if (slot.fnError ||
             slot.lnError ||
             slot.phoneError ||
-            slot.emailError) {
+            slot.emailError ||
+            slot.idError ||
+            hasQuestionError) {
           valid = false;
+          if (firstBadSlot < 0) firstBadSlot = s;
         }
       }
+      if (firstBadSlot >= 0) _currentSlot = firstBadSlot;
     });
     return valid;
   }
@@ -239,14 +385,30 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
 
       for (final slot in _slots) {
-        await TicketAttendenceApiService.createTicketAttendee(
-          ticketTypeId: slot.ticket.id,
-          orderId: orderId,
-          firstName: slot.fnController.text.trim(),
-          lastName: slot.lnController.text.trim(),
-          phoneNum: slot.phoneController.text.trim(),
-          email: slot.emailController.text.trim(),
+        final attendeeJson =
+            await TicketAttendenceApiService.createTicketAttendee(
+              ticketTypeId: slot.ticket.id,
+              orderId: orderId,
+              firstName: slot.fnController.text.trim(),
+              lastName: slot.lnController.text.trim(),
+              phoneNum: slot.phoneController.text.trim(),
+              email: slot.emailController.text.trim(),
+              nationalId: widget.onePerPerson
+                  ? slot.idController.text.trim()
+                  : null,
+            );
+        final attendeeId = int.tryParse(
+          attendeeJson['attendeeID'].toString(),
         );
+        for (final a in slot.answers) {
+          final value = a.value;
+          if (value == null || value.isEmpty || attendeeId == null) continue;
+          await AttendeeResponseApiService.createAttendeeResponse(
+            eventQuestionId: a.question.id,
+            attendeeId: attendeeId,
+            attendeeAnswer: value,
+          );
+        }
       }
 
       if (!mounted) return;
@@ -255,7 +417,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
+      final message = e.toString();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            message.toLowerCase().contains('already') ||
+                    message.contains('409')
+                ? l10n.nationalIdAlreadyUsed
+                : 'Error: $e',
+          ),
+        ),
+      );
     }
   }
 
@@ -547,12 +719,98 @@ class _CheckoutPageState extends State<CheckoutPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionTitle(l10n.attendeeInfo),
-        const SizedBox(height: 10),
-        for (var i = 0; i < _slots.length; i++) ...[
-          if (i > 0) const SizedBox(height: 14),
-          _attendeeCard(l10n, i, _slots[i]),
+        if (widget.onePerPerson) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: _kLavender,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _kIndigo.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.badge_outlined,
+                    color: _kIndigo, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.oneTicketPerPersonInfo,
+                    style: const TextStyle(
+                      color: _kTextGrey,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
+        const SizedBox(height: 10),
+        if (_slots.length > 1) ...[
+          _attendeeTabs(l10n),
+          const SizedBox(height: 10),
+        ],
+        _attendeeCard(l10n, _currentSlot, _slots[_currentSlot]),
       ],
+    );
+  }
+
+  /// Horizontal tab bar -- one chip per attendee slot, so the attendee forms
+  /// don't stack into a long scroll. Shows an error dot on chips whose form
+  /// currently fails validation.
+  Widget _attendeeTabs(AppLocalizations l10n) {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _slots.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final slot = _slots[i];
+          final selected = i == _currentSlot;
+          final hasError = slot.fnError ||
+              slot.lnError ||
+              slot.phoneError ||
+              slot.emailError ||
+              slot.idError ||
+              slot.answers.any((a) => a.error);
+          return GestureDetector(
+            onTap: () => setState(() => _currentSlot = i),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected ? _kIndigo : _kLavender,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${l10n.person} ${i + 1}',
+                    style: TextStyle(
+                      color: selected ? Colors.white : _kTextDark,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (hasError) ...[
+                    const SizedBox(width: 6),
+                    Icon(
+                      Icons.error,
+                      size: 14,
+                      color: selected ? Colors.white : Colors.redAccent,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -622,8 +880,170 @@ class _CheckoutPageState extends State<CheckoutPage> {
               if (slot.emailError) setState(() => slot.emailError = false);
             },
           ),
+          if (widget.onePerPerson) ...[
+            const SizedBox(height: 10),
+            TextField(
+              controller: slot.idController,
+              enabled: !_submitting,
+              keyboardType: TextInputType.text,
+              decoration: _fieldDecoration(
+                label: l10n.nationalId,
+                hint: l10n.nationalIdHint,
+                error: slot.idError
+                    ? slot.idController.text.trim().isEmpty
+                          ? l10n.nationalIdRequired
+                          : l10n.nationalIdRepeated
+                    : null,
+              ).copyWith(
+                prefixIcon: const Icon(Icons.badge_outlined,
+                    color: _kTextGrey),
+              ),
+              onChanged: (_) {
+                if (slot.idError) setState(() => slot.idError = false);
+              },
+            ),
+          ],
+          if (slot.answers.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            const Divider(color: Color(0xFFE0DCFD), height: 1),
+            const SizedBox(height: 12),
+            for (final a in slot.answers) ...[
+              _questionWidget(l10n, slot, a),
+              const SizedBox(height: 12),
+            ],
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _questionWidget(
+    AppLocalizations l10n,
+    _AttendeeSlot slot,
+    _QuestionAnswer a,
+  ) {
+    final options = a.options;
+    Widget input;
+    switch (a.question.questionTypeId) {
+      case _typeCheckbox:
+        input = options.isEmpty
+            ? _textAnswerField(l10n, slot, a)
+            : Column(
+                children: [
+                  for (var i = 0; i < options.length; i++)
+                    CheckboxListTile(
+                      value: a.checkbox.contains(i + 1),
+                      onChanged: _submitting
+                          ? null
+                          : (checked) {
+                              setState(() {
+                                if (checked ?? false) {
+                                  a.checkbox.add(i + 1);
+                                } else {
+                                  a.checkbox.remove(i + 1);
+                                }
+                                a.error = false;
+                              });
+                            },
+                      activeColor: _kIndigo,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(
+                        options[i],
+                        style: const TextStyle(
+                          color: _kTextDark,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+      case _typeRadio:
+      case _typeYesNo:
+        input = options.isEmpty
+            ? _textAnswerField(l10n, slot, a)
+            : Column(
+                children: [
+                  for (var i = 0; i < options.length; i++)
+                    RadioListTile<int>(
+                      value: i + 1,
+                      groupValue: a.selected,
+                      onChanged: _submitting
+                          ? null
+                          : (v) {
+                              setState(() {
+                                a.selected = v;
+                                a.error = false;
+                              });
+                            },
+                      activeColor: _kIndigo,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(
+                        options[i],
+                        style: const TextStyle(
+                          color: _kTextDark,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+      case _typeText:
+      case _typeEncryptedText:
+        input = _textAnswerField(l10n, slot, a);
+      default:
+        input = _textAnswerField(l10n, slot, a);
+    }
+
+    final choiceType = a.question.questionTypeId == _typeCheckbox ||
+        a.question.questionTypeId == _typeRadio ||
+        a.question.questionTypeId == _typeYesNo;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          a.question.isRequire
+              ? '${a.question.question} *'
+              : a.question.question,
+          style: const TextStyle(
+            color: _kTextDark,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        input,
+        if (a.error && choiceType)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              l10n.questionRequired,
+              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _textAnswerField(
+    AppLocalizations l10n,
+    _AttendeeSlot slot,
+    _QuestionAnswer a,
+  ) {
+    return TextField(
+      controller: a.textController,
+      enabled: !_submitting,
+      maxLines: 2,
+      decoration: _fieldDecoration(
+        label: l10n.answerLabel,
+        error: a.error ? l10n.questionRequired : null,
+      ),
+      onChanged: (_) {
+        if (a.error) setState(() => a.error = false);
+      },
     );
   }
 

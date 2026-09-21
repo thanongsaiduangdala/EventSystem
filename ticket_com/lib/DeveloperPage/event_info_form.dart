@@ -29,6 +29,8 @@ class EventInfoFormState extends State<EventInfoForm> {
 
   bool _isSubmitting = false;
 
+  bool _onePerPerson = false;
+
   bool _showingTable = false;
   int? _editingEventId;
 
@@ -212,6 +214,7 @@ class EventInfoFormState extends State<EventInfoForm> {
       _selectedOrganizerId = event.organizerId;
       _startDateTime = event.start;
       _endDateTime = event.end;
+      _onePerPerson = event.onePerPerson;
       _showingTable = false;
     });
   }
@@ -229,6 +232,7 @@ class EventInfoFormState extends State<EventInfoForm> {
       _selectedOrganizerId = null;
       _startDateTime = null;
       _endDateTime = null;
+      _onePerPerson = false;
       _showingTable = false;
     });
   }
@@ -313,6 +317,7 @@ class EventInfoFormState extends State<EventInfoForm> {
           longitude: longitude,
           eventDescription: _descriptionController.text.trim(),
           eventOrganizerID: _selectedOrganizerId!,
+          onePerPerson: _onePerPerson,
         );
         _snack(result['msg']?.toString() ?? 'Event created');
       } else {
@@ -326,6 +331,7 @@ class EventInfoFormState extends State<EventInfoForm> {
           longitude: longitude,
           eventDescription: _descriptionController.text.trim(),
           eventOrganizerID: _selectedOrganizerId!,
+          onePerPerson: _onePerPerson,
         );
         _snack('Event updated');
       }
@@ -525,6 +531,23 @@ class EventInfoFormState extends State<EventInfoForm> {
             ),
             const SizedBox(height: 16),
 
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              activeThumbColor: Colors.white,
+              title: const Text(
+                'One ticket per person (anti-reselling)',
+                style: TextStyle(color: Colors.white70),
+              ),
+              subtitle: const Text(
+                'Buyers must enter a National ID / Passport number, and '
+                'the same ID can only be used once for this event.',
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+              ),
+              value: _onePerPerson,
+              onChanged: (v) => setState(() => _onePerPerson = v),
+            ),
+            const SizedBox(height: 16),
+
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -655,7 +678,8 @@ class EventInfoFormState extends State<EventInfoForm> {
                             ),
                             subtitle: Text(
                               'ID: ${event.id}  •  ${_organizerNameFor(event.organizerId)}  •  '
-                              '${_formatForDisplay(event.start)}  →  ${_formatForDisplay(event.end)}',
+                              '${_formatForDisplay(event.start)}  →  ${_formatForDisplay(event.end)}'
+                              '${event.onePerPerson ? "  •  1 ticket / person" : ""}',
                               style: const TextStyle(color: Colors.white54),
                               overflow: TextOverflow.ellipsis,
                             ),
