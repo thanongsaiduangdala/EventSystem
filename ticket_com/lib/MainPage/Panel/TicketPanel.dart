@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
+import 'package:ticket_com/HomePage/event_detail_page.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/category_api_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
@@ -762,7 +763,9 @@ class _TicketPanelState extends State<TicketPanel> {
     final attend = _attendeeCountByEvent[event.id] ?? 0;
     final chip = _chipForEvent(event);
 
-    return Container(
+    return GestureDetector(
+      onTap: () => _openEventDetail(event),
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -827,7 +830,34 @@ class _TicketPanelState extends State<TicketPanel> {
           ),
         ],
       ),
+    ),
     );
+  }
+
+  void _openEventDetail(EventModel event) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EventDetailPage(
+          event: event,
+          image: _imageByEvent[event.id],
+          organizer: _organizerById[event.organizerId],
+          attend: _attendeeCountByEvent[event.id] ?? 0,
+          categories: _categoriesForEvent(event),
+        ),
+      ),
+    );
+  }
+
+  List<CategoryModel> _categoriesForEvent(EventModel event) {
+    final ids = _categoryIdByEvent[event.id];
+    if (ids == null || ids.isEmpty) return const [];
+    final options = _categoryOptionsInUse ?? const [];
+    return [
+      for (final option in options)
+        if (ids.contains(option.id))
+          CategoryModel(id: option.id, name: option.name),
+    ];
   }
 
   CategoryChipOption? _chipForEvent(EventModel event) {

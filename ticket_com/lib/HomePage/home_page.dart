@@ -8,6 +8,7 @@ import 'package:ticket_com/HomePage/event_card.dart';
 import 'package:ticket_com/HomePage/event_detail_page.dart';
 import 'package:ticket_com/HomePage/event_filter.dart';
 import 'package:ticket_com/HomePage/event_list_page.dart';
+import 'package:ticket_com/HomePage/nearby_auto_scroll.dart';
 import 'package:ticket_com/HomePage/nearby_event_card.dart';
 import 'package:ticket_com/l10n/app_localizations.dart';
 import 'package:ticket_com/map/location_picker_page.dart';
@@ -16,7 +17,10 @@ import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/category_api_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
+import 'package:ticket_com/services/event_view_api_service.dart';
+import 'package:ticket_com/services/follow_api_service.dart';
 import 'package:ticket_com/services/orders_api_service.dart';
+import 'package:ticket_com/services/location_service.dart';
 import 'package:ticket_com/services/ticket_attendence_api_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 import 'package:ticket_com/services/wishlist_api_service.dart';
@@ -43,14 +47,15 @@ class _HomePageState extends State<HomePage> {
   Map<int, EventOrganizer> _organizerById = {};
   List<CategoryModel> _categories = [];
   Map<int, List<int>> _eventCategories = {};
-  Set<int> _preferredCategories = {};
+  Map<int, int> _interestWeights = {};
   Map<int, int> _wishCounts = {};
   Map<int, WishlistModel> _myWishByEvent = {};
   Map<int, int> _minPriceByEvent = {};
   Set<int> _boughtEventIds = {};
+  Set<int> _followedOrganizerIds = {};
 
   static const LatLng _defaultLocation = LatLng(17.9757, 102.6331);
-  LatLng _userLocation = _defaultLocation;
+  late LatLng _userLocation;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -65,13 +70,22 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _userLocation = LocationService.currentOrFallback;
+    LocationService.position.addListener(_onLocationChanged);
+    LocationService.ensureResolved();
     _load();
   }
 
   @override
   void dispose() {
+    LocationService.position.removeListener(_onLocationChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onLocationChanged() {
+    if (!mounted) return;
+    setState(() => _userLocation = LocationService.currentOrFallback);
   }
 
   Future<void> _load() async {
@@ -106,9 +120,17 @@ class _HomePageState extends State<HomePage> {
         WishlistApiService.getAllWishes,
         const <WishlistModel>[],
       );
+      final follows = await _optional(
+        FollowApiService.getAllFollows,
+        const <FollowModel>[],
+      );
       final tickets = await _optional(
         TicketTypeApiService.getAllTicketTypes,
         const <TicketTypeModel>[],
+      );
+      final eventViews = await _optional(
+        EventViewApiService.getAllEventViews,
+        const <EventViewModel>[],
       );
 
       final imageByEvent = <int, EventImageModel>{};
@@ -170,6 +192,38 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
+      final interestWeights = <int, int>{};
+      void addSignal(Iterable<int> cats, int weight) {
+        for (final c in cats) {
+          interestWeights[c] = (interestWeights[c] ?? 0) + weight;
+        }
+      }
+
+      if (session != null) {
+        final wishedEventIds = {
+          for (final w in wishes)
+            if (w.accountId == session.accountId) w.eventId,
+        };
+        addSignal(preferred, 4);
+        addSignal(
+          wishedEventIds.expand((id) => eventCategories[id] ?? const <int>[]),
+          2,
+        );
+        addSignal(
+          boughtEventIds.expand((id) => eventCategories[id] ?? const <int>[]),
+          3,
+        );
+        final clickedEventIds = [
+          for (final v in eventViews)
+            if (v.accountId == session.accountId) v.eventId,
+        ];
+        for (final eventId in clickedEventIds) {
+          for (final c in eventCategories[eventId] ?? const <int>[]) {
+            interestWeights[c] = (interestWeights[c] ?? 0) + 1;
+          }
+        }
+      }
+
       final wishCounts = <int, int>{};
       for (final w in wishes) {
         wishCounts[w.eventId] = (wishCounts[w.eventId] ?? 0) + 1;
@@ -180,6 +234,15 @@ class _HomePageState extends State<HomePage> {
         for (final w in wishes) {
           if (w.accountId == session.accountId) {
             myWishByEvent[w.eventId] = w;
+          }
+        }
+      }
+
+      final followedOrganizerIds = <int>{};
+      if (session != null) {
+        for (final f in follows) {
+          if (f.accountId == session.accountId) {
+            followedOrganizerIds.add(f.organizerId);
           }
         }
       }
@@ -196,11 +259,12 @@ class _HomePageState extends State<HomePage> {
         _organizerById = {for (final o in organizers) o.id: o};
         _categories = categories;
         _eventCategories = eventCategories;
-        _preferredCategories = preferred;
+        _interestWeights = interestWeights;
         _wishCounts = wishCounts;
         _myWishByEvent = myWishByEvent;
         _minPriceByEvent = minPriceByEvent;
         _boughtEventIds = boughtEventIds;
+        _followedOrganizerIds = followedOrganizerIds;
         _maxPriceBound = priceBound;
         if (_filter.maxPrice > priceBound) {
           _filter = _filter.copyWith(maxPrice: priceBound);
@@ -247,20 +311,45 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<EventModel> get _allInterestingEvents {
-    if (_preferredCategories.isNotEmpty) {
-      final pick = _events
-          .where((e) => (_eventCategories[e.id] ?? [])
-              .any((c) => _preferredCategories.contains(c)))
-          .toList()
-        ..sort((a, b) => _popularity(b).compareTo(_popularity(a)));
-      if (pick.isNotEmpty) return pick;
+    if (_interestWeights.isNotEmpty) {
+      final scored = <_ScoredEvent>[];
+      for (final event in _events) {
+        if (_boughtEventIds.contains(event.id)) continue;
+        final cats = _eventCategories[event.id] ?? const <int>[];
+        var score = 0;
+        for (final c in cats) {
+          score += _interestWeights[c] ?? 0;
+        }
+        if (score > 0) scored.add(_ScoredEvent(event, score));
+      }
+      scored.sort((a, b) {
+        final byScore = b.score.compareTo(a.score);
+        if (byScore != 0) return byScore;
+        return _popularity(b.event).compareTo(_popularity(a.event));
+      });
+      if (scored.isNotEmpty) return scored.map((s) => s.event).toList();
     }
-    return _randomOrder;
+    return _fallbackInterestingEvents;
+  }
+
+  List<EventModel> get _fallbackInterestingEvents {
+    final withoutBought = _randomOrder
+        .where((e) => !_boughtEventIds.contains(e.id))
+        .toList();
+    return withoutBought.isEmpty ? _randomOrder : withoutBought;
   }
 
   List<EventModel> get _allMostJoinedEvents {
     final list = List<EventModel>.of(_events)
       ..sort((a, b) => _popularity(b).compareTo(_popularity(a)));
+    return list;
+  }
+
+  List<EventModel> get _allFollowedEvents {
+    final list = _events
+        .where((e) => _followedOrganizerIds.contains(e.organizerId))
+        .toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
     return list;
   }
 
@@ -430,6 +519,7 @@ class _HomePageState extends State<HomePage> {
     );
     if (picked != null && mounted) {
       setState(() => _userLocation = picked);
+      await LocationService.setPosition(picked);
     }
   }
 
@@ -489,6 +579,26 @@ class _HomePageState extends State<HomePage> {
         );
       }
     }
+  }
+
+  Future<void> _toggleFollow(EventOrganizer organizer) async {
+    final session = AuthService.currentSession;
+    final messenger = ScaffoldMessenger.of(context);
+    if (session == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Please log in to follow organizers')),
+      );
+      return;
+    }
+
+    final wasFollowing = _followedOrganizerIds.contains(organizer.id);
+    setState(() {
+      if (wasFollowing) {
+        _followedOrganizerIds.remove(organizer.id);
+      } else {
+        _followedOrganizerIds.add(organizer.id);
+      }
+    });
   }
 
   String get _locationLabel {
@@ -625,6 +735,17 @@ class _HomePageState extends State<HomePage> {
           else
             _horizontalEvents(_allInterestingEvents),
           const SizedBox(height: 20),
+          if (_allFollowedEvents.isNotEmpty) ...[
+            _sectionHeader(
+              context,
+              l10n.followedEvents,
+              onSeeAll: () =>
+                  _openAllEvents(l10n.followedEvents, _allFollowedEvents),
+            ),
+            const SizedBox(height: 12),
+            _horizontalEvents(_allFollowedEvents),
+            const SizedBox(height: 20),
+          ],
           _sectionHeader(
             context,
             l10n.mostJoinedEvents,
@@ -1096,7 +1217,7 @@ class _HomePageState extends State<HomePage> {
   Widget _horizontalEvents(List<EventModel> events) {
     final shown = events.take(10).toList();
     return SizedBox(
-      height: 164,
+      height: 156,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1121,35 +1242,28 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Horizontally scrolling row of wide split cards for the "Near You"
+  /// Horizontally auto-scrolling row of wide split cards for the "Near You"
   /// section. Shows up to 5 events before "See all" is needed.
   Widget _horizontalNearbyEvents(BuildContext context, List<EventModel> events) {
     final shown = events.take(5).toList();
     final cardWidth = MediaQuery.sizeOf(context).width - 48;
-    return SizedBox(
-      height: 158,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: shown.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, index) {
-          final event = shown[index];
-          return SizedBox(
-            width: cardWidth,
-            child: NearbyEventCard(
-              event: event,
-              image: _imageByEvent[event.id],
-              attend: _wishCounts[event.id] ?? 0,
-              organizerName: _organizerById[event.organizerId]?.name,
-              saved: _myWishByEvent.containsKey(event.id),
-              bought: _boughtEventIds.contains(event.id),
-              onSaveTap: () => _toggleWish(event),
-              onTap: () => _openEventDetail(event),
-            ),
-          );
-        },
-      ),
+    return NearbyAutoScroll(
+      itemCount: shown.length,
+      itemWidth: cardWidth,
+      itemHeight: 158,
+      itemBuilder: (context, index) {
+        final event = shown[index];
+        return NearbyEventCard(
+          event: event,
+          image: _imageByEvent[event.id],
+          attend: _wishCounts[event.id] ?? 0,
+          organizerName: _organizerById[event.organizerId]?.name,
+          saved: _myWishByEvent.containsKey(event.id),
+          bought: _boughtEventIds.contains(event.id),
+          onSaveTap: () => _toggleWish(event),
+          onTap: () => _openEventDetail(event),
+        );
+      },
     );
   }
 
@@ -1179,6 +1293,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openEventDetail(EventModel event) {
+    _trackEventView(event.id);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1189,11 +1304,22 @@ class _HomePageState extends State<HomePage> {
           attend: _wishCounts[event.id] ?? 0,
           saved: _myWishByEvent.containsKey(event.id),
           onToggleWish: _toggleWish,
+          followed: _followedOrganizerIds.contains(event.organizerId),
+          onToggleFollow: _toggleFollow,
           minPrice: _minPriceByEvent[event.id],
           categories: _categoriesForEvent(event.id),
         ),
       ),
     );
+  }
+
+  void _trackEventView(int eventId) {
+    final session = AuthService.currentSession;
+    if (session == null) return;
+    EventViewApiService.createEventView(
+      accountId: session.accountId,
+      eventId: eventId,
+    ).then((_) {}, onError: (_) {});
   }
 
   List<CategoryModel> _categoriesForEvent(int eventId) {

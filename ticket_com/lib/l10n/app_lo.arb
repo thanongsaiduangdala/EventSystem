@@ -69,6 +69,7 @@
     "eventcategoryinfo": "ຂໍ້ມູນໝວດໝູ່ອີເວັນ",
     "eventorganizerinfo": "ຂໍ້ມູນຜູ້ຈັດອີເວັນ",
 
+    "categories": "ໝວດໝູ່",
     "chooseLocation": "ເລືອກສະຖານທີ່",
     "currentLocation": "ສະຖານທີ່ປັດຈຸບັນ",
     "nearYou": "ອີເວັນໃກ້ໆ",
@@ -133,5 +134,12 @@
     "order": "ຄຳສັ່ງ",
     "paymentDate": "ວັນທີຊຳລະ",
     "answers": "ຄຳຕອບ",
-    "scanQrToEnter": "ສະແກນລະຫັດ QR ນີ້ທີ່ທາງເຂົ້າເພື່ອຢືນຢັນການເຂົ້າຮ່ວມ"
+    "scanQrToEnter": "ສະແກນລະຫັດ QR ນີ້ທີ່ທາງເຂົ້າເພື່ອຢືນຢັນການເຂົ້າຮ່ວມ",
+    "following": "ກຳລັງຕິດຕາມ",
+    "followedEvents": "ອີເວັນທີ່ຕິດຕາມ",
+    "followedOrganizer": "ຕິດຕາມຜູ້ຈັດງານແລ້ວ",
+    "unfollowedOrganizer": "ເລີກຕິດຕາມຜູ້ຈັດງານແລ້ວ",
+    "language": "ພາສາ",
+    "english": "ອັງກິດ",
+    "lao": "ລາວ"
 }

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:ticket_com/services/location_service.dart';
 
 class LocationPickerPage extends StatefulWidget {
   final LatLng? initialLocation;
@@ -17,9 +18,31 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   @override
   void initState() {
     super.initState();
-    _pickedLocation =
-        widget.initialLocation ??
-        const LatLng(17.9757, 102.6331); // default: Vientiane
+    _pickedLocation = widget.initialLocation ?? kDefaultCenter;
+  }
+
+  Future<void> _useMyLocation() async {
+    final messenger = ScaffoldMessenger.of(context);
+    await LocationService.ensureResolved();
+    final current = LocationService.position.value;
+    if (!mounted) return;
+    if (current == null) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Could not detect your location. Check GPS settings.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+    setState(() => _pickedLocation = current);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Using your current location'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 1),
+      ),
+    );
   }
 
   @override
@@ -71,6 +94,17 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                 ],
               ),
             ],
+          ),
+          Positioned(
+            bottom: 88,
+            right: 16,
+            child: FloatingActionButton(
+              heroTag: 'picker-locate',
+              onPressed: _useMyLocation,
+              backgroundColor: Colors.black87,
+              elevation: 4,
+              child: const Icon(Icons.my_location, color: Colors.white),
+            ),
           ),
           Positioned(
             bottom: 16,

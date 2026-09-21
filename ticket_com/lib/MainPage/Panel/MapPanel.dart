@@ -5,10 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:ticket_com/HomePage/event_filter.dart';
+import 'package:ticket_com/HomePage/event_detail_page.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/category_api_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
+import 'package:ticket_com/services/location_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 import 'package:ticket_com/services/wishlist_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
@@ -37,9 +39,14 @@ class MapPanel extends StatefulWidget {
   State<MapPanel> createState() => _MapPanelState();
 }
 
-class _MapPanelState extends State<MapPanel> {
+class _MapPanelState extends State<MapPanel> with TickerProviderStateMixin {
   static const LatLng _center = LatLng(17.9757, 102.6331);
   static const Distance _distance = Distance();
+
+  /// Zoom levels at or above this count as "zoomed in": the bottom card list
+  /// switches from wishlist events to the events currently visible on screen.
+  static const double _zoomInThreshold = 15;
+  static const int _maxVisibleCards = 10;
 
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
@@ -59,25 +66,86 @@ class _MapPanelState extends State<MapPanel> {
 
   // Search + category + filter behaviour mirrors the Home page.
   String _searchQuery = '';
+  bool _showSuggestions = false;
   final Set<int> _selectedCategoryIds = {};
   EventFilter _filter = const EventFilter();
   double _maxPriceBound = 1000000;
-  final LatLng _userLocation = _center;
+  late LatLng _userLocation;
+  bool _mapCentered = false;
+  double _mapZoom = 12;
 
   bool _loading = true;
   String? _error;
 
+  /// Drives the smooth "fly to event" camera animation.
+  late final AnimationController _flyController;
+  LatLng? _flyFrom;
+  LatLng? _flyTo;
+  double _flyFromZoom = 12;
+  double _flyToZoom = 12;
+
   @override
   void initState() {
     super.initState();
+    _flyController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    )..addListener(_onFlyTick);
+    _userLocation = LocationService.currentOrFallback;
+    LocationService.position.addListener(_onLocationChanged);
+    LocationService.ensureResolved();
     _load();
   }
 
   @override
   void dispose() {
+    _flyController.dispose();
+    LocationService.position.removeListener(_onLocationChanged);
     _searchController.dispose();
     _cardController.dispose();
     super.dispose();
+  }
+
+  /// Animates the camera from its current position to [target] / [zoom].
+  void _animateTo(LatLng target, double zoom) {
+    try {
+      final camera = _mapController.camera;
+      _flyFrom = camera.center;
+      _flyFromZoom = camera.zoom;
+    } catch (_) {
+      _mapController.move(target, zoom);
+      return;
+    }
+    _flyTo = target;
+    _flyToZoom = zoom;
+    _flyController.forward(from: 0);
+  }
+
+  void _onFlyTick() {
+    final from = _flyFrom;
+    final to = _flyTo;
+    if (from == null || to == null) return;
+    final t = Curves.easeInOutCubic.transform(_flyController.value);
+    _mapController.move(
+      LatLng(
+        from.latitude + (to.latitude - from.latitude) * t,
+        from.longitude + (to.longitude - from.longitude) * t,
+      ),
+      _flyFromZoom + (_flyToZoom - _flyFromZoom) * t,
+    );
+  }
+
+  void _onLocationChanged() {
+    if (!mounted) return;
+    final next = LocationService.currentOrFallback;
+    setState(() => _userLocation = next);
+    if (_mapCentered) return;
+    _mapCentered = true;
+    if (next == kDefaultCenter) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _mapController.move(next, 14);
+    });
   }
 
   Future<void> _load() async {
@@ -220,22 +288,56 @@ class _MapPanelState extends State<MapPanel> {
     });
   }
 
-  /// The cards shown in the bottom panel: the event pinned from a map tap
-  /// first (so you can wish it), followed by the wished events that still
-  /// match the current search / category / filter query.
+  /// The cards shown in the bottom panel:
+  /// - Zoomed out: the pinned event (from a map tap), then the wished events
+  ///   that still match the current search / category / filter query.
+  /// - Zoomed in: the pinned event, then the events currently visible on the
+  ///   map viewport, nearest to the screen centre first.
   List<EventModel> get _cardEvents {
     final result = <EventModel>[];
     final pinned = _pinnedEvent;
     if (pinned != null && _events.any((e) => e.id == pinned.id)) {
       result.add(pinned);
     }
-    for (final e in _events) {
-      if (!_wishedEventIds.contains(e.id)) continue;
+
+    final zoomedIn = _isZoomedIn;
+    final source = zoomedIn ? _visibleEvents() : _events;
+    for (final e in source) {
       if (pinned != null && e.id == pinned.id) continue;
+      if (result.any((r) => r.id == e.id)) continue;
+      if (!zoomedIn && !_wishedEventIds.contains(e.id)) continue;
       if (!_passes(e)) continue;
       result.add(e);
     }
     return result;
+  }
+
+  bool get _isZoomedIn => _mapZoom >= _zoomInThreshold;
+
+  /// Events inside the current map viewport, nearest to the screen centre
+  /// first. Only meaningful while zoomed in.
+  List<EventModel> _visibleEvents() {
+    try {
+      final camera = _mapController.camera;
+      final bounds = camera.visibleBounds;
+      final center = camera.center;
+      final visible = <EventModel>[];
+      for (final e in _events) {
+        final p = LatLng(e.latitude, e.longitude);
+        if (!bounds.contains(p)) continue;
+        visible.add(e);
+      }
+      visible.sort((a, b) {
+        final aLat = a.latitude - center.latitude;
+        final aLng = a.longitude - center.longitude;
+        final bLat = b.latitude - center.latitude;
+        final bLng = b.longitude - center.longitude;
+        return (aLat * aLat + aLng * aLng).compareTo(bLat * bLat + bLng * bLng);
+      });
+      return visible.take(_maxVisibleCards).toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   // ---------------- search / category / filter (Home page parity) ----------------
@@ -380,13 +482,50 @@ class _MapPanelState extends State<MapPanel> {
   // ---------------- interactions ----------------
 
   void _onSearchChanged(String value) {
-    setState(() => _searchQuery = value);
+    setState(() {
+      _searchQuery = value;
+      _showSuggestions = value.trim().isNotEmpty;
+    });
   }
 
   void _clearSearch() {
     _searchController.clear();
-    setState(() => _searchQuery = '');
+    setState(() {
+      _searchQuery = '';
+      _showSuggestions = false;
+    });
     _resetToFirstResult();
+  }
+
+  /// Name / organizer matches for the current query, prefix matches first.
+  List<EventModel> get _suggestions {
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isEmpty) return const [];
+    final matches = _events.where((e) {
+      if (e.name.toLowerCase().contains(q)) return true;
+      final organizer = _organizerById[e.organizerId]?.name.toLowerCase() ?? '';
+      return organizer.contains(q);
+    }).toList();
+    matches.sort((a, b) {
+      final aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+      final bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+      if (aStarts != bStarts) return aStarts.compareTo(bStarts);
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return matches.take(8).toList();
+  }
+
+  void _selectSuggestion(EventModel event) {
+    FocusScope.of(context).unfocus();
+    _searchController.text = event.name;
+    _searchController.selection = TextSelection.collapsed(
+      offset: event.name.length,
+    );
+    setState(() {
+      _searchQuery = event.name;
+      _showSuggestions = false;
+    });
+    _selectEvent(event);
   }
 
   void _toggleCategory(int id) {
@@ -412,6 +551,7 @@ class _MapPanelState extends State<MapPanel> {
     _searchController.clear();
     setState(() {
       _searchQuery = '';
+      _showSuggestions = false;
       _selectedCategoryIds.clear();
       _filter = const EventFilter();
     });
@@ -419,11 +559,15 @@ class _MapPanelState extends State<MapPanel> {
   }
 
   void _focusEvent(EventModel event) {
-    _mapController.move(LatLng(event.latitude, event.longitude), 14);
+    final zoom = _mapZoom >= _zoomInThreshold ? _mapZoom : 14.0;
+    _animateTo(LatLng(event.latitude, event.longitude), zoom);
   }
 
   void _selectEvent(EventModel event) {
-    setState(() => _pinnedEvent = event);
+    setState(() {
+      _pinnedEvent = event;
+      _showSuggestions = false;
+    });
     if (_cardController.hasClients) _cardController.jumpToPage(0);
     _focusEvent(event);
   }
@@ -440,8 +584,20 @@ class _MapPanelState extends State<MapPanel> {
     _focusEvent(list.first);
   }
 
-  void _goToMyLocation() {
-    _mapController.move(_center, 12);
+  Future<void> _goToMyLocation() async {
+    await LocationService.ensureResolved();
+    if (!mounted) return;
+    _animateTo(LocationService.currentOrFallback, 14);
+  }
+
+  /// Animates the camera zoom by [delta] levels, keeping the same centre.
+  void _zoomBy(double delta) {
+    try {
+      final camera = _mapController.camera;
+      final target = (camera.zoom + delta).clamp(3.0, 19.0);
+      if (target == camera.zoom) return;
+      _animateTo(camera.center, target);
+    } catch (_) {}
   }
 
   Future<void> _toggleWish(EventModel event) async {
@@ -468,6 +624,34 @@ class _MapPanelState extends State<MapPanel> {
       );
     }
     await _refreshWishes();
+  }
+
+  void _openEventDetail(EventModel event) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EventDetailPage(
+          event: event,
+          image: _imageByEvent[event.id],
+          organizer: _organizerById[event.organizerId],
+          attend: _wishCounts[event.id] ?? 0,
+          saved: _wishedEventIds.contains(event.id),
+          onToggleWish: (e) => _toggleWish(e),
+          minPrice: _minPriceByEvent[event.id],
+          categories: _categoriesForEvent(event),
+        ),
+      ),
+    );
+  }
+
+  List<CategoryModel> _categoriesForEvent(EventModel event) {
+    final ids = _categoryIdByEvent[event.id];
+    if (ids == null || ids.isEmpty) return const [];
+    return [
+      for (final category in _categories)
+        if (ids.contains(category.id))
+          CategoryModel(id: category.id, name: category.name),
+    ];
   }
 
   void _showCategoriesSheet() {
@@ -583,6 +767,7 @@ class _MapPanelState extends State<MapPanel> {
             _mapView(),
             _topBar(),
             if (_categories.isNotEmpty) _fab(),
+            if (!_loading) _zoomControls(),
             if (!_loading && _error == null && _cardEvents.isNotEmpty)
               _bottomCards(),
             if (!_loading &&
@@ -616,7 +801,19 @@ class _MapPanelState extends State<MapPanel> {
       options: MapOptions(
         initialCenter: _center,
         initialZoom: 12,
+        onPositionChanged: (camera, hasGesture) {
+          if (hasGesture && _flyController.isAnimating) {
+            _flyController.stop();
+          }
+          final zoom = camera.zoom.floorToDouble();
+          if (_mapZoom != zoom) {
+            setState(() => _mapZoom = zoom);
+          }
+        },
         onTap: (tapPosition, latLng) {
+          if (_showSuggestions) {
+            setState(() => _showSuggestions = false);
+          }
           if (_pinnedEvent != null) {
             setState(() => _pinnedEvent = null);
             if (_cardController.hasClients) _cardController.jumpToPage(0);
@@ -629,14 +826,28 @@ class _MapPanelState extends State<MapPanel> {
           userAgentPackageName: 'com.example.reservation_system',
         ),
         MarkerLayer(
-          markers: _results.map((e) {
-            return Marker(
-              point: LatLng(e.latitude, e.longitude),
-              width: 46,
-              height: 56,
-              child: _buildPin(e),
-            );
-          }).toList(),
+          markers: [
+            Marker(
+              point: _userLocation,
+              width: 24,
+              height: 24,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E88E5),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x55000000),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            ..._buildEventMarkers(),
+          ],
         ),
       ],
     );
@@ -703,6 +914,95 @@ class _MapPanelState extends State<MapPanel> {
     );
   }
 
+  /// Groups events that land on the same screen cell at the current zoom into
+  /// a single numbered cluster marker. Zooming the map in splits them apart,
+  /// so far-away clusters never overlap and the layer stays fast.
+  List<Marker> _buildEventMarkers() {
+    return _clusterEvents(_results, _mapZoom).map((cluster) {
+      if (cluster.events.length == 1) {
+        final e = cluster.events.first;
+        return Marker(
+          point: LatLng(e.latitude, e.longitude),
+          width: 46,
+          height: 56,
+          child: _buildPin(e),
+        );
+      }
+      return Marker(
+        point: cluster.center,
+        width: 42,
+        height: 42,
+        child: _buildCluster(cluster),
+      );
+    }).toList();
+  }
+
+  List<_EventCluster> _clusterEvents(List<EventModel> events, double zoom) {
+    final scale = 256 * math.pow(2, zoom).toDouble();
+    // Approximate screen size of a marker pin in pixels.
+    const cell = 70.0;
+    final cells = <String, _EventCluster>{};
+    for (final e in events) {
+      final x = ((e.longitude + 180) / 360) * scale;
+      final latRad = e.latitude * math.pi / 180;
+      final y =
+          (1 -
+                  math.log(math.tan(latRad) + 1 / math.cos(latRad)) /
+                      math.pi) /
+              2 *
+              scale;
+      final key = '${(x / cell).floor()},${(y / cell).floor()}';
+      final entry = cells[key];
+      if (entry == null) {
+        cells[key] = _EventCluster(LatLng(e.latitude, e.longitude), [e]);
+      } else {
+        entry.events.add(e);
+        final count = entry.events.length;
+        entry.center = LatLng(
+          (entry.center.latitude * (count - 1) + e.latitude) / count,
+          (entry.center.longitude * (count - 1) + e.longitude) / count,
+        );
+      }
+    }
+    return cells.values.toList();
+  }
+
+  Widget _buildCluster(_EventCluster cluster) {
+    return GestureDetector(
+      onTap: () {
+        _animateTo(cluster.center, math.min(_mapZoom + 2, 19));
+      },
+      child: Center(
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: kAccent.withValues(alpha: 0.92),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2.5),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 6,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              '${cluster.events.length}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   _CategoryPin? _categoryForEvent(EventModel event) {
     final ids = _categoryIdByEvent[event.id];
     if (ids == null) return null;
@@ -715,6 +1015,7 @@ class _MapPanelState extends State<MapPanel> {
   }
 
   Widget _topBar() {
+    final suggestions = _suggestions;
     return Positioned(
       top: 0,
       left: 0,
@@ -722,14 +1023,66 @@ class _MapPanelState extends State<MapPanel> {
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              _searchRow(),
-              const SizedBox(height: 10),
-              _pillRow(),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _searchRow(),
+                  const SizedBox(height: 10),
+                  _pillRow(),
+                ],
+              ),
+              if (_showSuggestions && suggestions.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 54),
+                  child: _suggestionList(suggestions),
+                ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _suggestionList(List<EventModel> suggestions) {
+    return Material(
+      elevation: 6,
+      shadowColor: const Color(0x33000000),
+      borderRadius: BorderRadius.circular(16),
+      color: Colors.white,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 300),
+        child: ListView.separated(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          itemCount: suggestions.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            final event = suggestions[index];
+            return ListTile(
+              dense: true,
+              leading: const Icon(Icons.event, color: kAccent, size: 20),
+              title: Text(
+                event.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF212121),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                event.address,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+              onTap: () => _selectSuggestion(event),
+            );
+          },
         ),
       ),
     );
@@ -763,7 +1116,7 @@ class _MapPanelState extends State<MapPanel> {
                     onChanged: _onSearchChanged,
                     textInputAction: TextInputAction.search,
                     decoration: const InputDecoration(
-                      hintText: 'Find for food or restaurant...',
+                      hintText: 'Find events, workshops or other activities...',
                       hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
                       border: InputBorder.none,
                       isDense: true,
@@ -902,6 +1255,42 @@ class _MapPanelState extends State<MapPanel> {
     );
   }
 
+  Widget _zoomControls() {
+    return Positioned(
+      right: 16,
+      bottom: 276,
+      child: Column(
+        children: [
+          _zoomButton(Icons.add, () => _zoomBy(1)),
+          const SizedBox(height: 10),
+          _zoomButton(Icons.remove, () => _zoomBy(-1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _zoomButton(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x22000000),
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: kAccent, size: 22),
+      ),
+    );
+  }
+
   Widget _bottomCards() {
     final list = _cardEvents;
     return Positioned(
@@ -909,7 +1298,7 @@ class _MapPanelState extends State<MapPanel> {
       right: 0,
       bottom: 0,
       child: SizedBox(
-        height: 184,
+        height: 150,
         child: PageView.builder(
           controller: _cardController,
           itemCount: list.length,
@@ -962,7 +1351,9 @@ class _MapPanelState extends State<MapPanel> {
     final image = _imageByEvent[event.id];
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 12),
-      child: Container(
+      child: GestureDetector(
+        onTap: () => _openEventDetail(event),
+        child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
@@ -1068,6 +1459,7 @@ class _MapPanelState extends State<MapPanel> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
@@ -1182,4 +1574,13 @@ class _ScoredEvent {
 
   final EventModel event;
   final int score;
+}
+
+/// Events that share a screen cell at the current zoom. [center] is the
+/// average of the clustered points so tapping a cluster jumps to its group.
+class _EventCluster {
+  _EventCluster(this.center, this.events);
+
+  LatLng center;
+  final List<EventModel> events;
 }

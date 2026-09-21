@@ -506,6 +506,12 @@ abstract class AppLocalizations {
   /// **'Event Organizer Info'**
   String get eventorganizerinfo;
 
+  /// No description provided for @categories.
+  ///
+  /// In en, this message translates to:
+  /// **'Categories'**
+  String get categories;
+
   /// No description provided for @chooseLocation.
   ///
   /// In en, this message translates to:
@@ -883,6 +889,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Scan this QR code at the entrance to check in'**
   String get scanQrToEnter;
+
+  /// No description provided for @following.
+  ///
+  /// In en, this message translates to:
+  /// **'Following'**
+  String get following;
+
+  /// No description provided for @followedEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Followed Events'**
+  String get followedEvents;
+
+  /// No description provided for @followedOrganizer.
+  ///
+  /// In en, this message translates to:
+  /// **'Organizer followed'**
+  String get followedOrganizer;
+
+  /// No description provided for @unfollowedOrganizer.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfollowed organizer'**
+  String get unfollowedOrganizer;
+
+  /// No description provided for @language.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get language;
+
+  /// No description provided for @english.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get english;
+
+  /// No description provided for @lao.
+  ///
+  /// In en, this message translates to:
+  /// **'Lao'**
+  String get lao;
 }
 
 class _AppLocalizationsDelegate

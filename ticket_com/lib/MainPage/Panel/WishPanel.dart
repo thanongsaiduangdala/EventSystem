@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ticket_com/HomePage/event_detail_page.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
@@ -25,6 +26,7 @@ class _WishPanelState extends State<WishPanel> {
   Map<int, EventImageModel> _imageByEvent = {};
   Map<int, EventOrganizer> _organizerById = {};
   Map<int, int> _attendeeCountByEvent = {};
+  final Map<int, int> _wishIdByEvent = {};
 
   @override
   void initState() {
@@ -47,10 +49,12 @@ class _WishPanelState extends State<WishPanel> {
 
       final myEventIds = <int>{};
       final attendeeCount = <int, int>{};
+      _wishIdByEvent.clear();
       for (final w in wishes) {
         attendeeCount[w.eventId] = (attendeeCount[w.eventId] ?? 0) + 1;
         if (session != null && w.accountId == session.accountId) {
           myEventIds.add(w.eventId);
+          _wishIdByEvent[w.eventId] = w.id;
         }
       }
 
@@ -101,6 +105,47 @@ class _WishPanelState extends State<WishPanel> {
     } catch (_) {
       return fallback;
     }
+  }
+
+  void _openEventDetail(EventModel event) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EventDetailPage(
+          event: event,
+          image: _imageByEvent[event.id],
+          organizer: _organizerById[event.organizerId],
+          attend: _attendeeCountByEvent[event.id] ?? 0,
+          saved: _wishIdByEvent.containsKey(event.id),
+          onToggleWish: _toggleWish,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleWish(EventModel event) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final session = AuthService.currentSession;
+    if (session == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Please sign in to save events')),
+      );
+      return;
+    }
+
+    final wishId = _wishIdByEvent[event.id];
+    if (wishId != null) {
+      await _optional(() => WishlistApiService.deleteWishById(wishId), null);
+    } else {
+      await _optional(
+        () => WishlistApiService.createWish(
+          accountId: session.accountId,
+          eventId: event.id,
+        ),
+        null,
+      );
+    }
+    await _load();
   }
 
   @override
@@ -185,7 +230,9 @@ class _WishPanelState extends State<WishPanel> {
     final organizer = _organizerById[event.organizerId]?.name ?? 'GAEA';
     final attend = _attendeeCountByEvent[event.id] ?? 0;
 
-    return Container(
+    return GestureDetector(
+      onTap: () => _openEventDetail(event),
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -262,6 +309,7 @@ class _WishPanelState extends State<WishPanel> {
           ),
         ],
       ),
+    ),
     );
   }
 

@@ -4,17 +4,23 @@ import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'package:ticket_com/HomePage/checkout_page.dart';
 import 'package:ticket_com/HomePage/my_ticket_page.dart';
 import 'package:ticket_com/models/category_models.dart';
+import 'package:ticket_com/models/sponser_models.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
+import 'package:ticket_com/services/follow_api_service.dart';
+import 'package:ticket_com/services/sponser_api_service.dart';
 import 'package:ticket_com/services/orders_api_service.dart';
 import 'package:ticket_com/services/ticket_attendence_api_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
+import 'package:ticket_com/utils/category_colors.dart';
+import 'package:ticket_com/utils/category_icons.dart';
 
 const Color _kIndigo = Color(0xFF5B4DFF);
 const Color _kLavender = Color(0xFFEFEEFC);
 const Color _kTextDark = Color(0xFF212121);
 const Color _kTextGrey = Color(0xFF757575);
+const double _kPinnedOffset = 60;
 
 class EventDetailPage extends StatefulWidget {
   const EventDetailPage({
@@ -25,6 +31,8 @@ class EventDetailPage extends StatefulWidget {
     this.attend = 0,
     this.saved = false,
     this.onToggleWish,
+    this.followed = false,
+    this.onToggleFollow,
     this.minPrice,
     this.categories = const [],
   });
@@ -35,6 +43,8 @@ class EventDetailPage extends StatefulWidget {
   final int attend;
   final bool saved;
   final Future<void> Function(EventModel event)? onToggleWish;
+  final bool followed;
+  final Future<void> Function(EventOrganizer organizer)? onToggleFollow;
   final int? minPrice;
   final List<CategoryModel> categories;
 
@@ -45,18 +55,26 @@ class EventDetailPage extends StatefulWidget {
 class _EventDetailPageState extends State<EventDetailPage> {
   bool _loading = true;
   bool _aboutExpanded = false;
+  bool _pinned = false;
+  late bool _saved;
 
   List<TicketTypeModel> _ticketTypes = [];
   List<PaymentType> _paymentTypes = [];
   List<EventImageModel> _heroImages = [];
   List<TicketPurchase> _purchases = [];
+  List<SponserModel> _sponsors = [];
   final PageController _heroController = PageController();
+  final ScrollController _scrollController = ScrollController();
   Timer? _carouselTimer;
   int _currentImage = 0;
+  late bool _following;
 
   @override
   void initState() {
     super.initState();
+    _following = widget.followed;
+    _saved = widget.saved;
+    _scrollController.addListener(_onScroll);
     _load();
   }
 
@@ -64,7 +82,14 @@ class _EventDetailPageState extends State<EventDetailPage> {
   void dispose() {
     _carouselTimer?.cancel();
     _heroController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    final pinned =
+        _scrollController.hasClients && _scrollController.offset > _kPinnedOffset;
+    if (pinned != _pinned) setState(() => _pinned = pinned);
   }
 
   void _startCarousel() {
@@ -134,16 +159,37 @@ class _EventDetailPageState extends State<EventDetailPage> {
     final sorted = List<TicketTypeModel>.of(tickets)
       ..sort((a, b) => a.priceInKip.compareTo(b.priceInKip));
     final purchases = await _loadPurchases(sorted);
+    final sponsors = await _loadSponsors();
 
     if (!mounted) return;
     setState(() {
       _ticketTypes = sorted;
       _paymentTypes = paymentTypes;
       _purchases = purchases;
+      _sponsors = sponsors;
       if (heroImages.isNotEmpty) _heroImages = heroImages;
       _loading = false;
     });
     if (heroImages.length > 1) _startCarousel();
+  }
+
+  /// Fetches every event<->sponsor link plus sponsor records, keeping only
+  /// the sponsors linked to this event (the backend has no per-event query).
+  Future<List<SponserModel>> _loadSponsors() async {
+    final links = await _optional(
+      SponserApiService.getAllEventSponsers,
+      const <EventSponserModel>[],
+    );
+    final matchingIds = <int>{
+      for (final link in links)
+        if (link.eventId == widget.event.id) link.sponserId,
+    };
+    if (matchingIds.isEmpty) return const [];
+    final sponsors = await _optional(
+      SponserApiService.getAllSponsers,
+      const <SponserModel>[],
+    );
+    return sponsors.where((s) => matchingIds.contains(s.id)).toList();
   }
 
   /// Fetches the signed-in user's orders and filters out the tickets they
@@ -232,6 +278,87 @@ class _EventDetailPageState extends State<EventDetailPage> {
     }
   }
 
+  Future<void> _toggleSave() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final callback = widget.onToggleWish;
+    if (callback == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not update wish list')),
+      );
+      return;
+    }
+    if (AuthService.currentSession == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Please log in to save events')),
+      );
+      return;
+    }
+
+    final wasSaved = _saved;
+    setState(() => _saved = !_saved);
+    try {
+      await callback(widget.event);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _saved = wasSaved);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Could not update wish list')),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    final session = AuthService.currentSession;
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = l10nOf(context);
+    final organizer = widget.organizer;
+    if (organizer == null) return;
+
+    if (session == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Please log in to follow organizers')),
+      );
+      return;
+    }
+
+    final wasFollowing = _following;
+    setState(() => _following = !_following);
+    try {
+      if (wasFollowing) {
+        await FollowApiService.deleteFollow(
+          accountId: session.accountId,
+          organizerId: organizer.id,
+        );
+      } else {
+        await FollowApiService.createFollow(
+          accountId: session.accountId,
+          organizerId: organizer.id,
+        );
+      }
+      await widget.onToggleFollow?.call(organizer);
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              wasFollowing
+                  ? l10n.unfollowedOrganizer
+                  : l10n.followedOrganizer,
+            ),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _following = wasFollowing);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Could not update follow')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -241,6 +368,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
           : Stack(
               children: [
                 ListView(
+                  controller: _scrollController,
                   padding: EdgeInsets.zero,
                   physics: const AlwaysScrollableScrollPhysics(),
                   children: [_heroWithPill(context), _body(context)],
@@ -251,6 +379,13 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   bottom: 12 + MediaQuery.paddingOf(context).bottom,
                   child: _buyBar(context),
                 ),
+                if (_pinned)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: _topBar(context),
+                  ),
               ],
             ),
     );
@@ -398,37 +533,82 @@ class _EventDetailPageState extends State<EventDetailPage> {
     required VoidCallback onTap,
     double size = 18,
     Color iconColor = Colors.white,
+    bool pinned = false,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 38,
         height: 38,
-        decoration: const BoxDecoration(
-          color: Colors.black26,
+        decoration: BoxDecoration(
+          color: pinned ? Colors.white : Colors.black26,
           shape: BoxShape.circle,
+          boxShadow: pinned
+              ? const [
+                  BoxShadow(
+                    color: Color(0x22000000),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
-        child: Icon(icon, color: iconColor, size: size),
+        child: Icon(
+          icon,
+          color: pinned ? _kTextDark : iconColor,
+          size: size,
+        ),
       ),
     );
   }
 
-  Widget _saveButton() {
-    final saved = widget.saved;
+  Widget _saveButton({bool pinned = false}) {
     return GestureDetector(
-      onTap: () => widget.onToggleWish?.call(widget.event),
+      onTap: _toggleSave,
       child: Container(
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: Colors.black26,
+          color: pinned ? Colors.white : Colors.black26,
           borderRadius: BorderRadius.circular(10),
+          boxShadow: pinned
+              ? const [
+                  BoxShadow(
+                    color: Color(0x22000000),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Icon(
-          saved ? Icons.bookmark : Icons.bookmark_border,
-          color: Colors.white,
+          _saved ? Icons.favorite : Icons.favorite_border,
+          color: pinned
+              ? (_saved ? Colors.redAccent : _kTextDark)
+              : Colors.white,
           size: 20,
         ),
+      ),
+    );
+  }
+
+  /// Sticky top bar shown while the hero scrolled off-screen: keeps only the
+  /// back arrow and the heart icon reachable at all times.
+  Widget _topBar(BuildContext context) {
+    final topPad = MediaQuery.paddingOf(context).top;
+    return Container(
+      padding: EdgeInsets.fromLTRB(12, topPad + 4, 12, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _circleIconButton(
+            icon: Icons.arrow_back_ios_new,
+            size: 18,
+            onTap: () => Navigator.pop(context),
+            pinned: true,
+          ),
+          _saveButton(pinned: true),
+        ],
       ),
     );
   }
@@ -552,8 +732,16 @@ class _EventDetailPageState extends State<EventDetailPage> {
           _locationRow(context),
           const SizedBox(height: 16),
           _organizerRow(context),
+          if (widget.categories.isNotEmpty) ...[
+            const SizedBox(height: 26),
+            _categoriesSection(context),
+          ],
           const SizedBox(height: 26),
           _aboutSection(context),
+          if (_sponsors.isNotEmpty) ...[
+            const SizedBox(height: 26),
+            _sponsorsSection(context),
+          ],
           const SizedBox(height: 140),
         ],
       ),
@@ -653,27 +841,33 @@ class _EventDetailPageState extends State<EventDetailPage> {
         const SizedBox(width: 14),
         Expanded(child: _twoLineText(name, l10n.organizer)),
         GestureDetector(
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('${l10n.follow} "$name"'),
-                duration: const Duration(seconds: 1),
-              ),
-            );
-          },
+          onTap: _toggleFollow,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: _kLavender,
+              color: _following ? _kIndigo : _kLavender,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Text(
-              l10n.follow,
-              style: const TextStyle(
-                color: _kIndigo,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_following) ...[
+                  const Icon(
+                    Icons.check,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                Text(
+                  _following ? l10n.following : l10n.follow,
+                  style: TextStyle(
+                    color: _following ? Colors.white : _kIndigo,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -695,6 +889,146 @@ class _EventDetailPageState extends State<EventDetailPage> {
         style: const TextStyle(
           color: Colors.white,
           fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  // ---------------- categories ----------------
+
+  Widget _categoriesSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10nOf(context).categories,
+          style: const TextStyle(
+            color: _kTextDark,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final category in widget.categories)
+              _categoryChip(category),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _categoryChip(CategoryModel category) {
+    final color = categoryColorFor(category.name);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            iconForKey(category.iconPath ?? ''),
+            size: 15,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            category.name,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------- sponsors ----------------
+
+  Widget _sponsorsSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10nOf(context).eventsponsorinfo,
+          style: const TextStyle(
+            color: _kTextDark,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 78,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _sponsors.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            itemBuilder: (context, index) => _sponsorItem(_sponsors[index]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _sponsorItem(SponserModel sponsor) {
+    return SizedBox(
+      width: 68,
+      child: Column(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: _kLavender,
+              shape: BoxShape.circle,
+              border: Border.all(color: _kIndigo.withValues(alpha: 0.25)),
+            ),
+            child: sponsor.logoPath.isEmpty
+                ? _sponsorInitial(sponsor)
+                : Image.network(
+                    SponserApiService.fullImageUrl(sponsor.logoPath),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _sponsorInitial(sponsor),
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return _sponsorInitial(sponsor);
+                    },
+                  ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            sponsor.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _kTextGrey, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sponsorInitial(SponserModel sponsor) {
+    final name = sponsor.name.trim();
+    final initial = name.isEmpty ? 'S' : name.characters.first.toUpperCase();
+    return Center(
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: _kIndigo,
+          fontSize: 20,
           fontWeight: FontWeight.bold,
         ),
       ),

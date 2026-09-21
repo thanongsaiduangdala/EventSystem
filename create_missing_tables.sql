@@ -17,3 +17,22 @@ CREATE TABLE IF NOT EXISTS wishlistinfo (
     FOREIGN KEY (AccountID) REFERENCES accountinfo(AccountID) ON DELETE CASCADE,
     FOREIGN KEY (EventID) REFERENCES eventinfo(EventID) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS followinfo (
+    FollowID INT AUTO_INCREMENT PRIMARY KEY,
+    AccountID INT NOT NULL,
+    EventOrganizerID INT NOT NULL,
+    CreatedAtYMDT DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_account_organizer (AccountID, EventOrganizerID),
+    FOREIGN KEY (AccountID) REFERENCES accountinfo(AccountID) ON DELETE CASCADE,
+    FOREIGN KEY (EventOrganizerID) REFERENCES eventorganizerinfo(EventOrganizerID) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS eventviewinfo (
+    ViewID INT AUTO_INCREMENT PRIMARY KEY,
+    AccountID INT NOT NULL,
+    EventID INT NOT NULL,
+    ViewedAtYMDT DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (AccountID) REFERENCES accountinfo(AccountID) ON DELETE CASCADE,
+    FOREIGN KEY (EventID) REFERENCES eventinfo(EventID) ON DELETE CASCADE
+);

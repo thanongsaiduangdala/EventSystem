@@ -220,6 +220,9 @@ class AppLocalizationsLo extends AppLocalizations {
   String get eventorganizerinfo => 'ຂໍ້ມູນຜູ້ຈັດອີເວັນ';
 
   @override
+  String get categories => 'ໝວດໝູ່';
+
+  @override
   String get chooseLocation => 'ເລືອກສະຖານທີ່';
 
   @override
@@ -415,4 +418,25 @@ class AppLocalizationsLo extends AppLocalizations {
   @override
   String get scanQrToEnter =>
       'ສະແກນລະຫັດ QR ນີ້ທີ່ທາງເຂົ້າເພື່ອຢືນຢັນການເຂົ້າຮ່ວມ';
+
+  @override
+  String get following => 'ກຳລັງຕິດຕາມ';
+
+  @override
+  String get followedEvents => 'ອີເວັນທີ່ຕິດຕາມ';
+
+  @override
+  String get followedOrganizer => 'ຕິດຕາມຜູ້ຈັດງານແລ້ວ';
+
+  @override
+  String get unfollowedOrganizer => 'ເລີກຕິດຕາມຜູ້ຈັດງານແລ້ວ';
+
+  @override
+  String get language => 'ພາສາ';
+
+  @override
+  String get english => 'ອັງກິດ';
+
+  @override
+  String get lao => 'ລາວ';
 }

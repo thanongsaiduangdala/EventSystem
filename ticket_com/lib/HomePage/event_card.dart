@@ -68,64 +68,70 @@ class EventCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    event.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF212121),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      height: 1.2,
+                  SizedBox(
+                    height: 32,
+                    child: Text(
+                      event.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF212121),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Row(
+                  SizedBox(
+                    height: 18,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.place_outlined,
+                                size: 13,
+                                color: Color(0xFF9E9E9E),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  event.address,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFF757575),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(
-                              Icons.place_outlined,
+                              Icons.people,
                               size: 13,
-                              color: Color(0xFF9E9E9E),
+                              color: Color(0xFF7C4DFF),
                             ),
                             const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                event.address,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFF757575),
-                                  fontSize: 11,
-                                ),
+                            Text(
+                              attend.toString(),
+                              style: const TextStyle(
+                                color: Color(0xFF7C4DFF),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      const Spacer(),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.people,
-                            size: 13,
-                            color: Color(0xFF7C4DFF),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            attend.toString(),
-                            style: const TextStyle(
-                              color: Color(0xFF7C4DFF),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),

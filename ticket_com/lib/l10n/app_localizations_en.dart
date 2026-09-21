@@ -219,6 +219,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get eventorganizerinfo => 'Event Organizer Info';
 
   @override
+  String get categories => 'Categories';
+
+  @override
   String get chooseLocation => 'Choose location';
 
   @override
@@ -414,4 +417,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scanQrToEnter => 'Scan this QR code at the entrance to check in';
+
+  @override
+  String get following => 'Following';
+
+  @override
+  String get followedEvents => 'Followed Events';
+
+  @override
+  String get followedOrganizer => 'Organizer followed';
+
+  @override
+  String get unfollowedOrganizer => 'Unfollowed organizer';
+
+  @override
+  String get language => 'Language';
+
+  @override
+  String get english => 'English';
+
+  @override
+  String get lao => 'Lao';
 }

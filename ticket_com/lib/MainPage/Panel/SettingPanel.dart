@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:ticket_com/services/auth_service.dart';
+import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'package:ticket_com/DeveloperPage/MainPageDashboard.dart';
 import 'package:ticket_com/LogSignPage/MainLoginSignUp.dart'; // adjust path
+import 'package:ticket_com/main.dart';
+import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
 
 class SettingPanel extends StatefulWidget {
@@ -57,6 +59,91 @@ class _SettingPanelState extends State<SettingPanel> {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const Mainloginsignup()),
       (route) => false,
+    );
+  }
+
+  Future<void> _pickLanguage() async {
+    final l10n = l10nOf(context);
+    final current = appLocale.value.languageCode;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.language,
+                  style: const TextStyle(
+                    color: Color(0xFF212121),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _languageOption(
+                  name: l10n.english,
+                  nativeName: 'English',
+                  selected: current == 'en',
+                  onTap: () => Navigator.pop(context, 'en'),
+                ),
+                _languageOption(
+                  name: l10n.lao,
+                  nativeName: 'ລາວ',
+                  selected: current == 'lo',
+                  onTap: () => Navigator.pop(context, 'lo'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (selected != null && selected != current) {
+      appLocale.value = Locale(selected);
+    }
+  }
+
+  Widget _languageOption({
+    required String name,
+    required String nativeName,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: kAccent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(Icons.language, color: kAccent, size: 22),
+      ),
+      title: Text(
+        name,
+        style: const TextStyle(
+          color: Color(0xFF212121),
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      subtitle: Text(
+        nativeName,
+        style: const TextStyle(color: Color(0xFF757575), fontSize: 12.5),
+      ),
+      trailing: selected
+          ? const Icon(Icons.check_circle, color: kAccent, size: 22)
+          : const Icon(Icons.radio_button_unchecked, color: Colors.grey),
     );
   }
 
@@ -231,6 +318,33 @@ class _SettingPanelState extends State<SettingPanel> {
               onTap: _checkingDeveloper ? null : _openDeveloperDashboard,
             ),
           if (canAdmin) const _CardDivider(),
+          _actionTile(
+            icon: Icons.language,
+            iconColor: const Color(0xFF00897B),
+            title: l10nOf(context).language,
+            subtitle: 'English / ລາວ',
+            titleColor: const Color(0xFF212121),
+            subtitleColor: const Color(0xFF757575),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  appLocale.value.languageCode == 'lo'
+                      ? l10nOf(context).lao
+                      : l10nOf(context).english,
+                  style: const TextStyle(
+                    color: Colors.black54,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right, color: Colors.black26),
+              ],
+            ),
+            onTap: _pickLanguage,
+          ),
+          const _CardDivider(),
           _actionTile(
             icon: Icons.logout,
             iconColor: Colors.redAccent,

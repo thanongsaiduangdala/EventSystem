@@ -182,6 +182,11 @@ class _MainloginsignupState extends State<Mainloginsignup>
             radius: BorderRadius.only(topRight: Radius.circular(bottomBlob)),
             slide: Offset(-bottomBlob * 0.5, bottomBlob * 0.5),
           ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            right: 16,
+            child: _languageToggle(),
+          ),
           _splashLogo(raise: logoRaise),
           _bottomPanel(
             welcomeHeight: welcomePanelHeight,
@@ -190,6 +195,132 @@ class _MainloginsignupState extends State<Mainloginsignup>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _languageToggle() {
+    final code = appLocale.value.languageCode;
+    return Material(
+      color: Colors.white.withValues(alpha: 0.9),
+      borderRadius: BorderRadius.circular(20),
+      elevation: 2,
+      shadowColor: Colors.black26,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: _pickLanguage,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.language, size: 16, color: kAuthBrandBlueDeep),
+              const SizedBox(width: 6),
+              Text(
+                code == 'lo' ? 'ລາວ' : 'EN',
+                style: const TextStyle(
+                  color: kAuthDarkNavy,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Icon(
+                Icons.arrow_drop_down,
+                size: 16,
+                color: kAuthDarkNavy,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickLanguage() async {
+    final l10n = l10nOf(context);
+    final current = appLocale.value.languageCode;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.language,
+                  style: const TextStyle(
+                    color: Color(0xFF212121),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _languageOption(
+                  name: l10n.english,
+                  nativeName: 'English',
+                  selected: current == 'en',
+                  onTap: () => Navigator.pop(context, 'en'),
+                ),
+                _languageOption(
+                  name: l10n.lao,
+                  nativeName: 'ລາວ',
+                  selected: current == 'lo',
+                  onTap: () => Navigator.pop(context, 'lo'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (selected != null && selected != current) {
+      appLocale.value = Locale(selected);
+    }
+  }
+
+  Widget _languageOption({
+    required String name,
+    required String nativeName,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: kAuthBrandBlueDeep.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.language, color: kAuthBrandBlueDeep, size: 22),
+      ),
+      title: Text(
+        name,
+        style: const TextStyle(
+          color: Color(0xFF212121),
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      subtitle: Text(
+        nativeName,
+        style: const TextStyle(color: Color(0xFF757575), fontSize: 12.5),
+      ),
+      trailing: selected
+          ? const Icon(
+              Icons.check_circle,
+              color: kAuthBrandBlueDeep,
+              size: 22,
+            )
+          : const Icon(Icons.radio_button_unchecked, color: Colors.grey),
     );
   }
 
@@ -901,11 +1032,11 @@ class _MainloginsignupState extends State<Mainloginsignup>
       );
       if (dupResponse.statusCode != 200) {
         final error = jsonDecode(dupResponse.body);
-        final detail = error['detail'].toString();
+        final detail = error['detail'].toString().toLowerCase();
         setState(() {
-          if (detail.contains('CustomerEmail')) {
+          if (detail.contains('email')) {
             _emailDup = true;
-          } else if (detail.contains('CustomerPhoneNum')) {
+          } else if (detail.contains('phone')) {
             _phoneDup = true;
           }
         });
@@ -924,6 +1055,15 @@ class _MainloginsignupState extends State<Mainloginsignup>
         _goTo(_AuthStage.otp);
       } else {
         if (!mounted) return;
+        try {
+          final error = jsonDecode(otpResponse.body);
+          final detail = error['detail'].toString().toLowerCase();
+          if (detail.contains('email already registered') ||
+              detail.contains('duplicate')) {
+            setState(() => _emailDup = true);
+            return;
+          }
+        } catch (_) {}
         _showErrorDialog(
           l10nOf(context).error,
           'Failed to send verification email. Please try again.',
@@ -971,14 +1111,16 @@ class _MainloginsignupState extends State<Mainloginsignup>
       } else {
         final error = jsonDecode(response.body);
         final detail = error['detail'].toString();
-        if (detail.contains('Invalid OTP')) {
+        final lower = detail.toLowerCase();
+        if (lower.contains('invalid otp')) {
           setState(() => _otpErr = true);
-        } else if (detail.contains('CustomerEmail')) {
+        } else if (lower.contains('email already registered') ||
+            lower.contains('email') || lower.contains('duplicate')) {
           _suEmail.clear();
           if (!mounted) return;
           setState(() => _emailDup = true);
           _goTo(_AuthStage.signup);
-        } else if (detail.contains('CustomerPhoneNum')) {
+        } else if (lower.contains('phone')) {
           _phone.clear();
           if (!mounted) return;
           setState(() => _phoneDup = true);

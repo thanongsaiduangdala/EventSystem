@@ -69,6 +69,7 @@
     "eventcategoryinfo": "Event category Info",
     "eventorganizerinfo": "Event Organizer Info",
 
+    "categories": "Categories",
     "chooseLocation": "Choose location",
     "currentLocation": "Current Location",
     "nearYou": "Nearby Events",
@@ -133,5 +134,12 @@
     "order": "Order",
     "paymentDate": "Payment Date",
     "answers": "Answers",
-    "scanQrToEnter": "Scan this QR code at the entrance to check in"
+    "scanQrToEnter": "Scan this QR code at the entrance to check in",
+    "following": "Following",
+    "followedEvents": "Followed Events",
+    "followedOrganizer": "Organizer followed",
+    "unfollowedOrganizer": "Unfollowed organizer",
+    "language": "Language",
+    "english": "English",
+    "lao": "Lao"
 }

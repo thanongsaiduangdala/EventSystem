@@ -447,6 +447,12 @@ class AddWishlistRequest(BaseModel):
     EventID: int
 
 
+# ---------- followinfo ----------
+class AddFollowRequest(BaseModel):
+    AccountID: int
+    EventOrganizerID: int
+
+
 # ---------- accountcategoryinfo ----------
 class SetAccountCategoriesRequest(BaseModel):
     AccountID: int
@@ -455,3 +461,8 @@ class SetAccountCategoriesRequest(BaseModel):
 class AddAccountCategoryRequest(BaseModel):
     AccountID: int
     CategoryID: int
+
+# ---------- eventviewinfo ----------
+class AddEventViewRequest(BaseModel):
+    AccountID: int
+    EventID: int
