@@ -14,6 +14,7 @@ class EventCard extends StatelessWidget {
     this.onTap,
     this.saved = false,
     this.onSaveTap,
+    this.bought = false,
   });
 
   final EventModel event;
@@ -22,6 +23,7 @@ class EventCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool saved;
   final VoidCallback? onSaveTap;
+  final bool bought;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +41,7 @@ class EventCard extends StatelessWidget {
             Stack(
               children: [
                 SizedBox(
-                  height: 92,
+                  height: 80,
                   width: double.infinity,
                   child: _eventImage(),
                 ),
@@ -53,6 +55,12 @@ class EventCard extends StatelessWidget {
                   right: 8,
                   child: _wishButton(),
                 ),
+                if (bought)
+                  Positioned(
+                    left: 8,
+                    bottom: 8,
+                    child: _boughtBadge(),
+                  ),
               ],
             ),
             Padding(
@@ -72,19 +80,50 @@ class EventCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  _detailRow(Icons.place_outlined, event.address),
-                  const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.people, size: 13, color: Color(0xFF7C4DFF)),
-                      const SizedBox(width: 4),
-                      Text(
-                        attend.toString(),
-                        style: const TextStyle(
-                          color: Color(0xFF7C4DFF),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                      Flexible(
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.place_outlined,
+                              size: 13,
+                              color: Color(0xFF9E9E9E),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                event.address,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFF757575),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                      const Spacer(),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.people,
+                            size: 13,
+                            color: Color(0xFF7C4DFF),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            attend.toString(),
+                            style: const TextStyle(
+                              color: Color(0xFF7C4DFF),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -159,20 +198,28 @@ class EventCard extends StatelessWidget {
     );
   }
 
-  Widget _detailRow(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, size: 13, color: const Color(0xFF9E9E9E)),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Color(0xFF757575), fontSize: 11),
+  Widget _boughtBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2E9E5B),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle, color: Colors.white, size: 11),
+          SizedBox(width: 3),
+          Text(
+            'Bought',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

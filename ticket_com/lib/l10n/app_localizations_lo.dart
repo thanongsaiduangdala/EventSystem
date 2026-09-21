@@ -396,4 +396,23 @@ class AppLocalizationsLo extends AppLocalizations {
 
   @override
   String get person => 'ຄົນ';
+
+  @override
+  String get ticketPurchased => 'ຊື້ປີ້ແລ້ວ';
+
+  @override
+  String get myTickets => 'ປີ້ຂອງຂ້ອຍ';
+
+  @override
+  String get order => 'ຄຳສັ່ງ';
+
+  @override
+  String get paymentDate => 'ວັນທີຊຳລະ';
+
+  @override
+  String get answers => 'ຄຳຕອບ';
+
+  @override
+  String get scanQrToEnter =>
+      'ສະແກນລະຫັດ QR ນີ້ທີ່ທາງເຂົ້າເພື່ອຢືນຢັນການເຂົ້າຮ່ວມ';
 }

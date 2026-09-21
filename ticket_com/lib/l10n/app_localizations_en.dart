@@ -396,4 +396,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get person => 'Person';
+
+  @override
+  String get ticketPurchased => 'Ticket Purchased';
+
+  @override
+  String get myTickets => 'My Tickets';
+
+  @override
+  String get order => 'Order';
+
+  @override
+  String get paymentDate => 'Payment Date';
+
+  @override
+  String get answers => 'Answers';
+
+  @override
+  String get scanQrToEnter => 'Scan this QR code at the entrance to check in';
 }

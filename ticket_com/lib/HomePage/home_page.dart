@@ -16,6 +16,8 @@ import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/category_api_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
+import 'package:ticket_com/services/orders_api_service.dart';
+import 'package:ticket_com/services/ticket_attendence_api_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 import 'package:ticket_com/services/wishlist_api_service.dart';
 import 'package:ticket_com/utils/category_icons.dart';
@@ -45,6 +47,7 @@ class _HomePageState extends State<HomePage> {
   Map<int, int> _wishCounts = {};
   Map<int, WishlistModel> _myWishByEvent = {};
   Map<int, int> _minPriceByEvent = {};
+  Set<int> _boughtEventIds = {};
 
   static const LatLng _defaultLocation = LatLng(17.9757, 102.6331);
   LatLng _userLocation = _defaultLocation;
@@ -146,6 +149,27 @@ class _HomePageState extends State<HomePage> {
         );
       }
 
+      // Events the signed-in user already bought tickets for, used to show a
+      // "Bought" badge on their cards.
+      final boughtEventIds = <int>{};
+      if (session != null) {
+        final eventByTicketType = {for (final t in tickets) t.id: t.eventId};
+        final myOrders = await _optional(
+          () => OrdersApiService.getOrdersByAccount(session.accountId),
+          const <OrderModel>[],
+        );
+        for (final order in myOrders) {
+          final attendees = await _optional(
+            () => TicketAttendenceApiService.getTicketAttendeesByOrder(order.id),
+            const <TicketAttendeeModel>[],
+          );
+          for (final a in attendees) {
+            final eventId = eventByTicketType[a.ticketTypeId];
+            if (eventId != null) boughtEventIds.add(eventId);
+          }
+        }
+      }
+
       final wishCounts = <int, int>{};
       for (final w in wishes) {
         wishCounts[w.eventId] = (wishCounts[w.eventId] ?? 0) + 1;
@@ -176,6 +200,7 @@ class _HomePageState extends State<HomePage> {
         _wishCounts = wishCounts;
         _myWishByEvent = myWishByEvent;
         _minPriceByEvent = minPriceByEvent;
+        _boughtEventIds = boughtEventIds;
         _maxPriceBound = priceBound;
         if (_filter.maxPrice > priceBound) {
           _filter = _filter.copyWith(maxPrice: priceBound);
@@ -707,6 +732,7 @@ class _HomePageState extends State<HomePage> {
       image: _imageByEvent[event.id],
       attend: _wishCounts[event.id] ?? 0,
       saved: _myWishByEvent.containsKey(event.id),
+      bought: _boughtEventIds.contains(event.id),
       onSaveTap: () => _toggleWish(event),
       onTap: () => _openEventDetail(event),
     );
@@ -1070,7 +1096,7 @@ class _HomePageState extends State<HomePage> {
   Widget _horizontalEvents(List<EventModel> events) {
     final shown = events.take(10).toList();
     return SizedBox(
-      height: 190,
+      height: 164,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1085,6 +1111,7 @@ class _HomePageState extends State<HomePage> {
               image: _imageByEvent[event.id],
               attend: _wishCounts[event.id] ?? 0,
               saved: _myWishByEvent.containsKey(event.id),
+              bought: _boughtEventIds.contains(event.id),
               onSaveTap: () => _toggleWish(event),
               onTap: () => _openEventDetail(event),
             ),
@@ -1116,6 +1143,7 @@ class _HomePageState extends State<HomePage> {
               attend: _wishCounts[event.id] ?? 0,
               organizerName: _organizerById[event.organizerId]?.name,
               saved: _myWishByEvent.containsKey(event.id),
+              bought: _boughtEventIds.contains(event.id),
               onSaveTap: () => _toggleWish(event),
               onTap: () => _openEventDetail(event),
             ),
@@ -1142,6 +1170,7 @@ class _HomePageState extends State<HomePage> {
           imageByEvent: _imageByEvent,
           wishCounts: _wishCounts,
           savedIds: _myWishByEvent.keys.toSet(),
+          boughtIds: _boughtEventIds,
           onToggleWish: _toggleWish,
           onEventTap: _openEventDetail,
         ),

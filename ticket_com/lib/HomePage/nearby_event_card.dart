@@ -18,6 +18,7 @@ class NearbyEventCard extends StatelessWidget {
     this.onTap,
     this.saved = false,
     this.onSaveTap,
+    this.bought = false,
   });
 
   final EventModel event;
@@ -27,6 +28,7 @@ class NearbyEventCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool saved;
   final VoidCallback? onSaveTap;
+  final bool bought;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +61,12 @@ class NearbyEventCard extends StatelessWidget {
                     left: 8,
                     child: _wishButton(),
                   ),
+                  if (bought)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _boughtBadge(),
+                    ),
                   Positioned(
                     left: 8,
                     right: 8,
@@ -207,6 +215,31 @@ class NearbyEventCard extends StatelessWidget {
           size: 15,
           color: saved ? const Color(0xFFEC407A) : Colors.black87,
         ),
+      ),
+    );
+  }
+
+  Widget _boughtBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2E9E5B),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle, color: Colors.white, size: 11),
+          SizedBox(width: 3),
+          Text(
+            'Bought',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }

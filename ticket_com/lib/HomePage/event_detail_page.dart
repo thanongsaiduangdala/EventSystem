@@ -2,11 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'package:ticket_com/HomePage/checkout_page.dart';
+import 'package:ticket_com/HomePage/my_ticket_page.dart';
 import 'package:ticket_com/models/category_models.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
 import 'package:ticket_com/services/orders_api_service.dart';
+import 'package:ticket_com/services/ticket_attendence_api_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 
 const Color _kIndigo = Color(0xFF5B4DFF);
@@ -47,6 +49,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
   List<TicketTypeModel> _ticketTypes = [];
   List<PaymentType> _paymentTypes = [];
   List<EventImageModel> _heroImages = [];
+  List<TicketPurchase> _purchases = [];
   final PageController _heroController = PageController();
   Timer? _carouselTimer;
   int _currentImage = 0;
@@ -128,16 +131,56 @@ class _EventDetailPageState extends State<EventDetailPage> {
             return a.id.compareTo(b.id);
           });
 
-    if (!mounted) return;
     final sorted = List<TicketTypeModel>.of(tickets)
       ..sort((a, b) => a.priceInKip.compareTo(b.priceInKip));
+    final purchases = await _loadPurchases(sorted);
+
+    if (!mounted) return;
     setState(() {
       _ticketTypes = sorted;
       _paymentTypes = paymentTypes;
+      _purchases = purchases;
       if (heroImages.isNotEmpty) _heroImages = heroImages;
       _loading = false;
     });
     if (heroImages.length > 1) _startCarousel();
+  }
+
+  /// Fetches the signed-in user's orders and filters out the tickets they
+  /// already bought for this event, so the page can show purchase info
+  /// instead of the buy/payment bar.
+  Future<List<TicketPurchase>> _loadPurchases(
+    List<TicketTypeModel> eventTicketTypes,
+  ) async {
+    final session = AuthService.currentSession;
+    if (session == null || eventTicketTypes.isEmpty) return const [];
+
+    final byId = {for (final t in eventTicketTypes) t.id: t};
+
+    final orders = await _optional(
+      () => OrdersApiService.getOrdersByAccount(session.accountId),
+      const <OrderModel>[],
+    );
+
+    final result = <TicketPurchase>[];
+    for (final order in orders) {
+      final attendees = await _optional(
+        () => TicketAttendenceApiService.getTicketAttendeesByOrder(order.id),
+        const <TicketAttendeeModel>[],
+      );
+      for (final attendee in attendees) {
+        final ticketType = byId[attendee.ticketTypeId];
+        if (ticketType == null) continue;
+        result.add(
+          TicketPurchase(
+            ticketType: ticketType,
+            attendee: attendee,
+            order: order,
+          ),
+        );
+      }
+    }
+    return result;
   }
 
   static Future<T> _optional<T>(Future<T> Function() load, T fallback) async {
@@ -181,6 +224,12 @@ class _EventDetailPageState extends State<EventDetailPage> {
         ),
       ),
     );
+
+    if (mounted) {
+      final purchases = await _loadPurchases(_ticketTypes);
+      if (!mounted) return;
+      setState(() => _purchases = purchases);
+    }
   }
 
   @override
@@ -717,6 +766,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
   Widget _buyBar(BuildContext context) {
     final l10n = l10nOf(context);
+    if (_purchases.isNotEmpty) return _purchasedBar(context);
     return Material(
       elevation: 8,
       shadowColor: _kIndigo.withValues(alpha: 0.4),
@@ -759,6 +809,96 @@ class _EventDetailPageState extends State<EventDetailPage> {
               const SizedBox(width: 2),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------- purchased bar ----------------
+
+  Widget _purchasedBar(BuildContext context) {
+    final l10n = l10nOf(context);
+    final qtyByType = <int, int>{};
+    for (final p in _purchases) {
+      qtyByType[p.ticketType.id] = (qtyByType[p.ticketType.id] ?? 0) + 1;
+    }
+    final summary = <String>[
+      for (final entry in qtyByType.entries)
+        '${_ticketTypes.firstWhere((t) => t.id == entry.key).typeName}'
+        ' ×${entry.value}',
+    ];
+
+    return Material(
+      elevation: 8,
+      shadowColor: const Color(0xFF2E9E5B).withValues(alpha: 0.4),
+      borderRadius: BorderRadius.circular(30),
+      color: const Color(0xFF2E9E5B),
+      child: InkWell(
+        onTap: _openTickets,
+        borderRadius: BorderRadius.circular(30),
+        child: SizedBox(
+          height: 58,
+          child: Row(
+            children: [
+              const SizedBox(width: 18),
+              const Icon(Icons.check_circle, color: Colors.white, size: 26),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.ticketPurchased,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      summary.join(' · '),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.all(7),
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.confirmation_num_outlined,
+                  color: Color(0xFF2E9E5B),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 2),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openTickets() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MyTicketPage(
+          event: widget.event,
+          purchases: _purchases,
+          paymentTypes: _paymentTypes,
         ),
       ),
     );

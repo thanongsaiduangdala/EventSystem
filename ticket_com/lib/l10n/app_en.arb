@@ -127,5 +127,11 @@
     "nationalIdAlreadyUsed": "This National ID already has a ticket for this event",
     "answerLabel": "Your answer",
     "questionRequired": "This question is required",
-    "person": "Person"
+    "person": "Person",
+    "ticketPurchased": "Ticket Purchased",
+    "myTickets": "My Tickets",
+    "order": "Order",
+    "paymentDate": "Payment Date",
+    "answers": "Answers",
+    "scanQrToEnter": "Scan this QR code at the entrance to check in"
 }

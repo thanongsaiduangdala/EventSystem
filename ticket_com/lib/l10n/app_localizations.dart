@@ -847,6 +847,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Person'**
   String get person;
+
+  /// No description provided for @ticketPurchased.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket Purchased'**
+  String get ticketPurchased;
+
+  /// No description provided for @myTickets.
+  ///
+  /// In en, this message translates to:
+  /// **'My Tickets'**
+  String get myTickets;
+
+  /// No description provided for @order.
+  ///
+  /// In en, this message translates to:
+  /// **'Order'**
+  String get order;
+
+  /// No description provided for @paymentDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Date'**
+  String get paymentDate;
+
+  /// No description provided for @answers.
+  ///
+  /// In en, this message translates to:
+  /// **'Answers'**
+  String get answers;
+
+  /// No description provided for @scanQrToEnter.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan this QR code at the entrance to check in'**
+  String get scanQrToEnter;
 }
 
 class _AppLocalizationsDelegate

@@ -12,6 +12,7 @@ class EventListPage extends StatefulWidget {
     this.imageByEvent = const {},
     this.wishCounts = const {},
     this.savedIds = const {},
+    this.boughtIds = const {},
     this.onToggleWish,
     this.onEventTap,
   });
@@ -21,6 +22,7 @@ class EventListPage extends StatefulWidget {
   final Map<int, EventImageModel> imageByEvent;
   final Map<int, int> wishCounts;
   final Set<int> savedIds;
+  final Set<int> boughtIds;
   final Future<void> Function(EventModel event)? onToggleWish;
   final void Function(EventModel event)? onEventTap;
 
@@ -108,6 +110,7 @@ class _EventListPageState extends State<EventListPage> {
       image: widget.imageByEvent[event.id],
       attend: widget.wishCounts[event.id] ?? 0,
       saved: _savedIds.contains(event.id),
+      bought: widget.boughtIds.contains(event.id),
       onSaveTap: widget.onToggleWish == null
           ? null
           : () => _toggleWish(event),

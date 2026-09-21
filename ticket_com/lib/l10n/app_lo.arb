@@ -127,5 +127,11 @@
     "nationalIdAlreadyUsed": "ເລກບັດປະຈຳຕົວນີ້ມີປີ້ສຳລັບອີເວັນນີ້ແລ້ວ",
     "answerLabel": "ຄຳຕອບຂອງທ່ານ",
     "questionRequired": "ກະລຸນາຕອບຄຳຖາມນີ້",
-    "person": "ຄົນ"
+    "person": "ຄົນ",
+    "ticketPurchased": "ຊື້ປີ້ແລ້ວ",
+    "myTickets": "ປີ້ຂອງຂ້ອຍ",
+    "order": "ຄຳສັ່ງ",
+    "paymentDate": "ວັນທີຊຳລະ",
+    "answers": "ຄຳຕອບ",
+    "scanQrToEnter": "ສະແກນລະຫັດ QR ນີ້ທີ່ທາງເຂົ້າເພື່ອຢືນຢັນການເຂົ້າຮ່ວມ"
 }
