@@ -439,4 +439,28 @@ class AppLocalizationsLo extends AppLocalizations {
 
   @override
   String get lao => 'ລາວ';
+
+  @override
+  String get myProfile => 'ໂປຣໄຟຼຂອງຂ້ອຍ';
+
+  @override
+  String get notification => 'ການແຈ້ງເຕືອນ';
+
+  @override
+  String get calender => 'ປະຕິທິນ';
+
+  @override
+  String get contactUs => 'ຕິດຕໍ່ພວກເຮົາ';
+
+  @override
+  String get settings => 'ຕັ້ງຄ່າ';
+
+  @override
+  String get helpsAndFaqs => 'ຄຳແນະນຳ & FAQ';
+
+  @override
+  String get signOut => 'ອອກຈາກລະບົບ';
+
+  @override
+  String get comingSoon => 'ມີໄວໆນີ້';
 }

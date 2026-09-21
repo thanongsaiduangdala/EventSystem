@@ -438,4 +438,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lao => 'Lao';
+
+  @override
+  String get myProfile => 'My Profile';
+
+  @override
+  String get notification => 'Notification';
+
+  @override
+  String get calender => 'Calender';
+
+  @override
+  String get contactUs => 'Contact Us';
+
+  @override
+  String get settings => 'Settings';
+
+  @override
+  String get helpsAndFaqs => 'Helps & FAQs';
+
+  @override
+  String get signOut => 'Sign Out';
+
+  @override
+  String get comingSoon => 'Coming soon';
 }

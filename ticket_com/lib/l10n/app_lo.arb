@@ -141,5 +141,13 @@
     "unfollowedOrganizer": "ເລີກຕິດຕາມຜູ້ຈັດງານແລ້ວ",
     "language": "ພາສາ",
     "english": "ອັງກິດ",
-    "lao": "ລາວ"
+    "lao": "ລາວ",
+    "myProfile": "ໂປຣໄຟຼຂອງຂ້ອຍ",
+    "notification": "ການແຈ້ງເຕືອນ",
+    "calender": "ປະຕິທິນ",
+    "contactUs": "ຕິດຕໍ່ພວກເຮົາ",
+    "settings": "ຕັ້ງຄ່າ",
+    "helpsAndFaqs": "ຄຳແນະນຳ & FAQ",
+    "signOut": "ອອກຈາກລະບົບ",
+    "comingSoon": "ມີໄວໆນີ້"
 }

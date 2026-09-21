@@ -10,6 +10,9 @@ import 'package:ticket_com/HomePage/event_filter.dart';
 import 'package:ticket_com/HomePage/event_list_page.dart';
 import 'package:ticket_com/HomePage/nearby_auto_scroll.dart';
 import 'package:ticket_com/HomePage/nearby_event_card.dart';
+import 'package:ticket_com/LogSignPage/MainLoginSignUp.dart';
+import 'package:ticket_com/MainPage/Panel/SettingPanel.dart';
+import 'package:ticket_com/MainPage/Panel/WishPanel.dart';
 import 'package:ticket_com/l10n/app_localizations.dart';
 import 'package:ticket_com/map/location_picker_page.dart';
 import 'package:ticket_com/services/account_category_api_service.dart';
@@ -37,7 +40,11 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _drawerController;
+  static const double _drawerWidthRatio = 0.8;
+
   bool _loading = true;
   String? _error;
 
@@ -70,15 +77,22 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _drawerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
     _userLocation = LocationService.currentOrFallback;
     LocationService.position.addListener(_onLocationChanged);
+    LocationService.label.addListener(_onLabelChanged);
     LocationService.ensureResolved();
     _load();
   }
 
   @override
   void dispose() {
+    _drawerController.dispose();
     LocationService.position.removeListener(_onLocationChanged);
+    LocationService.label.removeListener(_onLabelChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -86,6 +100,11 @@ class _HomePageState extends State<HomePage> {
   void _onLocationChanged() {
     if (!mounted) return;
     setState(() => _userLocation = LocationService.currentOrFallback);
+  }
+
+  void _onLabelChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _load() async {
@@ -602,6 +621,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   String get _locationLabel {
+    final resolved = LocationService.label.value;
+    if (resolved != null && resolved.trim().isNotEmpty) return resolved;
     final lat = _userLocation.latitude;
     final lng = _userLocation.longitude;
     if (lat == _defaultLocation.latitude &&
@@ -609,6 +630,245 @@ class _HomePageState extends State<HomePage> {
       return 'Vientiane, Laos';
     }
     return '${lat.toStringAsFixed(2)}, ${lng.toStringAsFixed(2)}';
+  }
+
+  // ---------------- sliding drawer ----------------
+
+  bool get _drawerOpen => _drawerController.value > 0.5;
+
+  void _openDrawer() {
+    if (_drawerOpen) return;
+    _drawerController.forward();
+  }
+
+  void _closeDrawer() {
+    if (_drawerController.value == 0) return;
+    _drawerController.reverse();
+  }
+
+  /// Scales the main screen down slightly and nudges it right/down while the
+  /// drawer slides over it, so a sliver of the page peeks out on the right.
+  Matrix4 _drawerBodyMatrix(double value, Size size) {
+    final t = Curves.easeOutCubic.transform(value.clamp(0.0, 1.0));
+    final scale = 1.0 - 0.07 * t;
+    final dx = size.width * (1 - scale) / 2 - 8;
+    final dy = size.height * (1 - scale) / 2 + 10 * t;
+    return Matrix4.identity()
+      ..translateByDouble(dx, dy, 0, 1)
+      ..translateByDouble(size.width / 2, size.height / 2, 0, 1)
+      ..scaleByDouble(scale, scale, 1, 1)
+      ..translateByDouble(-size.width / 2, -size.height / 2, 0, 1);
+  }
+
+  void _navigateTo(Widget page) {
+    _closeDrawer();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => page),
+      );
+    });
+  }
+
+  void _showComingSoon(String feature) {
+    _closeDrawer();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$feature — ${l10nOf(context).comingSoon}')),
+    );
+  }
+
+  Future<void> _logoutDrawer() async {
+    _closeDrawer();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
+    await AuthService.logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const Mainloginsignup()),
+      (route) => false,
+    );
+  }
+
+  Widget _drawerPanel(double width) {
+    final session = AuthService.currentSession;
+    final name = session == null
+        ? 'Guest'
+        : '${session.firstname} ${session.lastname}'.trim();
+    final email = session?.email ?? '';
+    final l10n = l10nOf(context);
+    final topPad = MediaQuery.paddingOf(context).top;
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+
+    return Container(
+      width: width,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 24,
+            spreadRadius: 2,
+            offset: Offset(8, 0),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(24, topPad + 36, 24, 0),
+            child: _drawerProfileHeader(name, email),
+          ),
+          const SizedBox(height: 30),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.only(bottom: bottomPad + 12),
+              children: [
+                _drawerRow(
+                  icon: Icons.person_outline,
+                  label: l10n.myProfile,
+                  onTap: () => _showComingSoon(l10n.myProfile),
+                ),
+                _drawerRow(
+                  icon: Icons.chat_bubble_outline,
+                  label: l10n.notification,
+                  onTap: () => _showComingSoon(l10n.notification),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF7043),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      '3',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                _drawerRow(
+                  icon: Icons.calendar_today_outlined,
+                  label: l10n.calender,
+                  onTap: () => _showComingSoon(l10n.calender),
+                ),
+                _drawerRow(
+                  icon: Icons.bookmark_border,
+                  label: l10n.wish,
+                  onTap: () => _navigateTo(const WishPanel()),
+                ),
+                _drawerRow(
+                  icon: Icons.mail_outline,
+                  label: l10n.contactUs,
+                  onTap: () => _showComingSoon(l10n.contactUs),
+                ),
+                _drawerRow(
+                  icon: Icons.settings_outlined,
+                  label: l10n.settings,
+                  onTap: () => _navigateTo(const SettingPanel()),
+                ),
+                _drawerRow(
+                  icon: Icons.help_outline,
+                  label: l10n.helpsAndFaqs,
+                  onTap: () => _showComingSoon(l10n.helpsAndFaqs),
+                ),
+                const Divider(
+                  height: 18,
+                  indent: 24,
+                  endIndent: 24,
+                  color: Color(0x14000000),
+                ),
+                _drawerRow(
+                  icon: Icons.logout,
+                  label: l10n.signOut,
+                  onTap: _logoutDrawer,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _drawerProfileHeader(String name, String email) {
+    return Column(
+      children: [
+        Container(
+          width: 70,
+          height: 70,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFBDBDBD), Color(0xFF757575)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.person, color: Colors.white, size: 36),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Color(0xFF212121),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        if (email.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            email,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Color(0xFF757575), fontSize: 12.5),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _drawerRow({
+    required IconData icon,
+    required String label,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: 54,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        alignment: Alignment.centerLeft,
+        child: Row(
+          children: [
+            Icon(icon, size: 23, color: const Color(0xFF757575)),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF212121),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (trailing != null) trailing,
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -619,15 +879,57 @@ class _HomePageState extends State<HomePage> {
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
       ),
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF5F6FA),
-        body: RefreshIndicator(
-          color: _kPurple,
-          backgroundColor: Colors.white,
-          onRefresh: _load,
-          child: _loading && _events.isEmpty
-              ? _loadingView(context)
-              : _body(context),
+      child: PopScope(
+        canPop: !_drawerOpen,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _closeDrawer();
+        },
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF5F6FA),
+          body: AnimatedBuilder(
+            animation: _drawerController,
+            builder: (context, child) {
+              final size = MediaQuery.sizeOf(context);
+              final value = _drawerController.value;
+              final t = Curves.easeOutCubic.transform(value.clamp(0.0, 1.0));
+              final drawerWidth = size.width * _drawerWidthRatio;
+              return Stack(
+                children: [
+                  Transform(
+                    transform: _drawerBodyMatrix(value, size),
+                    alignment: Alignment.center,
+                    child: child,
+                  ),
+                  if (value > 0)
+                    Positioned.fill(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _closeDrawer,
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: drawerWidth,
+                    child: Transform.translate(
+                      offset: Offset(-drawerWidth * (1 - t), 0),
+                      child: _drawerPanel(drawerWidth),
+                    ),
+                  ),
+                ],
+              );
+            },
+            child: RefreshIndicator(
+              color: _kPurple,
+              backgroundColor: Colors.white,
+              onRefresh: _load,
+              child: _loading && _events.isEmpty
+                  ? _loadingView(context)
+                  : _body(context),
+            ),
+          ),
         ),
       ),
     );
@@ -921,7 +1223,7 @@ class _HomePageState extends State<HomePage> {
           Row(
             children: [
               IconButton(
-                onPressed: () {},
+                onPressed: _openDrawer,
                 icon: const Icon(Icons.menu, color: Colors.white),
               ),
               Expanded(

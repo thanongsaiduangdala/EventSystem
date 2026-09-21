@@ -14,11 +14,19 @@ class LocationPickerPage extends StatefulWidget {
 
 class _LocationPickerPageState extends State<LocationPickerPage> {
   late LatLng _pickedLocation;
+  String? _pickedLabel;
 
   @override
   void initState() {
     super.initState();
     _pickedLocation = widget.initialLocation ?? kDefaultCenter;
+    _refreshLabel();
+  }
+
+  Future<void> _refreshLabel() async {
+    final resolved = await LocationService.reverseGeocode(_pickedLocation);
+    if (!mounted) return;
+    setState(() => _pickedLabel = resolved);
   }
 
   Future<void> _useMyLocation() async {
@@ -71,6 +79,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
               initialZoom: 14,
               onTap: (tapPosition, point) {
                 setState(() => _pickedLocation = point);
+                _refreshLabel();
               },
             ),
             children: [
@@ -116,10 +125,30 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                 color: Colors.black87,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
-                'Lat: ${_pickedLocation.latitude.toStringAsFixed(6)}, '
-                'Lng: ${_pickedLocation.longitude.toStringAsFixed(6)}',
-                style: const TextStyle(color: Colors.white),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_pickedLabel != null && _pickedLabel!.isNotEmpty)
+                    Text(
+                      _pickedLabel!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  if (_pickedLabel != null && _pickedLabel!.isNotEmpty)
+                    const SizedBox(height: 4),
+                  Text(
+                    'Lat: ${_pickedLocation.latitude.toStringAsFixed(6)}, '
+                    'Lng: ${_pickedLocation.longitude.toStringAsFixed(6)}',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

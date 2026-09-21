@@ -141,5 +141,13 @@
     "unfollowedOrganizer": "Unfollowed organizer",
     "language": "Language",
     "english": "English",
-    "lao": "Lao"
+    "lao": "Lao",
+    "myProfile": "My Profile",
+    "notification": "Notification",
+    "calender": "Calender",
+    "contactUs": "Contact Us",
+    "settings": "Settings",
+    "helpsAndFaqs": "Helps & FAQs",
+    "signOut": "Sign Out",
+    "comingSoon": "Coming soon"
 }
