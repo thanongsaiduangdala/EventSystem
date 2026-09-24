@@ -914,6 +914,12 @@ abstract class AppLocalizations {
   /// **'Unfollowed organizer'**
   String get unfollowedOrganizer;
 
+  /// No description provided for @followedOrganizers.
+  ///
+  /// In en, this message translates to:
+  /// **'Followed Organizers'**
+  String get followedOrganizers;
+
   /// No description provided for @language.
   ///
   /// In en, this message translates to:
@@ -956,6 +962,12 @@ abstract class AppLocalizations {
   /// **'Contact Us'**
   String get contactUs;
 
+  /// No description provided for @becomeOrganizer.
+  ///
+  /// In en, this message translates to:
+  /// **'Become an Organizer'**
+  String get becomeOrganizer;
+
   /// No description provided for @settings.
   ///
   /// In en, this message translates to:
@@ -979,6 +991,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Coming soon'**
   String get comingSoon;
+
+  /// No description provided for @editProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Profile'**
+  String get editProfile;
+
+  /// No description provided for @save.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get save;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @personalInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Personal Information'**
+  String get personalInfo;
+
+  /// No description provided for @profileUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile updated successfully'**
+  String get profileUpdated;
+
+  /// No description provided for @editCategories.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Categories'**
+  String get editCategories;
+
+  /// No description provided for @noCategoriesSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'No favorite categories yet'**
+  String get noCategoriesSelected;
+
+  /// No description provided for @selectCategoriesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the categories you like to see more events like them'**
+  String get selectCategoriesHint;
+
+  /// No description provided for @done.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get done;
+
+  /// No description provided for @categoriesUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Categories updated'**
+  String get categoriesUpdated;
+
+  /// No description provided for @aboutMe.
+  ///
+  /// In en, this message translates to:
+  /// **'About Me'**
+  String get aboutMe;
+
+  /// No description provided for @aboutMeText.
+  ///
+  /// In en, this message translates to:
+  /// **'Enjoy great events with friends and family, from food festivals to live music across Laos.'**
+  String get aboutMeText;
+
+  /// No description provided for @aboutMeDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow your favourite organizers, save events to your wish list, and get ticket alerts the moment new shows go on sale. Pick your interests below and we\'ll tailor recommendations just for you.'**
+  String get aboutMeDetail;
+
+  /// No description provided for @interest.
+  ///
+  /// In en, this message translates to:
+  /// **'Interest'**
+  String get interest;
+
+  /// No description provided for @changeProfilePicture.
+  ///
+  /// In en, this message translates to:
+  /// **'Change profile picture'**
+  String get changeProfilePicture;
+
+  /// No description provided for @takePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Take Photo'**
+  String get takePhoto;
+
+  /// No description provided for @chooseFromGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose from Gallery'**
+  String get chooseFromGallery;
+
+  /// No description provided for @profilePictureUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile picture updated'**
+  String get profilePictureUpdated;
 }
 
 class _AppLocalizationsDelegate

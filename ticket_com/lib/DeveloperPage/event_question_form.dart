@@ -263,14 +263,14 @@ class EventQuestionFormState extends State<EventQuestionForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Colors.white,
         title: const Text(
           'Delete event question?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Color(0xFF212121)),
         ),
         content: Text(
           'This will permanently delete "${q.question}".',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -387,12 +387,17 @@ class EventQuestionFormState extends State<EventQuestionForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -417,7 +422,7 @@ class EventQuestionFormState extends State<EventQuestionForm> {
                 child: Text(
                   'Editing Event Question ID: $_editingEventQuestionId',
                   style: const TextStyle(
-                    color: Colors.amber,
+                    color: Color(0xFF5B4DFF),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -437,7 +442,7 @@ class EventQuestionFormState extends State<EventQuestionForm> {
                                   ? 'Loading...'
                                   : 'Tap to search event')
                             : _eventNameFor(_selectedEventId!),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -450,10 +455,10 @@ class EventQuestionFormState extends State<EventQuestionForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh event list',
                 ),
               ],
@@ -462,7 +467,7 @@ class EventQuestionFormState extends State<EventQuestionForm> {
 
             TextFormField(
               controller: _questionController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Event Question'),
               maxLines: 2,
               validator: (v) =>
@@ -481,8 +486,8 @@ class EventQuestionFormState extends State<EventQuestionForm> {
                         )
                         ? _selectedQuestionTypeId
                         : null,
-                    dropdownColor: const Color(0xFF1E1E1E),
-                    style: const TextStyle(color: Colors.white),
+                    dropdownColor: Colors.white,
+                    style: const TextStyle(color: Color(0xFF212121)),
                     decoration: _decoration(
                       _loadingQuestionTypes
                           ? 'Loading question types...'
@@ -511,10 +516,10 @@ class EventQuestionFormState extends State<EventQuestionForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh question types',
                 ),
               ],
@@ -524,7 +529,7 @@ class EventQuestionFormState extends State<EventQuestionForm> {
             TextFormField(
               controller: _sortOrderController,
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Sort Order'),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Required' : null,
@@ -533,10 +538,10 @@ class EventQuestionFormState extends State<EventQuestionForm> {
 
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              activeThumbColor: Colors.white,
+              activeThumbColor: Color(0xFF5B4DFF),
               title: const Text(
                 'Required',
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(color: Color(0xFF757575)),
               ),
               value: _isRequire,
               onChanged: (v) => setState(() => _isRequire = v),
@@ -546,7 +551,7 @@ class EventQuestionFormState extends State<EventQuestionForm> {
               const SizedBox(height: 8),
               const Text(
                 'Options (at least 2)',
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(color: Color(0xFF757575)),
               ),
               const SizedBox(height: 8),
               ..._optionControllers.asMap().entries.map((entry) {
@@ -559,7 +564,7 @@ class EventQuestionFormState extends State<EventQuestionForm> {
                       Expanded(
                         child: TextFormField(
                           controller: controller,
-                          style: const TextStyle(color: Colors.white),
+                          style: const TextStyle(color: Color(0xFF212121)),
                           decoration: _decoration('Option ${index + 1}'),
                         ),
                       ),
@@ -581,10 +586,10 @@ class EventQuestionFormState extends State<EventQuestionForm> {
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
                   onPressed: () => _addOptionField(),
-                  icon: const Icon(Icons.add, color: Colors.white70),
+                  icon: const Icon(Icons.add, color: Color(0xFF757575)),
                   label: const Text(
                     'Add option',
-                    style: TextStyle(color: Colors.white70),
+                    style: TextStyle(color: Color(0xFF757575)),
                   ),
                 ),
               ),
@@ -598,8 +603,8 @@ class EventQuestionFormState extends State<EventQuestionForm> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Color(0xFF5B4DFF),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _isSubmitting
@@ -622,8 +627,8 @@ class EventQuestionFormState extends State<EventQuestionForm> {
               child: OutlinedButton(
                 onPressed: _openTable,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
+                  foregroundColor: Color(0xFF212121),
+                  side: const BorderSide(color: Color(0x33000000)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: const Text('View / Manage Event Questions'),
@@ -662,20 +667,20 @@ class EventQuestionFormState extends State<EventQuestionForm> {
                       _filterEventId == null
                           ? 'All Events -- tap to filter'
                           : _eventNameFor(_filterEventId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
               ),
               if (_filterEventId != null)
                 IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white70),
+                  icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                   tooltip: 'Clear event filter',
                   onPressed: () => _onEventFilterChanged(null),
                 ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadEventQuestions,
               ),
               TextButton(
@@ -690,16 +695,16 @@ class EventQuestionFormState extends State<EventQuestionForm> {
           child: TextField(
             controller: _eventQuestionSearchController,
             onChanged: _filterEventQuestions,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF212121)),
             decoration: InputDecoration(
               hintText: 'Search by ID or question',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
               enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
+                borderSide: BorderSide(color: Color(0x33000000)),
               ),
               focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white),
+                borderSide: BorderSide(color: Color(0xFF5B4DFF)),
               ),
             ),
           ),
@@ -711,7 +716,7 @@ class EventQuestionFormState extends State<EventQuestionForm> {
               ? const Center(
                   child: Text(
                     'No event questions found',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: Color(0xFF9E9E9E)),
                   ),
                 )
               : ListView.builder(
@@ -721,20 +726,20 @@ class EventQuestionFormState extends State<EventQuestionForm> {
                     return ListTile(
                       title: Text(
                         q.question,
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                       subtitle: Text(
                         'ID: ${q.id}  •  ${_eventNameFor(q.eventId)}  •  '
                         '${_questionTypeNameFor(q.questionTypeId)}  •  '
                         '${q.isRequire ? "Required" : "Optional"}  •  '
                         'Sort: ${q.sortOrder}',
-                        style: const TextStyle(color: Colors.white54),
+                        style: const TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.white70),
+                            icon: const Icon(Icons.edit, color: Color(0xFF757575)),
                             onPressed: () => _startEdit(q),
                           ),
                           IconButton(

@@ -57,16 +57,16 @@ class _EventOrganizerSearchDialogState
               child: TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: InputDecoration(
                   hintText: 'Search by name or ID',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -76,7 +76,7 @@ class _EventOrganizerSearchDialogState
                   ? const Center(
                       child: Text(
                         'No organizers found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView.builder(
@@ -86,11 +86,11 @@ class _EventOrganizerSearchDialogState
                         return ListTile(
                           title: Text(
                             org.name,
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF212121)),
                           ),
                           subtitle: Text(
                             'ID: ${org.id}',
-                            style: const TextStyle(color: Colors.white54),
+                            style: const TextStyle(color: Color(0xFF9E9E9E)),
                           ),
                           onTap: () => Navigator.pop(context, org),
                         );

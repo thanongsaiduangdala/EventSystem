@@ -10,11 +10,13 @@ bearer_scheme = HTTPBearer()
 ROLE_CUSTOMER = 1
 ROLE_ORGANIZER = 2
 ROLE_SUPERADMIN = 3
+ROLE_EMPLOYEE = 4
 
 ROLE_NAMES = {
     ROLE_CUSTOMER: "CUSTOMER",
     ROLE_ORGANIZER: "ORGANIZER",
     ROLE_SUPERADMIN: "SUPERADMIN",
+    ROLE_EMPLOYEE: "EMPLOYEE",
 }
 
 
@@ -103,6 +105,26 @@ async def require_developer(
     """Backwards-compatible alias which maps the old developer (StatusID 3)
     to the SUPERADMIN role."""
     return await require_superadmin(current)
+
+
+async def require_employee_or_superadmin(
+    current=Depends(get_current_account),
+) -> dict:
+    """Routes accessible to both EMPLOYEE (StatusID 4) and SUPERADMIN
+    (StatusID 3) accounts. Re-checks StatusID against the DB so revoked
+    access takes effect immediately instead of waiting for token expiry."""
+    con = getConnect()
+    with con.cursor() as cur:
+        cur.execute("SELECT StatusID FROM accountinfo WHERE AccountID = %s", (current["account_id"],))
+        row = cur.fetchone()
+
+    if row is None or row["StatusID"] not in (ROLE_SUPERADMIN, ROLE_EMPLOYEE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SUPERADMIN or EMPLOYEE access required",
+        )
+
+    return current
 
 
 def require_permission(permission_name: str):

@@ -366,14 +366,14 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Colors.white,
         title: const Text(
           'Delete attendee response?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Color(0xFF212121)),
         ),
         content: Text(
           'This will permanently delete "${_answerDisplayFor(r)}".',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -464,12 +464,17 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -482,7 +487,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
     if (question == null) {
       return TextFormField(
         enabled: false,
-        style: const TextStyle(color: Colors.white38),
+        style: const TextStyle(color: Color(0xFF9E9E9E)),
         decoration: _decoration('Select a question first'),
       );
     }
@@ -498,7 +503,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
         return TextFormField(
           controller: _answerController,
           obscureText: true,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: Color(0xFF212121)),
           decoration: _decoration('Answer (stored encrypted)'),
           validator: (v) =>
               (v == null || v.trim().isEmpty) ? 'Required' : null,
@@ -507,7 +512,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
       default:
         return TextFormField(
           controller: _answerController,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: Color(0xFF212121)),
           decoration: _decoration('Answer'),
           maxLines: 2,
           validator: (v) =>
@@ -528,15 +533,15 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Answer (select one or more)',
-            style: TextStyle(color: Colors.white70)),
+            style: TextStyle(color: Color(0xFF757575))),
         ...options.asMap().entries.map((entry) {
           final index = entry.key + 1; // 1-based
           final label = entry.value;
           return CheckboxListTile(
             contentPadding: EdgeInsets.zero,
-            checkColor: Colors.black,
-            activeColor: Colors.white,
-            title: Text(label, style: const TextStyle(color: Colors.white)),
+            checkColor: Color(0xFF5B4DFF),
+            activeColor: Color(0xFF5B4DFF),
+            title: Text(label, style: const TextStyle(color: Color(0xFF212121))),
             value: _selectedCheckboxIndices.contains(index),
             onChanged: (checked) {
               setState(() {
@@ -564,16 +569,16 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white70)),
+        Text(label, style: const TextStyle(color: Color(0xFF757575))),
         ...options.asMap().entries.map((entry) {
           final index = entry.key + 1; // 1-based
           final optionLabel = entry.value;
           return RadioListTile<int>(
             contentPadding: EdgeInsets.zero,
-            activeColor: Colors.white,
+            activeColor: Color(0xFF5B4DFF),
             title: Text(
               optionLabel,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
             ),
             value: index,
             groupValue: _selectedRadioIndex,
@@ -604,7 +609,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
                 child: Text(
                   'Editing Response ID: $_editingResponseId',
                   style: const TextStyle(
-                    color: Colors.amber,
+                    color: Color(0xFF5B4DFF),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -626,7 +631,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
                                   ? 'Loading...'
                                   : 'Tap to search event question')
                             : _questionLabelFor(_selectedEventQuestionId!),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -641,10 +646,10 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh event questions',
                 ),
               ],
@@ -665,7 +670,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
                                   ? 'Loading...'
                                   : 'Tap to search attendee')
                             : _attendeeLabelFor(_selectedAttendeeId!),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -678,10 +683,10 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh attendees',
                 ),
               ],
@@ -696,8 +701,8 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Color(0xFF5B4DFF),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _isSubmitting
@@ -720,8 +725,8 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
               child: OutlinedButton(
                 onPressed: _openTable,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
+                  foregroundColor: Color(0xFF212121),
+                  side: const BorderSide(color: Color(0x33000000)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: const Text('View / Manage Attendee Responses'),
@@ -760,20 +765,20 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
                       _filterAttendeeId == null
                           ? 'All Attendees -- tap to filter'
                           : _attendeeLabelFor(_filterAttendeeId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
               ),
               if (_filterAttendeeId != null)
                 IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white70),
+                  icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                   tooltip: 'Clear attendee filter',
                   onPressed: () => _onAttendeeFilterChanged(null),
                 ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadResponses,
               ),
               TextButton(
@@ -788,16 +793,16 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
           child: TextField(
             controller: _responseSearchController,
             onChanged: _filterResponses,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF212121)),
             decoration: InputDecoration(
               hintText: 'Search by ID or answer',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
               enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
+                borderSide: BorderSide(color: Color(0x33000000)),
               ),
               focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white),
+                borderSide: BorderSide(color: Color(0xFF5B4DFF)),
               ),
             ),
           ),
@@ -809,7 +814,7 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
               ? const Center(
                   child: Text(
                     'No attendee responses found',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: Color(0xFF9E9E9E)),
                   ),
                 )
               : ListView.builder(
@@ -819,19 +824,19 @@ class AttendeeResponseFormState extends State<AttendeeResponseForm> {
                     return ListTile(
                       title: Text(
                         _answerDisplayFor(r),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                       subtitle: Text(
                         'ID: ${r.id}  •  ${_attendeeLabelFor(r.attendeeId)}  •  '
                         '${_questionLabelFor(r.eventQuestionId)}',
-                        style: const TextStyle(color: Colors.white54),
+                        style: const TextStyle(color: Color(0xFF9E9E9E)),
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.white70),
+                            icon: const Icon(Icons.edit, color: Color(0xFF757575)),
                             onPressed: () => _startEdit(r),
                           ),
                           IconButton(
@@ -896,7 +901,7 @@ class _EventQuestionPickerDialogState
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 420,
         height: 480,
@@ -908,16 +913,16 @@ class _EventQuestionPickerDialogState
                 controller: _searchController,
                 autofocus: true,
                 onChanged: _onSearchChanged,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: const InputDecoration(
                   hintText: 'Search by question or ID',
-                  hintStyle: TextStyle(color: Colors.white54),
-                  prefixIcon: Icon(Icons.search, color: Colors.white54),
+                  hintStyle: TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -927,14 +932,14 @@ class _EventQuestionPickerDialogState
                   ? const Center(
                       child: Text(
                         'No event questions loaded',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : _filtered.isEmpty
                   ? const Center(
                       child: Text(
                         'No event questions found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView(
@@ -943,11 +948,11 @@ class _EventQuestionPickerDialogState
                           ListTile(
                             title: Text(
                               question.question,
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'Question #${question.id}  •  Event #${question.eventId}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                             ),
                             onTap: () => Navigator.pop(context, question),
                           ),
@@ -1021,7 +1026,7 @@ class _AttendeePickerDialogState extends State<_AttendeePickerDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 400,
         height: 480,
@@ -1033,16 +1038,16 @@ class _AttendeePickerDialogState extends State<_AttendeePickerDialog> {
                 controller: _searchController,
                 autofocus: true,
                 onChanged: _onSearchChanged,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: const InputDecoration(
                   hintText: 'Search attendees by name, email, or ID',
-                  hintStyle: TextStyle(color: Colors.white54),
-                  prefixIcon: Icon(Icons.search, color: Colors.white54),
+                  hintStyle: TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -1052,7 +1057,7 @@ class _AttendeePickerDialogState extends State<_AttendeePickerDialog> {
                   ? const Center(
                       child: Text(
                         'No attendees found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView(
@@ -1061,11 +1066,11 @@ class _AttendeePickerDialogState extends State<_AttendeePickerDialog> {
                           ListTile(
                             leading: const Icon(
                               Icons.clear,
-                              color: Colors.white70,
+                              color: Color(0xFF757575),
                             ),
                             title: const Text(
                               'All Attendees',
-                              style: TextStyle(color: Colors.white),
+                              style: TextStyle(color: Color(0xFF212121)),
                             ),
                             onTap: () => Navigator.pop(
                               context,
@@ -1084,11 +1089,11 @@ class _AttendeePickerDialogState extends State<_AttendeePickerDialog> {
                           ListTile(
                             title: Text(
                               '${attendee.firstName} ${attendee.lastName}',
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'Attendee #${attendee.id}  •  ${attendee.email}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                             ),
                             onTap: () => Navigator.pop(context, attendee),
                           ),

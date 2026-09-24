@@ -431,6 +431,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get unfollowedOrganizer => 'Unfollowed organizer';
 
   @override
+  String get followedOrganizers => 'Followed Organizers';
+
+  @override
   String get language => 'Language';
 
   @override
@@ -452,6 +455,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contactUs => 'Contact Us';
 
   @override
+  String get becomeOrganizer => 'Become an Organizer';
+
+  @override
   String get settings => 'Settings';
 
   @override
@@ -462,4 +468,61 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get comingSoon => 'Coming soon';
+
+  @override
+  String get editProfile => 'Edit Profile';
+
+  @override
+  String get save => 'Save';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get personalInfo => 'Personal Information';
+
+  @override
+  String get profileUpdated => 'Profile updated successfully';
+
+  @override
+  String get editCategories => 'Edit Categories';
+
+  @override
+  String get noCategoriesSelected => 'No favorite categories yet';
+
+  @override
+  String get selectCategoriesHint =>
+      'Pick the categories you like to see more events like them';
+
+  @override
+  String get done => 'Done';
+
+  @override
+  String get categoriesUpdated => 'Categories updated';
+
+  @override
+  String get aboutMe => 'About Me';
+
+  @override
+  String get aboutMeText =>
+      'Enjoy great events with friends and family, from food festivals to live music across Laos.';
+
+  @override
+  String get aboutMeDetail =>
+      'Follow your favourite organizers, save events to your wish list, and get ticket alerts the moment new shows go on sale. Pick your interests below and we\'ll tailor recommendations just for you.';
+
+  @override
+  String get interest => 'Interest';
+
+  @override
+  String get changeProfilePicture => 'Change profile picture';
+
+  @override
+  String get takePhoto => 'Take Photo';
+
+  @override
+  String get chooseFromGallery => 'Choose from Gallery';
+
+  @override
+  String get profilePictureUpdated => 'Profile picture updated';
 }

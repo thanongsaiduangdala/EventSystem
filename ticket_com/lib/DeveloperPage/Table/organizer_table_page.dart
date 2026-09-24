@@ -38,14 +38,14 @@ class OrganizerTablePageState extends State<OrganizerTablePage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Colors.white,
         title: const Text(
           'Delete organizer?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Color(0xFF212121)),
         ),
         content: Text(
           'This will permanently delete "${org.name}".',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -80,28 +80,28 @@ class OrganizerTablePageState extends State<OrganizerTablePage> {
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Colors.white,
         title: const Text(
           'Edit Organizer',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Color(0xFF212121)),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: const InputDecoration(
                 labelText: 'Name',
-                labelStyle: TextStyle(color: Colors.white54),
+                labelStyle: TextStyle(color: Color(0xFF9E9E9E)),
               ),
             ),
             TextField(
               controller: descController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: const InputDecoration(
                 labelText: 'Description',
-                labelStyle: TextStyle(color: Colors.white54),
+                labelStyle: TextStyle(color: Color(0xFF9E9E9E)),
               ),
             ),
           ],
@@ -145,35 +145,35 @@ class OrganizerTablePageState extends State<OrganizerTablePage> {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
-        headingRowColor: WidgetStateProperty.all(const Color(0xFF1E1E1E)),
-        dataRowColor: WidgetStateProperty.all(Colors.black),
+        headingRowColor: WidgetStateProperty.all(Colors.white),
+        dataRowColor: WidgetStateProperty.all(Colors.white),
         columns: const [
           DataColumn(
-            label: Text('ID', style: TextStyle(color: Colors.white)),
+            label: Text('ID', style: TextStyle(color: Color(0xFF212121))),
           ),
           DataColumn(
-            label: Text('Name', style: TextStyle(color: Colors.white)),
+            label: Text('Name', style: TextStyle(color: Color(0xFF212121))),
           ),
           DataColumn(
-            label: Text('Description', style: TextStyle(color: Colors.white)),
+            label: Text('Description', style: TextStyle(color: Color(0xFF212121))),
           ),
           DataColumn(
-            label: Text('Actions', style: TextStyle(color: Colors.white)),
+            label: Text('Actions', style: TextStyle(color: Color(0xFF212121))),
           ),
         ],
         rows: _organizers.map((org) {
           return DataRow(
             cells: [
               DataCell(
-                Text('${org.id}', style: const TextStyle(color: Colors.white)),
+                Text('${org.id}', style: const TextStyle(color: Color(0xFF212121))),
               ),
               DataCell(
-                Text(org.name, style: const TextStyle(color: Colors.white)),
+                Text(org.name, style: const TextStyle(color: Color(0xFF212121))),
               ),
               DataCell(
                 Text(
                   org.description ?? '',
-                  style: const TextStyle(color: Colors.white70),
+                  style: const TextStyle(color: Color(0xFF757575)),
                 ),
               ),
               DataCell(
@@ -182,7 +182,7 @@ class OrganizerTablePageState extends State<OrganizerTablePage> {
                     IconButton(
                       icon: const Icon(
                         Icons.edit,
-                        color: Colors.white70,
+                        color: Color(0xFF757575),
                         size: 20,
                       ),
                       onPressed: () => _openEditDialog(org),

@@ -2,7 +2,8 @@ from fastapi import APIRouter
 from controllers.Event_Controllers.IdentityVerification_controllers import (
     create_identityverification, get_all_identityverifications, get_identityverification_by_id,
     get_identityverifications_by_account_id, update_identityverification, delete_identityverification,
-    get_verified_accounts_for_organizer, upload_identity_document
+    get_verified_accounts_for_organizer, upload_identity_document,
+    get_identityverifications_with_accounts, approve_identityverification, deny_identityverification
 )
 from controllers.Event_Controllers.VerificationTypeInfo_controllers import (
     create_Verificationtype, get_all_VerificationTypes, get_Verificationtype_by_id,
@@ -23,10 +24,17 @@ router.get("/verification/all")(get_all_identityverifications)
 # below, otherwise FastAPI matches it as that dynamic route first and 422s
 # trying to parse "verified-accounts" as an int.
 router.get("/verification/verified-accounts")(get_verified_accounts_for_organizer)
+# Employee Dashboard data: join verifications with account details. Also must
+# be registered before "/verification/{verfication_id}".
+router.get("/verification/with-details")(get_identityverifications_with_accounts)
 router.get("/verification/{verfication_id}")(get_identityverification_by_id)
 router.get("/verification/by-account/{account_id}")(get_identityverifications_by_account_id)
 router.put("/verification/update")(update_identityverification)
 router.delete("/verification/{verfication_id}")(delete_identityverification)
+
+# Employee/Superadmin review actions
+router.post("/verification/{verfication_id}/approve")(approve_identityverification)
+router.post("/verification/{verfication_id}/deny")(deny_identityverification)
 
 # Verificationtypeinfo
 router.post("/type/create")(create_Verificationtype)

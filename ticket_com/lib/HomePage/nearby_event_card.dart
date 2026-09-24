@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
+import 'package:ticket_com/services/event_organizer_api_service.dart'
+    show EventOrganizerApiService;
 
 const Color _kPurple = Color(0xFF7C4DFF);
 const Color _kTextDark = Color(0xFF212121);
@@ -15,6 +17,7 @@ class NearbyEventCard extends StatelessWidget {
     this.image,
     required this.attend,
     this.organizerName,
+    this.organizerLogoPath,
     this.onTap,
     this.saved = false,
     this.onSaveTap,
@@ -25,6 +28,7 @@ class NearbyEventCard extends StatelessWidget {
   final EventImageModel? image;
   final int attend;
   final String? organizerName;
+  final String? organizerLogoPath;
   final VoidCallback? onTap;
   final bool saved;
   final VoidCallback? onSaveTap;
@@ -119,17 +123,7 @@ class NearbyEventCard extends StatelessWidget {
                           Expanded(
                             child: Row(
                               children: [
-                                CircleAvatar(
-                                  radius: 8,
-                                  backgroundColor: _kPurple,
-                                  child: Text(
-                                    initial,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                    ),
-                                  ),
-                                ),
+                                _organizerAvatar(initial),
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
@@ -171,6 +165,33 @@ class NearbyEventCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _organizerAvatar(String initial) {
+    final logo = organizerLogoPath;
+    if (logo != null && logo.isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          EventOrganizerApiService.fullImageUrl(logo),
+          width: 16,
+          height: 16,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _initialAvatar(initial),
+        ),
+      );
+    }
+    return _initialAvatar(initial);
+  }
+
+  Widget _initialAvatar(String initial) {
+    return CircleAvatar(
+      radius: 8,
+      backgroundColor: _kPurple,
+      child: Text(
+        initial,
+        style: const TextStyle(color: Colors.white, fontSize: 9),
       ),
     );
   }

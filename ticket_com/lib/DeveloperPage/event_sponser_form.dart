@@ -276,15 +276,15 @@ class EventSponserFormState extends State<EventSponserForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Colors.white,
         title: const Text(
           'Remove sponsor from event?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Color(0xFF212121)),
         ),
         content: Text(
           'This will remove "${sponser?.name ?? 'this sponsor'}" from '
           '"${_eventNameFor(link.eventId)}". The sponsor itself is not deleted.',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -334,16 +334,16 @@ class EventSponserFormState extends State<EventSponserForm> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1E1E),
+          backgroundColor: Colors.white,
           title: const Text(
             'Update this sponsor?',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: Color(0xFF212121)),
           ),
           content: Text(
             'This changes the name/logo for '
             '"${_sponserFor(_editingSponserId!)?.name ?? 'this sponsor'}" '
             'everywhere it\'s used, not just this event. Continue?',
-            style: const TextStyle(color: Colors.white70),
+            style: const TextStyle(color: Color(0xFF757575)),
           ),
           actions: [
             TextButton(
@@ -354,7 +354,7 @@ class EventSponserFormState extends State<EventSponserForm> {
               onPressed: () => Navigator.pop(context, true),
               child: const Text(
                 'Update',
-                style: TextStyle(color: Colors.amber),
+                style: TextStyle(color: Color(0xFF5B4DFF)),
               ),
             ),
           ],
@@ -429,12 +429,17 @@ class EventSponserFormState extends State<EventSponserForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -448,12 +453,12 @@ class EventSponserFormState extends State<EventSponserForm> {
         SponserApiService.fullImageUrl(_existingLogoPath!),
         fit: BoxFit.cover,
         errorBuilder: (context, error, stack) => const Center(
-          child: Icon(Icons.broken_image_outlined, color: Colors.white38),
+          child: Icon(Icons.broken_image_outlined, color: Color(0xFF9E9E9E)),
         ),
       );
     } else {
       child = const Center(
-        child: Icon(Icons.handshake_outlined, color: Colors.white38, size: 40),
+        child: Icon(Icons.handshake_outlined, color: Color(0xFF9E9E9E), size: 40),
       );
     }
 
@@ -463,7 +468,7 @@ class EventSponserFormState extends State<EventSponserForm> {
       child: Container(
         height: 160,
         width: 160,
-        color: const Color(0xFF1E1E1E),
+        color: Color(0xFFF1F1F5),
         child: child,
       ),
     );
@@ -489,7 +494,7 @@ class EventSponserFormState extends State<EventSponserForm> {
                 child: Text(
                   'Editing Sponsor Link ID: $_editingEventSponserId',
                   style: const TextStyle(
-                    color: Colors.amber,
+                    color: Color(0xFF5B4DFF),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -509,7 +514,7 @@ class EventSponserFormState extends State<EventSponserForm> {
                                   ? 'Loading...'
                                   : 'Tap to search event')
                             : _eventNameFor(_selectedEventId!),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -522,10 +527,10 @@ class EventSponserFormState extends State<EventSponserForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh event list',
                 ),
               ],
@@ -549,14 +554,14 @@ class EventSponserFormState extends State<EventSponserForm> {
                                   : 'Tap to search existing sponsors')
                             : (_sponserFor(_editingSponserId!)?.name ??
                                   'Sponsor #$_editingSponserId'),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
                 ),
                 if (_editingSponserId != null)
                   IconButton(
-                    icon: const Icon(Icons.clear, color: Colors.white70),
+                    icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                     tooltip: 'Clear selected sponsor',
                     onPressed: _clearSponserSelection,
                   ),
@@ -570,10 +575,10 @@ class EventSponserFormState extends State<EventSponserForm> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white70,
+                              color: Color(0xFF757575),
                             ),
                           )
-                        : const Icon(Icons.refresh, color: Colors.white70),
+                        : const Icon(Icons.refresh, color: Color(0xFF757575)),
                     tooltip: 'Refresh sponsor list',
                   ),
                   tooltip: 'Refresh sponsor list',
@@ -584,7 +589,7 @@ class EventSponserFormState extends State<EventSponserForm> {
 
             TextFormField(
               controller: _sponserNameController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Sponsor Name'),
               validator: (v) => (v == null || v.trim().isEmpty)
                   ? 'Sponsor name is required'
@@ -594,7 +599,7 @@ class EventSponserFormState extends State<EventSponserForm> {
 
             const Text(
               'Sponsor Logo (must be square)',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: Color(0xFF757575)),
             ),
             const SizedBox(height: 8),
             _buildLogoPreview(),
@@ -603,7 +608,7 @@ class EventSponserFormState extends State<EventSponserForm> {
               onPressed: _pickImage,
               icon: const Icon(
                 Icons.photo_library_outlined,
-                color: Colors.white,
+                color: Color(0xFF212121),
               ),
               label: Text(
                 _pickedLogoBytes == null && _existingLogoPath == null
@@ -611,15 +616,15 @@ class EventSponserFormState extends State<EventSponserForm> {
                     : 'Choose Different Logo',
               ),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white24),
+                foregroundColor: Color(0xFF212121),
+                side: const BorderSide(color: Color(0x33000000)),
               ),
             ),
             const Padding(
               padding: EdgeInsets.only(top: 4),
               child: Text(
                 "If the picked image isn't square, you'll be asked to crop it before it's used.",
-                style: TextStyle(color: Colors.white38, fontSize: 12),
+                style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 12),
               ),
             ),
 
@@ -630,8 +635,8 @@ class EventSponserFormState extends State<EventSponserForm> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Color(0xFF5B4DFF),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _isSubmitting
@@ -654,8 +659,8 @@ class EventSponserFormState extends State<EventSponserForm> {
               child: OutlinedButton(
                 onPressed: _openTable,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
+                  foregroundColor: Color(0xFF212121),
+                  side: const BorderSide(color: Color(0x33000000)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: const Text('View / Manage Event Sponsors'),
@@ -694,20 +699,20 @@ class EventSponserFormState extends State<EventSponserForm> {
                       _filterEventId == null
                           ? 'All Events -- tap to filter'
                           : _eventNameFor(_filterEventId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
               ),
               if (_filterEventId != null)
                 IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white70),
+                  icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                   tooltip: 'Clear event filter',
                   onPressed: () => _onEventFilterChanged(null),
                 ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadLinks,
               ),
               TextButton(
@@ -722,16 +727,16 @@ class EventSponserFormState extends State<EventSponserForm> {
           child: TextField(
             controller: _linkSearchController,
             onChanged: _filterLinks,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF212121)),
             decoration: InputDecoration(
               hintText: 'Search by ID or sponsor name',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
               enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
+                borderSide: BorderSide(color: Color(0x33000000)),
               ),
               focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white),
+                borderSide: BorderSide(color: Color(0xFF5B4DFF)),
               ),
             ),
           ),
@@ -743,7 +748,7 @@ class EventSponserFormState extends State<EventSponserForm> {
               ? const Center(
                   child: Text(
                     'No event sponsors found',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: Color(0xFF9E9E9E)),
                   ),
                 )
               : Material(
@@ -761,10 +766,10 @@ class EventSponserFormState extends State<EventSponserForm> {
                             height: 48,
                             child: (sponser == null || sponser.logoPath.isEmpty)
                                 ? Container(
-                                    color: const Color(0xFF1E1E1E),
+                                    color: Color(0xFFF1F1F5),
                                     child: const Icon(
                                       Icons.handshake_outlined,
-                                      color: Colors.white38,
+                                      color: Color(0xFF9E9E9E),
                                       size: 20,
                                     ),
                                   )
@@ -775,10 +780,10 @@ class EventSponserFormState extends State<EventSponserForm> {
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stack) =>
                                         Container(
-                                          color: const Color(0xFF1E1E1E),
+                                          color: Color(0xFFF1F1F5),
                                           child: const Icon(
                                             Icons.broken_image_outlined,
-                                            color: Colors.white38,
+                                            color: Color(0xFF9E9E9E),
                                             size: 20,
                                           ),
                                         ),
@@ -787,11 +792,11 @@ class EventSponserFormState extends State<EventSponserForm> {
                         ),
                         title: Text(
                           sponser?.name ?? 'Sponsor #${link.sponserId}',
-                          style: const TextStyle(color: Colors.white),
+                          style: const TextStyle(color: Color(0xFF212121)),
                         ),
                         subtitle: Text(
                           'ID: ${link.id}  •  ${_eventNameFor(link.eventId)}',
-                          style: const TextStyle(color: Colors.white54),
+                          style: const TextStyle(color: Color(0xFF9E9E9E)),
                           overflow: TextOverflow.ellipsis,
                         ),
                         trailing: Row(
@@ -800,7 +805,7 @@ class EventSponserFormState extends State<EventSponserForm> {
                             IconButton(
                               icon: const Icon(
                                 Icons.edit,
-                                color: Colors.white70,
+                                color: Color(0xFF757575),
                               ),
                               onPressed: () => _startEditLink(link),
                             ),

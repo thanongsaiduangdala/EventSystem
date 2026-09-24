@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:ticket_com/DeveloperPage/account_controller_page.dart';
 import 'package:ticket_com/DeveloperPage/attendee_controller_page.dart';
 import 'package:ticket_com/DeveloperPage/organizer_controller_page.dart';
+import 'package:ticket_com/utils/category_colors.dart';
 import './EventController_Page.dart';
 import './event_info_form.dart';
 import './ticket_type_form.dart';
 import './sponsor_controller_page.dart';
 import './wish_and_category_controller_page.dart';
+
+const Color _kTextDark = Color(0xFF212121);
+const Color _kTextGrey = Color(0xFF757575);
+const Color _kSurface = Color(0xFFF5F6FA);
 
 class MainPageDashboard extends StatefulWidget {
   const MainPageDashboard({super.key});
@@ -102,7 +107,7 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: _kSurface,
       key: _scaffoldKey,
       appBar: _appbar(),
       body: _currentBody(),
@@ -113,16 +118,20 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
 
   PreferredSizeWidget _appbar() {
     return AppBar(
-      backgroundColor: Colors.black,
-      iconTheme: const IconThemeData(color: Colors.white),
+      backgroundColor: Colors.white,
+      foregroundColor: _kTextDark,
+      elevation: 0,
       title: Text(
         _titles[_selectedIndex],
-        style: const TextStyle(color: Colors.white),
+        style: const TextStyle(
+          color: _kTextDark,
+          fontWeight: FontWeight.w800,
+        ),
       ),
       actions: _selectedIndex == 0
           ? [
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white),
+                icon: const Icon(Icons.refresh, color: _kTextDark),
                 onPressed: () {
                   if (_eventNavIndex == 1) {
                     _ticketTypeFormKey.currentState?.reloadEvents();
@@ -138,19 +147,25 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
 
   Widget _drawer() {
     return Drawer(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(color: Color(0xFF1E1E1E)),
-            child: Row(
+          DrawerHeader(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [kAccent, Color(0xFF8E2DE2)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: const Row(
               children: [
                 CircleAvatar(
                   radius: 28,
-                  backgroundColor: Color(0xFF424242),
-                  child: Icon(Icons.person, color: Colors.white70, size: 32),
+                  backgroundColor: Color(0x33FFFFFF),
+                  child: Icon(Icons.person, color: Colors.white, size: 32),
                 ),
                 SizedBox(width: 12),
                 Text(
@@ -158,73 +173,115 @@ class _MainPageDashboardState extends State<MainPageDashboard> {
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.event, color: Colors.white70),
-            title: const Text('Event', style: TextStyle(color: Colors.white)),
+            leading: Icon(
+              Icons.event,
+              color: _selectedIndex == 0 ? kAccent : _kTextGrey,
+            ),
+            title: Text(
+              'Event',
+              style: TextStyle(
+                color: _selectedIndex == 0 ? kAccent : _kTextDark,
+                fontWeight: _selectedIndex == 0 ? FontWeight.w700 : null,
+              ),
+            ),
             selected: _selectedIndex == 0,
-            selectedTileColor: Colors.white10,
+            selectedTileColor: const Color(0x145B4DFF),
             onTap: () => _selectPage(0),
           ),
           ListTile(
-            leading: const Icon(
+            leading: Icon(
               Icons.account_box_outlined,
-              color: Colors.white70,
+              color: _selectedIndex == 1 ? kAccent : _kTextGrey,
             ),
-            title: const Text('Account', style: TextStyle(color: Colors.white)),
+            title: Text(
+              'Account',
+              style: TextStyle(
+                color: _selectedIndex == 1 ? kAccent : _kTextDark,
+                fontWeight: _selectedIndex == 1 ? FontWeight.w700 : null,
+              ),
+            ),
             selected: _selectedIndex == 1,
-            selectedTileColor: Colors.white10,
+            selectedTileColor: const Color(0x145B4DFF),
             onTap: () => _selectPage(1),
           ),
           ListTile(
-            leading: const Icon(Icons.business, color: Colors.white70),
-            title: const Text(
+            leading: Icon(
+              Icons.business,
+              color: _selectedIndex == 2 ? kAccent : _kTextGrey,
+            ),
+            title: Text(
               'Organization',
-              style: TextStyle(color: Colors.white),
+              style: TextStyle(
+                color: _selectedIndex == 2 ? kAccent : _kTextDark,
+                fontWeight: _selectedIndex == 2 ? FontWeight.w700 : null,
+              ),
             ),
             selected: _selectedIndex == 2,
-            selectedTileColor: Colors.white10,
+            selectedTileColor: const Color(0x145B4DFF),
             onTap: () => _selectPage(2),
           ),
           ListTile(
-            leading: const Icon(Icons.groups_3_outlined, color: Colors.white70),
-            title: const Text(
+            leading: Icon(
+              Icons.groups_3_outlined,
+              color: _selectedIndex == 3 ? kAccent : _kTextGrey,
+            ),
+            title: Text(
               'Attendee',
-              style: TextStyle(color: Colors.white),
+              style: TextStyle(
+                color: _selectedIndex == 3 ? kAccent : _kTextDark,
+                fontWeight: _selectedIndex == 3 ? FontWeight.w700 : null,
+              ),
             ),
             selected: _selectedIndex == 3,
-            selectedTileColor: Colors.white10,
+            selectedTileColor: const Color(0x145B4DFF),
             onTap: () => _selectPage(3),
           ),
           ListTile(
-            leading: const Icon(
+            leading: Icon(
               Icons.handshake_outlined,
-              color: Colors.white70,
+              color: _selectedIndex == 4 ? kAccent : _kTextGrey,
             ),
-            title: const Text('Sponsor', style: TextStyle(color: Colors.white)),
+            title: Text(
+              'Sponsor',
+              style: TextStyle(
+                color: _selectedIndex == 4 ? kAccent : _kTextDark,
+                fontWeight: _selectedIndex == 4 ? FontWeight.w700 : null,
+              ),
+            ),
             selected: _selectedIndex == 4,
-            selectedTileColor: Colors.white10,
+            selectedTileColor: const Color(0x145B4DFF),
             onTap: () => _selectPage(4),
           ),
           ListTile(
-            leading: const Icon(Icons.star_outline, color: Colors.white70),
-            title: const Text(
+            leading: Icon(
+              Icons.star_outline,
+              color: _selectedIndex == 5 ? kAccent : _kTextGrey,
+            ),
+            title: Text(
               'Wishlist & Categories',
-              style: TextStyle(color: Colors.white),
+              style: TextStyle(
+                color: _selectedIndex == 5 ? kAccent : _kTextDark,
+                fontWeight: _selectedIndex == 5 ? FontWeight.w700 : null,
+              ),
             ),
             selected: _selectedIndex == 5,
-            selectedTileColor: Colors.white10,
+            selectedTileColor: const Color(0x145B4DFF),
             onTap: () => _selectPage(5),
           ),
-          const Divider(color: Colors.white24, height: 32),
+          const Divider(color: Color(0x14000000), height: 32),
           ListTile(
-            leading: const Icon(Icons.logout, color: Colors.white70),
-            title: const Text('Exit', style: TextStyle(color: Colors.white)),
+            leading: const Icon(Icons.logout, color: _kTextGrey),
+            title: const Text(
+              'Exit',
+              style: TextStyle(color: _kTextDark),
+            ),
             onTap: _exitDashboard,
           ),
         ],
@@ -238,7 +295,7 @@ class AccountBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: Text('Account content', style: TextStyle(color: Colors.white)),
+      child: Text('Account content', style: TextStyle(color: _kTextDark)),
     );
   }
 }
@@ -250,7 +307,7 @@ class OrganizationBody extends StatelessWidget {
     return const Center(
       child: Text(
         'Organization content',
-        style: TextStyle(color: Colors.white),
+        style: TextStyle(color: _kTextDark),
       ),
     );
   }
@@ -261,7 +318,7 @@ class AttendeeBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: Text('Attendee content', style: TextStyle(color: Colors.white)),
+      child: Text('Attendee content', style: TextStyle(color: _kTextDark)),
     );
   }
 }
@@ -271,7 +328,8 @@ class AttendeeNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BottomNavigationBar(
-      backgroundColor: Colors.black87,
+      backgroundColor: Colors.white,
+      unselectedItemColor: _kTextGrey,
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.list), label: 'List'),
         BottomNavigationBarItem(icon: Icon(Icons.qr_code), label: 'Scan'),
@@ -280,13 +338,13 @@ class AttendeeNavBar extends StatelessWidget {
   }
 }
 
-
 class SponsorNavBar extends StatelessWidget {
   const SponsorNavBar({super.key});
   @override
   Widget build(BuildContext context) {
     return BottomNavigationBar(
-      backgroundColor: Colors.black87,
+      backgroundColor: Colors.white,
+      unselectedItemColor: _kTextGrey,
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.list), label: 'List'),
         BottomNavigationBarItem(icon: Icon(Icons.info), label: 'Info'),

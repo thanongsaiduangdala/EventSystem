@@ -1,10 +1,14 @@
 import random
 import string
 import time
+import os
+import uuid
 import bcrypt
 import pymysql
-from fastapi import HTTPException, status, Depends
+from pathlib import Path
+from fastapi import HTTPException, status, Depends, UploadFile, File
 from DB.DBConnect import getConnect
+from auth.dependencies import get_current_account
 from models.schema import (
     SignUpRequest, LoginRequest, SendOtpRequest,
     ResetPasswordRequest, SignupOtpRequest, VerifyOtpRequest,
@@ -15,7 +19,11 @@ from controllers.email_service_controller import (
 from auth.jwt_handler import create_access_token
 from auth.dependencies import require_developer
 
-OTP_TTL_SECONDS = 300  
+OTP_TTL_SECONDS = 300
+
+PROFILE_PIC_DIR = "static/profile_images"
+ALLOWED_PROFILE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+MAX_PROFILE_PIC_BYTES = 5 * 1024 * 1024  # 5 MB  
 
 
 def _store_otp(store: dict, email: str, otp: str) -> None:
@@ -71,7 +79,7 @@ async def login(req_data: LoginRequest):
         with con.cursor() as cur:
             sql = """
                 SELECT AccountID, FirstName, LastName,
-                       PhoneNum, Email, StatusID, PasswordEnc
+                       PhoneNum, ProfileImagePath, Email, StatusID, PasswordEnc
                 FROM accountinfo
                 WHERE Email = %s
             """
@@ -87,8 +95,8 @@ async def login(req_data: LoginRequest):
         if not is_match:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect password")
 
-        if user["StatusID"] == 4:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
+        if user["StatusID"] == 5:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is banned")
 
         token = create_access_token(account_id=user["AccountID"], status_id=user["StatusID"])
 
@@ -106,7 +114,8 @@ async def login(req_data: LoginRequest):
             "firstname": user["FirstName"],
             "lastname": user["LastName"],
             "PhoneNum": user["PhoneNum"],
-            "Email": user["Email"]
+            "Email": user["Email"],
+            "ProfileImagePath": user["ProfileImagePath"]
         }
 
     except HTTPException:
@@ -120,7 +129,7 @@ async def send_forgot_otp(req_data: SendOtpRequest):
         con = getConnect()
         with con.cursor() as cur:
             cur.execute(
-                "SELECT AccountID FROM accountinfo WHERE Email = %s AND (StatusID = 1 OR StatusID = 2 OR StatusID = 3)",
+                "SELECT AccountID FROM accountinfo WHERE Email = %s AND (StatusID = 1 OR StatusID = 2 OR StatusID = 3 OR StatusID = 4)",
                 (req_data.email,)
             )
             user = cur.fetchone()
@@ -226,3 +235,78 @@ async def get_account_status(account_id: int):
 
 async def check_developer_status(current=Depends(require_developer)):
     return {"msg": "Developer access confirmed", "AccountID": current["account_id"]}
+
+
+async def upload_profile_picture(file: UploadFile = File(...), current=Depends(get_current_account)):
+    """
+    Saves an uploaded profile picture for the signed-in account, updates
+    accountinfo.ProfileImagePath, and deletes the previous image file.
+    The account id always comes from the JWT, so users can only change their
+    own picture. Returns the relative /static path to display client-side.
+    """
+    account_id = current["account_id"]
+    try:
+        ext = os.path.splitext(file.filename or "")[1].lower()
+        if ext not in ALLOWED_PROFILE_EXTENSIONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported file type. Allowed: jpg, jpeg, png, webp, gif",
+            )
+
+        contents = await file.read()
+        if len(contents) > MAX_PROFILE_PIC_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File too large (max 5MB)",
+            )
+        if len(contents) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Empty file",
+            )
+
+        account_dir = Path(PROFILE_PIC_DIR) / str(account_id)
+        account_dir.mkdir(parents=True, exist_ok=True)
+        new_filename = f"{uuid.uuid4().hex}{ext}"
+        dest_path = account_dir / new_filename
+
+        with open(dest_path, "wb") as f:
+            f.write(contents)
+
+        relative_path = f"/static/profile_images/{account_id}/{new_filename}"
+
+        con = getConnect()
+        with con.cursor() as cur:
+            cur.execute(
+                "SELECT ProfileImagePath FROM accountinfo WHERE AccountID = %s",
+                (account_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+            old_path = row["ProfileImagePath"] if isinstance(row, dict) else row[0]
+
+            cur.execute(
+                "UPDATE accountinfo SET ProfileImagePath = %s WHERE AccountID = %s",
+                (relative_path, account_id),
+            )
+            con.commit()
+
+        # Best-effort removal of the previous picture file (never blocks success).
+        if old_path and str(old_path).startswith("/static/"):
+            try:
+                old_file = Path(old_path.lstrip("/"))
+                if old_file.exists():
+                    old_file.unlink()
+            except OSError:
+                pass
+
+        return {"msg": "Profile picture updated", "ProfileImagePath": relative_path}
+
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+    except Exception as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"upload error": str(err)})

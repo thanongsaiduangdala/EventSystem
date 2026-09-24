@@ -38,14 +38,14 @@ class TicketTypeTablePageState extends State<TicketTypeTablePage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Colors.white,
         title: const Text(
           'Delete ticket type?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Color(0xFF212121)),
         ),
         content: Text(
           'This will permanently delete "${ticket.typeName}".',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -106,17 +106,17 @@ class TicketTypeTablePageState extends State<TicketTypeTablePage> {
         child: TextField(
           controller: controller,
           keyboardType: keyboardType,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: Color(0xFF212121)),
           decoration: InputDecoration(
             labelText: label,
-            labelStyle: const TextStyle(color: Colors.white54),
+            labelStyle: const TextStyle(color: Color(0xFF9E9E9E)),
             hintText: hint,
-            hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
+            hintStyle: const TextStyle(color: Color(0x33000000), fontSize: 12),
             enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.white24),
+              borderSide: BorderSide(color: Color(0x33000000)),
             ),
             focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.white),
+              borderSide: BorderSide(color: Color(0xFF5B4DFF)),
             ),
           ),
         ),
@@ -126,10 +126,10 @@ class TicketTypeTablePageState extends State<TicketTypeTablePage> {
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Colors.white,
         title: Text(
           isEditing ? 'Edit Ticket Type' : 'Add Ticket Type',
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: Color(0xFF212121)),
         ),
         content: SizedBox(
           width: 360,
@@ -231,41 +231,41 @@ class TicketTypeTablePageState extends State<TicketTypeTablePage> {
     if (_loading) return const Center(child: CircularProgressIndicator());
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Color(0xFFF5F6FA),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Color(0xFF5B4DFF),
         child: const Icon(Icons.add, color: Colors.white),
         onPressed: () => _openFormDialog(),
       ),
       body: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
-          headingRowColor: WidgetStateProperty.all(const Color(0xFF1E1E1E)),
-          dataRowColor: WidgetStateProperty.all(Colors.black),
+          headingRowColor: WidgetStateProperty.all(Colors.white),
+          dataRowColor: WidgetStateProperty.all(Colors.white),
           columns: const [
             DataColumn(
-              label: Text('ID', style: TextStyle(color: Colors.white)),
+              label: Text('ID', style: TextStyle(color: Color(0xFF212121))),
             ),
             DataColumn(
-              label: Text('Event ID', style: TextStyle(color: Colors.white)),
+              label: Text('Event ID', style: TextStyle(color: Color(0xFF212121))),
             ),
             DataColumn(
-              label: Text('Type Name', style: TextStyle(color: Colors.white)),
+              label: Text('Type Name', style: TextStyle(color: Color(0xFF212121))),
             ),
             DataColumn(
-              label: Text('Price (Kip)', style: TextStyle(color: Colors.white)),
+              label: Text('Price (Kip)', style: TextStyle(color: Color(0xFF212121))),
             ),
             DataColumn(
-              label: Text('Capacity', style: TextStyle(color: Colors.white)),
+              label: Text('Capacity', style: TextStyle(color: Color(0xFF212121))),
             ),
             DataColumn(
-              label: Text('Sale Start', style: TextStyle(color: Colors.white)),
+              label: Text('Sale Start', style: TextStyle(color: Color(0xFF212121))),
             ),
             DataColumn(
-              label: Text('Sale End', style: TextStyle(color: Colors.white)),
+              label: Text('Sale End', style: TextStyle(color: Color(0xFF212121))),
             ),
             DataColumn(
-              label: Text('Actions', style: TextStyle(color: Colors.white)),
+              label: Text('Actions', style: TextStyle(color: Color(0xFF212121))),
             ),
           ],
           rows: _ticketTypes.map((ticket) {
@@ -274,43 +274,43 @@ class TicketTypeTablePageState extends State<TicketTypeTablePage> {
                 DataCell(
                   Text(
                     '${ticket.id}',
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Color(0xFF212121)),
                   ),
                 ),
                 DataCell(
                   Text(
                     '${ticket.eventId}',
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Color(0xFF212121)),
                   ),
                 ),
                 DataCell(
                   Text(
                     ticket.typeName,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Color(0xFF212121)),
                   ),
                 ),
                 DataCell(
                   Text(
                     '${ticket.priceInKip}',
-                    style: const TextStyle(color: Colors.white70),
+                    style: const TextStyle(color: Color(0xFF757575)),
                   ),
                 ),
                 DataCell(
                   Text(
                     '${ticket.capacity}',
-                    style: const TextStyle(color: Colors.white70),
+                    style: const TextStyle(color: Color(0xFF757575)),
                   ),
                 ),
                 DataCell(
                   Text(
                     ticket.saleStart,
-                    style: const TextStyle(color: Colors.white70),
+                    style: const TextStyle(color: Color(0xFF757575)),
                   ),
                 ),
                 DataCell(
                   Text(
                     ticket.saleEnd,
-                    style: const TextStyle(color: Colors.white70),
+                    style: const TextStyle(color: Color(0xFF757575)),
                   ),
                 ),
                 DataCell(
@@ -319,7 +319,7 @@ class TicketTypeTablePageState extends State<TicketTypeTablePage> {
                       IconButton(
                         icon: const Icon(
                           Icons.edit,
-                          color: Colors.white70,
+                          color: Color(0xFF757575),
                           size: 20,
                         ),
                         onPressed: () => _openFormDialog(existing: ticket),

@@ -4,14 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
+import 'package:ticket_com/HomePage/contact_us_page.dart';
 import 'package:ticket_com/HomePage/event_card.dart';
 import 'package:ticket_com/HomePage/event_detail_page.dart';
 import 'package:ticket_com/HomePage/event_filter.dart';
 import 'package:ticket_com/HomePage/event_list_page.dart';
+import 'package:ticket_com/HomePage/my_profile_page.dart';
 import 'package:ticket_com/HomePage/nearby_auto_scroll.dart';
 import 'package:ticket_com/HomePage/nearby_event_card.dart';
+import 'package:ticket_com/HomePage/notification_page.dart';
 import 'package:ticket_com/LogSignPage/MainLoginSignUp.dart';
 import 'package:ticket_com/MainPage/Panel/SettingPanel.dart';
+import 'package:ticket_com/MainPage/Panel/TicketPanel.dart';
 import 'package:ticket_com/MainPage/Panel/WishPanel.dart';
 import 'package:ticket_com/l10n/app_localizations.dart';
 import 'package:ticket_com/map/location_picker_page.dart';
@@ -24,6 +28,7 @@ import 'package:ticket_com/services/event_view_api_service.dart';
 import 'package:ticket_com/services/follow_api_service.dart';
 import 'package:ticket_com/services/orders_api_service.dart';
 import 'package:ticket_com/services/location_service.dart';
+import 'package:ticket_com/services/notification_service.dart';
 import 'package:ticket_com/services/ticket_attendence_api_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 import 'package:ticket_com/services/wishlist_api_service.dart';
@@ -44,6 +49,9 @@ class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _drawerController;
   static const double _drawerWidthRatio = 0.8;
+
+  final LayerLink _notificationLink = LayerLink();
+  OverlayEntry? _notificationOverlay;
 
   bool _loading = true;
   String? _error;
@@ -85,11 +93,13 @@ class _HomePageState extends State<HomePage>
     LocationService.position.addListener(_onLocationChanged);
     LocationService.label.addListener(_onLabelChanged);
     LocationService.ensureResolved();
+    NotificationService.instance.syncSession();
     _load();
   }
 
   @override
   void dispose() {
+    _closeNotificationPanel();
     _drawerController.dispose();
     LocationService.position.removeListener(_onLocationChanged);
     LocationService.label.removeListener(_onLabelChanged);
@@ -112,6 +122,7 @@ class _HomePageState extends State<HomePage>
       _loading = true;
       _error = null;
     });
+    NotificationService.instance.refresh();
 
     try {
       final events = await EventApiService.getAllEvents();
@@ -638,6 +649,7 @@ class _HomePageState extends State<HomePage>
 
   void _openDrawer() {
     if (_drawerOpen) return;
+    _closeNotificationPanel();
     _drawerController.forward();
   }
 
@@ -646,18 +658,57 @@ class _HomePageState extends State<HomePage>
     _drawerController.reverse();
   }
 
-  /// Scales the main screen down slightly and nudges it right/down while the
-  /// drawer slides over it, so a sliver of the page peeks out on the right.
+  // ---------------- notification panel ----------------
+
+  void _toggleNotificationPanel() {
+    if (_notificationOverlay != null) {
+      _closeNotificationPanel();
+      return;
+    }
+    final entry = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _closeNotificationPanel,
+              child: const SizedBox.expand(),
+            ),
+          ),
+          CompositedTransformFollower(
+            link: _notificationLink,
+            targetAnchor: Alignment.topRight,
+            followerAnchor: Alignment.topRight,
+            offset: const Offset(4, 64),
+            child: NotificationDropdown(onSeeAll: _openNotificationPage),
+          ),
+        ],
+      ),
+    );
+    _notificationOverlay = entry;
+    Overlay.of(context).insert(entry);
+  }
+
+  void _closeNotificationPanel() {
+    _notificationOverlay?.remove();
+    _notificationOverlay = null;
+  }
+
+  void _openNotificationPage() {
+    _closeNotificationPanel();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const NotificationPage()),
+    );
+  }
+
+  /// Slides the main screen to the right along with the drawer using the same
+  /// eased curve, so the page pushes aside together with the drawer instead
+  /// of shrinking in place.
   Matrix4 _drawerBodyMatrix(double value, Size size) {
     final t = Curves.easeOutCubic.transform(value.clamp(0.0, 1.0));
-    final scale = 1.0 - 0.07 * t;
-    final dx = size.width * (1 - scale) / 2 - 8;
-    final dy = size.height * (1 - scale) / 2 + 10 * t;
+    final drawerWidth = size.width * _drawerWidthRatio;
     return Matrix4.identity()
-      ..translateByDouble(dx, dy, 0, 1)
-      ..translateByDouble(size.width / 2, size.height / 2, 0, 1)
-      ..scaleByDouble(scale, scale, 1, 1)
-      ..translateByDouble(-size.width / 2, -size.height / 2, 0, 1);
+      ..translateByDouble(drawerWidth * t, 0, 0, 1);
   }
 
   void _navigateTo(Widget page) {
@@ -695,6 +746,7 @@ class _HomePageState extends State<HomePage>
         ? 'Guest'
         : '${session.firstname} ${session.lastname}'.trim();
     final email = session?.email ?? '';
+    final picUrl = session?.profileImageUrl ?? '';
     final l10n = l10nOf(context);
     final topPad = MediaQuery.paddingOf(context).top;
     final bottomPad = MediaQuery.paddingOf(context).bottom;
@@ -716,7 +768,7 @@ class _HomePageState extends State<HomePage>
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(24, topPad + 36, 24, 0),
-            child: _drawerProfileHeader(name, email),
+            child: _drawerProfileHeader(name, email, picUrl),
           ),
           const SizedBox(height: 30),
           Expanded(
@@ -726,45 +778,52 @@ class _HomePageState extends State<HomePage>
                 _drawerRow(
                   icon: Icons.person_outline,
                   label: l10n.myProfile,
-                  onTap: () => _showComingSoon(l10n.myProfile),
+                  onTap: () => _navigateTo(const MyProfilePage()),
                 ),
                 _drawerRow(
                   icon: Icons.chat_bubble_outline,
                   label: l10n.notification,
-                  onTap: () => _showComingSoon(l10n.notification),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF7043),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      '3',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  onTap: () => _navigateTo(const NotificationPage()),
+                  trailing: ListenableBuilder(
+                    listenable: NotificationService.instance,
+                    builder: (context, _) {
+                      final unread = NotificationService.instance.unreadCount;
+                      if (unread == 0) return const SizedBox.shrink();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF7043),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          unread > 99 ? '99+' : '$unread',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 _drawerRow(
                   icon: Icons.calendar_today_outlined,
                   label: l10n.calender,
-                  onTap: () => _showComingSoon(l10n.calender),
+                  onTap: () => _navigateTo(const TicketPanel(showBackButton: true)),
                 ),
                 _drawerRow(
                   icon: Icons.bookmark_border,
                   label: l10n.wish,
-                  onTap: () => _navigateTo(const WishPanel()),
+                  onTap: () => _navigateTo(const WishPanel(showBackButton: true)),
                 ),
                 _drawerRow(
                   icon: Icons.mail_outline,
                   label: l10n.contactUs,
-                  onTap: () => _showComingSoon(l10n.contactUs),
+                  onTap: () => _navigateTo(const ContactUsPage()),
                 ),
                 _drawerRow(
                   icon: Icons.settings_outlined,
@@ -795,21 +854,36 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  Widget _drawerProfileHeader(String name, String email) {
+  Widget _drawerProfileHeader(String name, String email, String picUrl) {
     return Column(
       children: [
-        Container(
-          width: 70,
-          height: 70,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFFBDBDBD), Color(0xFF757575)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            shape: BoxShape.circle,
+        ClipOval(
+          child: SizedBox(
+            width: 70,
+            height: 70,
+            child: picUrl.isEmpty
+                ? Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFBDBDBD), Color(0xFF757575)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: const Icon(Icons.person, color: Colors.white, size: 36),
+                  )
+                : Image.network(
+                    picUrl,
+                    fit: BoxFit.cover,
+                    width: 70,
+                    height: 70,
+                    errorBuilder: (context, error, stack) => Container(
+                      color: const Color(0xFFBDBDBD),
+                      child: const Icon(Icons.person,
+                          color: Colors.white, size: 36),
+                    ),
+                  ),
           ),
-          child: const Icon(Icons.person, color: Colors.white, size: 36),
         ),
         const SizedBox(height: 14),
         Text(
@@ -1260,33 +1334,58 @@ class _HomePageState extends State<HomePage>
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      color: Colors.white24,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      onPressed: () {},
-                      icon: const Icon(
-                        Icons.notifications_none,
-                        color: Colors.white,
-                        size: 22,
+                  CompositedTransformTarget(
+                    link: _notificationLink,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: Colors.white24,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        onPressed: _toggleNotificationPanel,
+                        icon: const Icon(
+                          Icons.notifications_none,
+                          color: Colors.white,
+                          size: 22,
+                        ),
                       ),
                     ),
                   ),
                   Positioned(
                     top: 4,
                     right: 4,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00BFA5),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5),
-                      ),
+                    child: ListenableBuilder(
+                      listenable: NotificationService.instance,
+                      builder: (context, _) {
+                        final unread = NotificationService.instance.unreadCount;
+                        if (unread == 0) return const SizedBox.shrink();
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 2,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF7043),
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            unread > 99 ? '99+' : '$unread',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -1560,6 +1659,7 @@ class _HomePageState extends State<HomePage>
           image: _imageByEvent[event.id],
           attend: _wishCounts[event.id] ?? 0,
           organizerName: _organizerById[event.organizerId]?.name,
+          organizerLogoPath: _organizerById[event.organizerId]?.logoPath,
           saved: _myWishByEvent.containsKey(event.id),
           bought: _boughtEventIds.contains(event.id),
           onSaveTap: () => _toggleWish(event),

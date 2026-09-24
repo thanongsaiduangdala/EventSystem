@@ -27,6 +27,7 @@ CREATE TABLE `accountinfo` (
   `FirstName` varchar(50) NOT NULL,
   `LastName` varchar(50) NOT NULL,
   `PhoneNum` varchar(20) NOT NULL,
+  `ProfileImagePath` varchar(255) DEFAULT NULL,
   `Email` varchar(255) NOT NULL,
   `StatusID` int NOT NULL,
   `PasswordEnc` varchar(255) NOT NULL,
@@ -40,7 +41,7 @@ CREATE TABLE `accountinfo` (
 
 LOCK TABLES `accountinfo` WRITE;
 /*!40000 ALTER TABLE `accountinfo` DISABLE KEYS */;
-INSERT INTO `accountinfo` VALUES (2,'sunny','duangdala','02055083766','sunny.duangdal@gmail.com',3,'$2b$10$OrFkNcCUw1gOS77xKmESpeqnNcoZD2QA8NSwbSFkpcNZD99N9LsuS'),(4,'Steven','Universe','0256565646','Steven.Universe@gmail.com',1,'$2b$10$Umx2CuBxNzKryEk6ZJllnuI.NoaqaTrJ6m7tZNvVZrR7oqBL85leq'),(5,'thanongsai','duangdala','02054654654','thanongsai.duangdala@gmail.com',1,'$2b$10$o4UVMZIKfU2j2mU9f.XdYer0vT.LeaFsKRRJXBVJanxXgw2v3p9Zq');
+INSERT INTO `accountinfo` VALUES (2,'sunny','duangdala','02055083766',NULL,'sunny.duangdal@gmail.com',3,'$2b$10$OrFkNcCUw1gOS77xKmESpeqnNcoZD2QA8NSwbSFkpcNZD99N9LsuS'),(4,'Steven','Universe','0256565646',NULL,'Steven.Universe@gmail.com',1,'$2b$10$Umx2CuBxNzKryEk6ZJllnuI.NoaqaTrJ6m7tZNvVZrR7oqBL85leq'),(5,'thanongsai','duangdala','02054654654',NULL,'thanongsai.duangdala@gmail.com',1,'$2b$10$o4UVMZIKfU2j2mU9f.XdYer0vT.LeaFsKRRJXBVJanxXgw2v3p9Zq');
 /*!40000 ALTER TABLE `accountinfo` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -64,7 +65,7 @@ CREATE TABLE `accountstatusinfo` (
 
 LOCK TABLES `accountstatusinfo` WRITE;
 /*!40000 ALTER TABLE `accountstatusinfo` DISABLE KEYS */;
-INSERT INTO `accountstatusinfo` VALUES (1,'Customer'),(2,'Organizer'),(3,'Developer'),(4,'Not in use'),(5,'Ban');
+INSERT INTO `accountstatusinfo` VALUES (1,'Customer'),(2,'Organizer'),(3,'Developer'),(4,'Employee'),(5,'Ban');
 /*!40000 ALTER TABLE `accountstatusinfo` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -189,6 +190,7 @@ CREATE TABLE `eventinfo` (
   `EventDescription` text NOT NULL,
   `EventOrganizerID` int NOT NULL,
   `OnePerPerson` tinyint(1) NOT NULL DEFAULT 0,
+  `EventStatusID` int NOT NULL DEFAULT 2,
   PRIMARY KEY (`EventID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -199,7 +201,7 @@ CREATE TABLE `eventinfo` (
 
 LOCK TABLES `eventinfo` WRITE;
 /*!40000 ALTER TABLE `eventinfo` DISABLE KEYS */;
-INSERT INTO `eventinfo` VALUES (1,'That Luang to Mekong Marathon','2026-10-01 06:00:00','2026-10-01 13:00:00','That Luang',17.975649,102.633682,'Marathon from That Luang to Mekong and back. They is 10km and 21km',1,0),(4,'Pilot Training part 1','2026-05-12 09:00:00','2026-05-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2,0),(5,'Pilot Training part 2','2026-11-12 06:00:00','2026-11-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2,0),(6,'Marathon','2026-08-15 04:20:00','2026-08-16 22:20:00','ThatLuangpart1',17.976542,102.635899,'Marathon from Mekong to ThatLuang and back that is 10 km  or 21km.',1,0),(8,'MarathonPart2','2026-08-20 06:00:00','2026-08-06 16:00:00','ThatLuang',17.975707,102.633619,'Marathon from Thatluang to Mekong and back. For those who want to do either 10km or 21km.',1,0),(9,'PilotTrainingPart3','2026-08-15 10:00:00','2026-08-08 20:00:00','Wattay Airport',17.973006,102.567955,'sdkjaslkdjlksada',2,0);
+INSERT INTO `eventinfo` VALUES (1,'That Luang to Mekong Marathon','2026-10-01 06:00:00','2026-10-01 13:00:00','That Luang',17.975649,102.633682,'Marathon from That Luang to Mekong and back. They is 10km and 21km',1,0,2),(4,'Pilot Training part 1','2026-05-12 09:00:00','2026-05-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2,0,2),(5,'Pilot Training part 2','2026-11-12 06:00:00','2026-11-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2,0,2),(6,'Marathon','2026-08-15 04:20:00','2026-08-16 22:20:00','ThatLuangpart1',17.976542,102.635899,'Marathon from Mekong to ThatLuang and back that is 10 km  or 21km.',1,0,2),(8,'MarathonPart2','2026-08-20 06:00:00','2026-08-06 16:00:00','ThatLuang',17.975707,102.633619,'Marathon from Thatluang to Mekong and back. For those who want to do either 10km or 21km.',1,0,2),(9,'PilotTrainingPart3','2026-08-15 10:00:00','2026-08-08 20:00:00','Wattay Airport',17.973006,102.567955,'sdkjaslkdjlksada',2,0,2);
 /*!40000 ALTER TABLE `eventinfo` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -375,9 +377,9 @@ CREATE TABLE `identityverification` (
   `DateOfBirth` date NOT NULL,
   `DocumentImageRedPath` varchar(255) NOT NULL,
   `VerificationStatusID` int NOT NULL,
-  `ReviewedByAccountID` int NOT NULL,
+  `ReviewedByAccountID` int NULL,
   `SubmittedAtYMDT` datetime NOT NULL,
-  `ReviewedAtYMDT` datetime NOT NULL,
+  `ReviewedAtYMDT` datetime NULL,
   PRIMARY KEY (`VerificationID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -514,7 +516,7 @@ CREATE TABLE `teamrole` (
 
 LOCK TABLES `teamrole` WRITE;
 /*!40000 ALTER TABLE `teamrole` DISABLE KEYS */;
-INSERT INTO `teamrole` VALUES (3,'Developer'),(4,'Manager');
+INSERT INTO `teamrole` VALUES (1,'Employee'),(2,'Volunteer'),(3,'Developer'),(4,'Manager');
 /*!40000 ALTER TABLE `teamrole` ENABLE KEYS */;
 UNLOCK TABLES;
 

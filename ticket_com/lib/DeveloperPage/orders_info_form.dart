@@ -261,11 +261,11 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Delete order?', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: const Text('Delete order?', style: TextStyle(color: Color(0xFF212121))),
         content: Text(
           'This will permanently delete Order #${order.id}.',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -349,12 +349,17 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -379,7 +384,7 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
                 child: Text(
                   'Editing Order ID: $_editingOrderId',
                   style: const TextStyle(
-                    color: Colors.amber,
+                    color: Color(0xFF5B4DFF),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -399,7 +404,7 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
                                 ? 'Loading...'
                                 : 'Tap to select account')
                             : _accountNameFor(_selectedAccountId!),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -412,10 +417,10 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh account list',
                 ),
               ],
@@ -436,7 +441,7 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
                                 ? 'Loading...'
                                 : 'Tap to select payment type')
                             : _paymentTypeNameFor(_selectedPaymentTypeId!),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -449,10 +454,10 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh payment type list',
                 ),
               ],
@@ -468,14 +473,14 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
                       decoration: _decoration('Payment Date/Time (optional)'),
                       child: Text(
                         _formatForDisplay(_paymentDateTime),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
                 ),
                 if (_paymentDateTime != null)
                   IconButton(
-                    icon: const Icon(Icons.clear, color: Colors.white70),
+                    icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                     tooltip: 'Clear payment date',
                     onPressed: _clearPaymentDate,
                   ),
@@ -485,7 +490,7 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
 
             TextFormField(
               controller: _proveOfPaymentController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Proof of Payment (optional)'),
             ),
             const SizedBox(height: 16),
@@ -495,8 +500,8 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Color(0xFF5B4DFF),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _isSubmitting
@@ -515,8 +520,8 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
               child: OutlinedButton(
                 onPressed: _openTable,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
+                  foregroundColor: Color(0xFF212121),
+                  side: const BorderSide(color: Color(0x33000000)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: const Text('View / Manage Orders'),
@@ -555,20 +560,20 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
                       _filterPaymentTypeId == null
                           ? 'All Payment Types -- tap to filter'
                           : _paymentTypeNameFor(_filterPaymentTypeId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
               ),
               if (_filterPaymentTypeId != null)
                 IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white70),
+                  icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                   tooltip: 'Clear payment type filter',
                   onPressed: () => _onPaymentTypeFilterChanged(null),
                 ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadOrders,
               ),
               TextButton(
@@ -583,16 +588,16 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
           child: TextField(
             controller: _orderSearchController,
             onChanged: _filterOrders,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF212121)),
             decoration: InputDecoration(
               hintText: 'Search by order ID, account ID, or account name',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
               enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
+                borderSide: BorderSide(color: Color(0x33000000)),
               ),
               focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white),
+                borderSide: BorderSide(color: Color(0xFF5B4DFF)),
               ),
             ),
           ),
@@ -604,7 +609,7 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
                   ? const Center(
                       child: Text(
                         'No orders found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : Material(
@@ -616,20 +621,20 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
                           return ListTile(
                             title: Text(
                               'Order #${order.id}',
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               '${_accountNameFor(order.accountId)}  •  '
                               '${_paymentTypeNameFor(order.paymentTypeId)}  •  '
                               '${_formatForDisplay(order.paymentDate)}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                               overflow: TextOverflow.ellipsis,
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.white70),
+                                  icon: const Icon(Icons.edit, color: Color(0xFF757575)),
                                   onPressed: () => _startEdit(order),
                                 ),
                                 IconButton(
@@ -690,7 +695,7 @@ class _AccountPickerDialogState extends State<_AccountPickerDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 400,
         height: 480,
@@ -702,16 +707,16 @@ class _AccountPickerDialogState extends State<_AccountPickerDialog> {
                 controller: _searchController,
                 autofocus: true,
                 onChanged: _onSearchChanged,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: const InputDecoration(
                   hintText: 'Search accounts',
-                  hintStyle: TextStyle(color: Colors.white54),
-                  prefixIcon: Icon(Icons.search, color: Colors.white54),
+                  hintStyle: TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -721,7 +726,7 @@ class _AccountPickerDialogState extends State<_AccountPickerDialog> {
                   ? const Center(
                       child: Text(
                         'No accounts found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView(
@@ -730,11 +735,11 @@ class _AccountPickerDialogState extends State<_AccountPickerDialog> {
                           ListTile(
                             title: Text(
                               '${account.firstName} ${account.lastName}',
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'ID: ${account.id}  •  ${account.email}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                             ),
                             onTap: () => Navigator.pop(context, account),
                           ),
@@ -803,7 +808,7 @@ class _PaymentTypePickerDialogState extends State<_PaymentTypePickerDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 400,
         height: 480,
@@ -815,16 +820,16 @@ class _PaymentTypePickerDialogState extends State<_PaymentTypePickerDialog> {
                 controller: _searchController,
                 autofocus: true,
                 onChanged: _onSearchChanged,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: const InputDecoration(
                   hintText: 'Search payment types',
-                  hintStyle: TextStyle(color: Colors.white54),
-                  prefixIcon: Icon(Icons.search, color: Colors.white54),
+                  hintStyle: TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -834,17 +839,17 @@ class _PaymentTypePickerDialogState extends State<_PaymentTypePickerDialog> {
                   ? const Center(
                       child: Text(
                         'No payment types found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView(
                       children: [
                         if (widget.allowClear)
                           ListTile(
-                            leading: const Icon(Icons.clear, color: Colors.white70),
+                            leading: const Icon(Icons.clear, color: Color(0xFF757575)),
                             title: const Text(
                               'All Payment Types',
-                              style: TextStyle(color: Colors.white),
+                              style: TextStyle(color: Color(0xFF212121)),
                             ),
                             onTap: () => Navigator.pop(
                               context,
@@ -855,11 +860,11 @@ class _PaymentTypePickerDialogState extends State<_PaymentTypePickerDialog> {
                           ListTile(
                             title: Text(
                               type.paymentTypeName,
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'ID: ${type.id}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                             ),
                             onTap: () => Navigator.pop(context, type),
                           ),

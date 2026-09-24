@@ -40,7 +40,12 @@ class CategoryChipOption {
 /// palette (Sports red, Music purple, Food green) with a gentle fallback
 /// for any other category.
 class TicketPanel extends StatefulWidget {
-  const TicketPanel({super.key});
+  const TicketPanel({super.key, this.showBackButton = false});
+
+  /// When pushed as a standalone route (e.g. from the Home drawer's
+  /// "Calender" item), shows a back arrow in the header so the user can
+  /// return. Stays hidden when used as a bottom-navigation tab.
+  final bool showBackButton;
 
   @override
   State<TicketPanel> createState() => _TicketPanelState();
@@ -66,10 +71,15 @@ class _TicketPanelState extends State<TicketPanel> {
   String _search = '';
   int? _filteredCategoryId;
 
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _headerKey = GlobalKey();
+  bool _showFloatingBack = false;
+
   @override
   void initState() {
     super.initState();
     _month = DateTime(DateTime.now().year, DateTime.now().month);
+    _scrollController.addListener(_onScroll);
     _load();
   }
 
@@ -291,25 +301,76 @@ class _TicketPanelState extends State<TicketPanel> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final floatingShown = widget.showBackButton && _showFloatingBack;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        statusBarBrightness: Brightness.dark,
+        statusBarIconBrightness:
+            floatingShown ? Brightness.dark : Brightness.light,
+        statusBarBrightness: floatingShown ? Brightness.light : Brightness.dark,
       ),
       child: Scaffold(
         backgroundColor: const Color(0xFFF5F6FA),
-        body: RefreshIndicator(
-          color: _kPurpleDeep,
-          backgroundColor: Colors.white,
-          onRefresh: _load,
-          child: _loading && _events.isEmpty ? _loadingView() : _body(context),
+        body: Stack(
+          children: [
+            RefreshIndicator(
+              color: _kPurpleDeep,
+              backgroundColor: Colors.white,
+              onRefresh: _load,
+              child:
+                  _loading && _events.isEmpty ? _loadingView() : _body(context),
+            ),
+            if (widget.showBackButton) _floatingBack(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _onScroll() {
+    if (!widget.showBackButton) return;
+    final ctx = _headerKey.currentContext;
+    if (ctx == null) return;
+    final renderBox = ctx.findRenderObject();
+    if (renderBox is! RenderBox) return;
+    final headerHeight = renderBox.size.height;
+    final show = _scrollController.hasClients &&
+        _scrollController.offset >= headerHeight - 1;
+    if (show != _showFloatingBack) {
+      setState(() => _showFloatingBack = show);
+    }
+  }
+
+  Widget _floatingBack(BuildContext context) {
+    final topPad = MediaQuery.paddingOf(context).top;
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Padding(
+        padding: EdgeInsets.only(top: topPad + 8, left: 12),
+        child: AnimatedOpacity(
+          opacity: _showFloatingBack ? 1 : 0,
+          duration: const Duration(milliseconds: 200),
+          child: IgnorePointer(
+            ignoring: !_showFloatingBack,
+            child: Material(
+              color: Colors.white,
+              elevation: 3,
+              shape: const CircleBorder(),
+              child: IconButton(
+                onPressed: () => Navigator.maybePop(context),
+                icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                iconSize: 20,
+                tooltip: 'Back',
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -333,6 +394,7 @@ class _TicketPanelState extends State<TicketPanel> {
     final l10n = l10nOf(context);
 
     return ListView(
+      controller: _scrollController,
       padding: EdgeInsets.zero,
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
@@ -395,6 +457,7 @@ class _TicketPanelState extends State<TicketPanel> {
 
   Widget _header(BuildContext context, double topPad) {
     return Container(
+      key: _headerKey,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [_kPurpleLight, _kPurpleDeep],
@@ -403,9 +466,14 @@ class _TicketPanelState extends State<TicketPanel> {
         ),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
       ),
-      padding: EdgeInsets.fromLTRB(16, topPad + 12, 16, 20),
+      padding: EdgeInsets.fromLTRB(
+        16, topPad + (widget.showBackButton ? 8 : 0) + 12, 16, 20),
       child: Column(
         children: [
+          if (widget.showBackButton) ...[
+            _backTitle(context),
+            const SizedBox(height: 12),
+          ],
           _searchBar(context),
           const SizedBox(height: 16),
           if (_categoryChips.isNotEmpty) ...[
@@ -417,6 +485,26 @@ class _TicketPanelState extends State<TicketPanel> {
           _toggle(context),
         ],
       ),
+    );
+  }
+
+  Widget _backTitle(BuildContext context) {
+    return Row(
+      children: [
+        IconButton(
+          onPressed: () => Navigator.maybePop(context),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          l10nOf(context).calender,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 

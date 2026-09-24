@@ -15,7 +15,7 @@ class _AccountControllerPageState extends State<AccountControllerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Color(0xFFF5F6FA),
       body: _body(),
       bottomNavigationBar: _buildBottomNavBar(),
     );
@@ -27,7 +27,7 @@ class _AccountControllerPageState extends State<AccountControllerPage> {
         return AccountInfoForm(key: _accountFormKey);
       case 1:
         return const Center(
-          child: Text('Coming soon', style: TextStyle(color: Colors.white)),
+          child: Text('Coming soon', style: TextStyle(color: Color(0xFF212121))),
         );
       default:
         return const Center();
@@ -42,9 +42,9 @@ class _AccountControllerPageState extends State<AccountControllerPage> {
 
   Widget _buildBottomNavBar() {
     return BottomNavigationBar(
-      backgroundColor: Colors.black87,
+      backgroundColor: Colors.white,
       unselectedItemColor: Colors.grey,
-      selectedItemColor: Colors.white,
+      selectedItemColor: Color(0xFF5B4DFF),
       currentIndex: _selectedIndexId,
       onTap: _onItemTapped,
       items: const [

@@ -19,7 +19,7 @@ class _WishAndCategoryControllerPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Color(0xFFF5F6FA),
       body: _body(),
       bottomNavigationBar: _buildBottomNavBar(),
     );
@@ -44,9 +44,9 @@ class _WishAndCategoryControllerPageState
 
   Widget _buildBottomNavBar() {
     return BottomNavigationBar(
-      backgroundColor: Colors.black87,
+      backgroundColor: Colors.white,
       unselectedItemColor: Colors.grey,
-      selectedItemColor: Colors.white,
+      selectedItemColor: Color(0xFF5B4DFF),
       currentIndex: _selectedIndexId,
       onTap: _onItemTapped,
       items: const [

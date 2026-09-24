@@ -211,14 +211,14 @@ class EventImageFormState extends State<EventImageForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Colors.white,
         title: const Text(
           'Delete event image?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Color(0xFF212121)),
         ),
         content: Text(
           'This will permanently delete "${img.imageName}".',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -332,12 +332,17 @@ class EventImageFormState extends State<EventImageForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -351,12 +356,12 @@ class EventImageFormState extends State<EventImageForm> {
         EventImageApiService.fullImageUrl(_existingImagePath!),
         fit: BoxFit.cover,
         errorBuilder: (context, error, stack) => const Center(
-          child: Icon(Icons.broken_image_outlined, color: Colors.white38),
+          child: Icon(Icons.broken_image_outlined, color: Color(0xFF9E9E9E)),
         ),
       );
     } else {
       child = const Center(
-        child: Icon(Icons.image_outlined, color: Colors.white38, size: 40),
+        child: Icon(Icons.image_outlined, color: Color(0xFF9E9E9E), size: 40),
       );
     }
 
@@ -365,7 +370,7 @@ class EventImageFormState extends State<EventImageForm> {
       child: Container(
         height: 160,
         width: double.infinity,
-        color: const Color(0xFF1E1E1E),
+        color: Color(0xFFF1F1F5),
         child: child,
       ),
     );
@@ -391,7 +396,7 @@ class EventImageFormState extends State<EventImageForm> {
                 child: Text(
                   'Editing Event Image ID: $_editingImageId',
                   style: const TextStyle(
-                    color: Colors.amber,
+                    color: Color(0xFF5B4DFF),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -411,7 +416,7 @@ class EventImageFormState extends State<EventImageForm> {
                                   ? 'Loading...'
                                   : 'Tap to search event')
                             : _eventNameFor(_selectedEventId!),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -424,10 +429,10 @@ class EventImageFormState extends State<EventImageForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh event list',
                 ),
               ],
@@ -436,26 +441,26 @@ class EventImageFormState extends State<EventImageForm> {
 
             TextFormField(
               controller: _imageNameController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Image Name (optional)'),
             ),
             const SizedBox(height: 16),
 
-            const Text('Image', style: TextStyle(color: Colors.white70)),
+            const Text('Image', style: TextStyle(color: Color(0xFF757575))),
             const SizedBox(height: 8),
             _buildImagePreview(),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: _pickImage,
-              icon: const Icon(Icons.photo_library_outlined, color: Colors.white),
+              icon: const Icon(Icons.photo_library_outlined, color: Color(0xFF212121)),
               label: Text(
                 _pickedImageBytes == null && _existingImagePath == null
                     ? 'Choose Image'
                     : 'Choose Different Image',
               ),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white24),
+                foregroundColor: Color(0xFF212121),
+                side: const BorderSide(color: Color(0x33000000)),
               ),
             ),
 
@@ -467,15 +472,15 @@ class EventImageFormState extends State<EventImageForm> {
                   setState(() => _setAsThumbnail = value ?? false),
               controlAffinity: ListTileControlAffinity.leading,
               contentPadding: EdgeInsets.zero,
-              activeColor: Colors.white,
-              checkColor: Colors.black,
+              activeColor: Color(0xFF5B4DFF),
+              checkColor: Color(0xFF5B4DFF),
               title: const Text(
                 'Set as event thumbnail',
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: Color(0xFF212121)),
               ),
               subtitle: const Text(
                 'Replaces whichever image is currently the thumbnail for this event',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 12),
               ),
             ),
 
@@ -486,8 +491,8 @@ class EventImageFormState extends State<EventImageForm> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Color(0xFF5B4DFF),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _isSubmitting
@@ -510,8 +515,8 @@ class EventImageFormState extends State<EventImageForm> {
               child: OutlinedButton(
                 onPressed: _openTable,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
+                  foregroundColor: Color(0xFF212121),
+                  side: const BorderSide(color: Color(0x33000000)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: const Text('View / Manage Event Images'),
@@ -550,20 +555,20 @@ class EventImageFormState extends State<EventImageForm> {
                       _filterEventId == null
                           ? 'All Events -- tap to filter'
                           : _eventNameFor(_filterEventId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
               ),
               if (_filterEventId != null)
                 IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white70),
+                  icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                   tooltip: 'Clear event filter',
                   onPressed: () => _onEventFilterChanged(null),
                 ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadEventImages,
               ),
               TextButton(
@@ -578,16 +583,16 @@ class EventImageFormState extends State<EventImageForm> {
           child: TextField(
             controller: _eventImageSearchController,
             onChanged: _filterEventImages,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF212121)),
             decoration: InputDecoration(
               hintText: 'Search by ID or image name',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
               enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
+                borderSide: BorderSide(color: Color(0x33000000)),
               ),
               focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white),
+                borderSide: BorderSide(color: Color(0xFF5B4DFF)),
               ),
             ),
           ),
@@ -599,7 +604,7 @@ class EventImageFormState extends State<EventImageForm> {
               ? const Center(
                   child: Text(
                     'No event images found',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: Color(0xFF9E9E9E)),
                   ),
                 )
               : Material(
@@ -618,10 +623,10 @@ class EventImageFormState extends State<EventImageForm> {
                               EventImageApiService.fullImageUrl(img.imagePath),
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stack) => Container(
-                                color: const Color(0xFF1E1E1E),
+                                color: Color(0xFFF1F1F5),
                                 child: const Icon(
                                   Icons.broken_image_outlined,
-                                  color: Colors.white38,
+                                  color: Color(0xFF9E9E9E),
                                   size: 20,
                                 ),
                               ),
@@ -630,7 +635,7 @@ class EventImageFormState extends State<EventImageForm> {
                         ),
                         title: Text(
                           img.imageName,
-                          style: const TextStyle(color: Colors.white),
+                          style: const TextStyle(color: Color(0xFF212121)),
                         ),
                         subtitle: Text(
                           'ID: ${img.id}  •  ${_eventNameFor(img.eventId)}'
@@ -639,7 +644,7 @@ class EventImageFormState extends State<EventImageForm> {
                           style: TextStyle(
                             color: img.isThumbnail
                                 ? Colors.amber
-                                : Colors.white54,
+                                : Color(0xFF9E9E9E),
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -651,7 +656,7 @@ class EventImageFormState extends State<EventImageForm> {
                                 img.isThumbnail ? Icons.star : Icons.star_border,
                                 color: img.isThumbnail
                                     ? Colors.amber
-                                    : Colors.white70,
+                                    : Color(0xFF757575),
                               ),
                               tooltip: img.isThumbnail
                                   ? 'This is the event thumbnail'
@@ -659,7 +664,7 @@ class EventImageFormState extends State<EventImageForm> {
                               onPressed: () => _toggleThumbnail(img),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.white70),
+                              icon: const Icon(Icons.edit, color: Color(0xFF757575)),
                               onPressed: () => _startEdit(img),
                             ),
                             IconButton(

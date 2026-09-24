@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'package:ticket_com/DeveloperPage/MainPageDashboard.dart';
+import 'package:ticket_com/DeveloperPage/employee_dashboard_page.dart';
+import 'package:ticket_com/HomePage/become_organizer_page.dart';
+import 'package:ticket_com/HomePage/my_profile_page.dart';
+import 'package:ticket_com/HomePage/organizer_dashboard_page.dart';
+import 'package:ticket_com/HomePage/organizers_page.dart';
 import 'package:ticket_com/LogSignPage/MainLoginSignUp.dart'; // adjust path
 import 'package:ticket_com/main.dart';
 import 'package:ticket_com/services/auth_service.dart';
@@ -27,6 +32,8 @@ class _SettingPanelState extends State<SettingPanel> {
         return 'ORGANIZER';
       case 3:
         return 'SUPERADMIN';
+      case 4:
+        return 'EMPLOYEE';
     }
     return null;
   }
@@ -51,6 +58,24 @@ class _SettingPanelState extends State<SettingPanel> {
         const SnackBar(content: Text('SUPERADMIN access is required')),
       );
     }
+  }
+
+  Future<void> _openEmployeeDashboard() async {
+    final session = AuthService.currentSession;
+    final canUse = (session?.isSuperAdmin ?? false) ||
+        (session?.isEmployee ?? false);
+    if (!canUse) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('SUPERADMIN or EMPLOYEE access is required'),
+        ),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const EmployeeDashboardPage()),
+    );
   }
 
   Future<void> _logout() async {
@@ -152,6 +177,10 @@ class _SettingPanelState extends State<SettingPanel> {
     final session = AuthService.currentSession;
     final roleName = _roleName;
     final canAdmin = session?.isSuperAdmin ?? false;
+    final canEmployee = (session?.isSuperAdmin ?? false) ||
+        (session?.isEmployee ?? false);
+    final isOrganizer = (session?.isOrganizer ?? false) ||
+        (session?.isSuperAdmin ?? false);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -167,15 +196,16 @@ class _SettingPanelState extends State<SettingPanel> {
           children: [
             _header(context),
             const SizedBox(height: 16),
-            if (session != null)
+            if (session != null) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: _profileCard(session, roleName),
               ),
-            if (session != null) const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _actionsCard(canAdmin),
+              child: _actionsCard(canAdmin, canEmployee, isOrganizer),
             ),
             const SizedBox(height: 24),
           ],
@@ -188,13 +218,38 @@ class _SettingPanelState extends State<SettingPanel> {
     final topPad = MediaQuery.paddingOf(context).top;
     return Padding(
       padding: EdgeInsets.fromLTRB(16, topPad + 16, 16, 0),
-      child: const Text(
-        'Settings',
-        style: TextStyle(
-          color: Color(0xFF212121),
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-        ),
+      child: Row(
+        children: [
+          if (Navigator.canPop(context)) ...[
+            Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x18000000),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back, size: 22),
+                color: const Color(0xFF212121),
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
+          const Text(
+            'Settings',
+            style: TextStyle(
+              color: Color(0xFF212121),
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -282,7 +337,7 @@ class _SettingPanelState extends State<SettingPanel> {
     );
   }
 
-  Widget _actionsCard(bool canAdmin) {
+  Widget _actionsCard(bool canAdmin, bool canEmployee, bool isOrganizer) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -318,6 +373,91 @@ class _SettingPanelState extends State<SettingPanel> {
               onTap: _checkingDeveloper ? null : _openDeveloperDashboard,
             ),
           if (canAdmin) const _CardDivider(),
+          if (canEmployee)
+            _actionTile(
+              icon: Icons.badge_outlined,
+              iconColor: const Color(0xFF00897B),
+              title: 'Employee Dashboard',
+              subtitle: 'Approve organizer identity verification',
+              titleColor: const Color(0xFF212121),
+              subtitleColor: const Color(0xFF757575),
+              trailing: const Icon(Icons.chevron_right, color: Colors.black26),
+              onTap: _openEmployeeDashboard,
+            ),
+          if (canEmployee) const _CardDivider(),
+          _actionTile(
+            icon: Icons.person_outline,
+            iconColor: kAccent,
+            title: 'Profile',
+            subtitle: 'Edit your profile & interests',
+            titleColor: const Color(0xFF212121),
+            subtitleColor: const Color(0xFF757575),
+            trailing: const Icon(Icons.chevron_right, color: Colors.black26),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const MyProfilePage(),
+                ),
+              );
+            },
+          ),
+          const _CardDivider(),
+          _actionTile(
+            icon: Icons.business_outlined,
+            iconColor: const Color(0xFF1E88E5),
+            title: 'Organizers',
+            subtitle: 'Verified organizer users',
+            titleColor: const Color(0xFF212121),
+            subtitleColor: const Color(0xFF757575),
+            trailing: const Icon(Icons.chevron_right, color: Colors.black26),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const OrganizersPage(),
+                ),
+              );
+            },
+          ),
+          const _CardDivider(),
+          if (isOrganizer)
+            _actionTile(
+              icon: Icons.dashboard_customize_outlined,
+              iconColor: const Color(0xFFFF8F00),
+              title: 'Organizers Dashboard',
+              subtitle: 'Create events & manage your team',
+              titleColor: const Color(0xFF212121),
+              subtitleColor: const Color(0xFF757575),
+              trailing: const Icon(Icons.chevron_right, color: Colors.black26),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const OrganizerDashboardPage(),
+                  ),
+                );
+              },
+            )
+          else
+            _actionTile(
+              icon: Icons.storefront_outlined,
+              iconColor: const Color(0xFFFF8F00),
+              title: l10nOf(context).becomeOrganizer,
+              subtitle: 'Verify your identity to organize events',
+              titleColor: const Color(0xFF212121),
+              subtitleColor: const Color(0xFF757575),
+              trailing: const Icon(Icons.chevron_right, color: Colors.black26),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const BecomeOrganizerPage(),
+                  ),
+                );
+              },
+            ),
+          const _CardDivider(),
           _actionTile(
             icon: Icons.language,
             iconColor: const Color(0xFF00897B),

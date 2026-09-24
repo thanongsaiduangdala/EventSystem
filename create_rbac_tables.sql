@@ -1,6 +1,6 @@
 -- RBAC: role & permission tables for the reservation_system database
 -- Roles are driven by accountstatusinfo.StatusID:
---   1 = CUSTOMER, 2 = ORGANIZER, 3 = SUPERADMIN
+--   1 = CUSTOMER, 2 = ORGANIZER, 3 = SUPERADMIN, 4 = EMPLOYEE
 
 USE reservation_system;
 
@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS rolepermissioninfo (
 UPDATE accountstatusinfo SET StatusType = 'CUSTOMER'   WHERE StatusID = 1;
 UPDATE accountstatusinfo SET StatusType = 'ORGANIZER'  WHERE StatusID = 2;
 UPDATE accountstatusinfo SET StatusType = 'SUPERADMIN' WHERE StatusID = 3;
+INSERT INTO accountstatusinfo (StatusID, StatusType)
+VALUES (4, 'EMPLOYEE')
+ON DUPLICATE KEY UPDATE StatusType = 'EMPLOYEE';
 
 -- ---------------------------------------------------------------------------
 -- Seed permissions (idempotent)
@@ -42,7 +45,8 @@ INSERT INTO permissioninfo (PermissionName, PermissionDescription) VALUES
 ('manage_event_questions',   'Create/update/delete event questions'),
 ('manage_accounts',          'Create/update/delete accounts'),
 ('manage_orders',            'View/manage orders'),
-('manage_wishlist',          'Add/remove wishlist items')
+('manage_wishlist',          'Add/remove wishlist items'),
+('manage_identity_verifications', 'Approve/deny identity verification and grant organizer access')
 ON DUPLICATE KEY UPDATE PermissionDescription = VALUES(PermissionDescription);
 
 -- ---------------------------------------------------------------------------
@@ -60,3 +64,11 @@ SELECT 2, p.PermissionID FROM permissioninfo p WHERE p.PermissionName IN
 
 INSERT IGNORE INTO rolepermissioninfo (StatusID, PermissionID)
 SELECT 3, p.PermissionID FROM permissioninfo p;
+
+-- EMPLOYEE (StatusID 4) gets the identity-review permission so they can work
+-- the Employee Dashboard; SUPERADMIN always passes, but keep the record too.
+INSERT IGNORE INTO rolepermissioninfo (StatusID, PermissionID)
+SELECT 3, p.PermissionID FROM permissioninfo p WHERE p.PermissionName = 'manage_identity_verifications';
+
+INSERT IGNORE INTO rolepermissioninfo (StatusID, PermissionID)
+SELECT 4, p.PermissionID FROM permissioninfo p WHERE p.PermissionName = 'manage_identity_verifications';

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import 'event_organizer_api_service.dart';
 import '../config/api_config.dart';
 
 class VerificationTypeModel {
@@ -99,6 +100,45 @@ class IdentityVerificationModel {
   }
 }
 
+/// Verification row enriched with the applicant's account details, returned
+/// by GET /identityverification/verification/with-details (Employee Dashboard).
+class IdentityVerificationDetailModel {
+  final IdentityVerificationModel verification;
+  final String accountFirstName;
+  final String accountLastName;
+  final String accountEmail;
+  final String accountPhone;
+  final int accountStatusId;
+  final List<EventOrganizer> organizers;
+
+  IdentityVerificationDetailModel({
+    required this.verification,
+    required this.accountFirstName,
+    required this.accountLastName,
+    required this.accountEmail,
+    required this.accountPhone,
+    required this.accountStatusId,
+    this.organizers = const [],
+  });
+
+  String get accountFullName => '$accountFirstName $accountLastName';
+
+  factory IdentityVerificationDetailModel.fromJson(Map<String, dynamic> json) {
+    return IdentityVerificationDetailModel(
+      verification: IdentityVerificationModel.fromJson(json),
+      accountFirstName: json['FirstName']?.toString() ?? '',
+      accountLastName: json['LastName']?.toString() ?? '',
+      accountEmail: json['Email']?.toString() ?? '',
+      accountPhone: json['PhoneNum']?.toString() ?? '',
+      accountStatusId: json['AccountStatusID'] as int? ?? 0,
+      organizers: (json['Organizers'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map((o) => EventOrganizer.fromJson(o))
+          .toList(),
+    );
+  }
+}
+
 class IdentityVerificationApiService {
   static String get baseUrl => ApiConfig.baseUrl;
   static const _prefix = '/identityverification';
@@ -177,6 +217,52 @@ class IdentityVerificationApiService {
           .toList();
     }
     throw _handleError(res, 'Failed to load identity verifications');
+  }
+
+  /// Employee Dashboard data: pending reviews first, with applicant account
+  /// details attached. Requires SUPERADMIN or EMPLOYEE.
+  static Future<List<IdentityVerificationDetailModel>>
+      getAllVerificationsWithAccounts() async {
+    final res = await http.get(
+      _u('/verification/with-details'),
+      headers: _authHeaders(),
+    );
+    if (res.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(res.body);
+      return data
+          .map((e) => IdentityVerificationDetailModel.fromJson(
+              e as Map<String, dynamic>))
+          .toList();
+    }
+    throw _handleError(res, 'Failed to load identity verifications');
+  }
+
+  /// Superadmin/Employee action: accept the request (status 2) AND grant the
+  /// applicant account ORGANIZER status so they can create events.
+  static Future<String> approveVerification(int verificationId) async {
+    final res = await http.post(
+      _u('/verification/$verificationId/approve'),
+      headers: _authHeaders(),
+    );
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return data['msg']?.toString() ?? 'Identity verification approved';
+    }
+    throw _handleError(res, 'Failed to approve identity verification');
+  }
+
+  /// Superadmin/Employee action: reject the request (status 3). The account
+  /// status is untouched.
+  static Future<String> denyVerification(int verificationId) async {
+    final res = await http.post(
+      _u('/verification/$verificationId/deny'),
+      headers: _authHeaders(),
+    );
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return data['msg']?.toString() ?? 'Identity verification denied';
+    }
+    throw _handleError(res, 'Failed to deny identity verification');
   }
 
   static Future<IdentityVerificationModel> getVerificationById(int id) async {

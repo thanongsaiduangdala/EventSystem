@@ -49,7 +49,7 @@ class _StaffMemberSearchDialogState extends State<StaffMemberSearchDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 420,
         height: 500,
@@ -61,16 +61,16 @@ class _StaffMemberSearchDialogState extends State<StaffMemberSearchDialog> {
                 controller: _controller,
                 autofocus: true,
                 onChanged: _filter,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: InputDecoration(
                   hintText: 'Search by ID, account, or organizer',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -80,7 +80,7 @@ class _StaffMemberSearchDialogState extends State<StaffMemberSearchDialog> {
                   ? const Center(
                       child: Text(
                         'No organizer members found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView.builder(
@@ -92,17 +92,17 @@ class _StaffMemberSearchDialogState extends State<StaffMemberSearchDialog> {
                             backgroundColor: Color(0xFF2A2A2A),
                             child: Icon(
                               Icons.badge_outlined,
-                              color: Colors.white70,
+                              color: Color(0xFF757575),
                               size: 18,
                             ),
                           ),
                           title: Text(
                             widget.labelBuilder(m),
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF212121)),
                           ),
                           subtitle: Text(
                             'ID: ${m.id}  •  ${widget.subtitleBuilder(m)}',
-                            style: const TextStyle(color: Colors.white54),
+                            style: const TextStyle(color: Color(0xFF9E9E9E)),
                           ),
                           onTap: () => Navigator.pop(context, m),
                         );

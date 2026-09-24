@@ -42,7 +42,7 @@ async def get_me(current=Depends(get_current_account)):
         con = getConnect()
         with con.cursor() as cur:
             cur.execute(
-                "SELECT AccountID, StatusID FROM accountinfo WHERE AccountID = %s",
+                "SELECT AccountID, ProfileImagePath, StatusID FROM accountinfo WHERE AccountID = %s",
                 (current["account_id"],),
             )
             row = cur.fetchone()
@@ -53,6 +53,7 @@ async def get_me(current=Depends(get_current_account)):
         return {
             "AccountID": row["AccountID"],
             "StatusID": row["StatusID"],
+            "ProfileImagePath": row["ProfileImagePath"],
             "Role": role_info["Role"],
             "Permissions": role_info["Permissions"],
         }

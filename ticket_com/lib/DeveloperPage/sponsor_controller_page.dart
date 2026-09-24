@@ -14,7 +14,7 @@ class _SponsorControllerPageState extends State<SponsorControllerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Color(0xFFF5F6FA),
       body: _body(),
     );
   }

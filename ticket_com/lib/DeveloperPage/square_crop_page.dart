@@ -67,7 +67,7 @@ class _SquareCropPageState extends State<SquareCropPage> {
         body: const Center(
           child: Text(
             "Couldn't read this image",
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: Colors.white70),
           ),
         ),
       );

@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'package:ticket_com/HomePage/checkout_page.dart';
 import 'package:ticket_com/HomePage/my_ticket_page.dart';
@@ -8,6 +11,8 @@ import 'package:ticket_com/models/sponser_models.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
+import 'package:ticket_com/services/event_organizer_api_service.dart'
+    show EventOrganizerApiService;
 import 'package:ticket_com/services/follow_api_service.dart';
 import 'package:ticket_com/services/sponser_api_service.dart';
 import 'package:ticket_com/services/orders_api_service.dart';
@@ -54,7 +59,6 @@ class EventDetailPage extends StatefulWidget {
 
 class _EventDetailPageState extends State<EventDetailPage> {
   bool _loading = true;
-  bool _aboutExpanded = false;
   bool _pinned = false;
   late bool _saved;
 
@@ -738,6 +742,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
           ],
           const SizedBox(height: 26),
           _aboutSection(context),
+          _mapSection(context),
           if (_sponsors.isNotEmpty) ...[
             const SizedBox(height: 26),
             _sponsorsSection(context),
@@ -813,6 +818,183 @@ class _EventDetailPageState extends State<EventDetailPage> {
     );
   }
 
+  /// Interactive map card showing where the event happens, with an
+  /// "Open in Maps" shortcut that can hand the location to Google Maps,
+  /// Apple Maps, Waze or OpenStreetMap.
+  Widget _mapSection(BuildContext context) {
+    final lat = widget.event.latitude;
+    final lng = widget.event.longitude;
+    if (lat == 0 && lng == 0) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE9E8F8)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14000000),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            SizedBox(
+              height: 170,
+              width: double.infinity,
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: LatLng(lat, lng),
+                  initialZoom: 13,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.reservation_system',
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: LatLng(lat, lng),
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.topCenter,
+                        child: const Icon(
+                          Icons.location_pin,
+                          color: Color(0xFFE53935),
+                          size: 44,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.navigation_outlined,
+                      color: _kIndigo, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _twoLineText(
+                      widget.event.address,
+                      'Lat ${lat.toStringAsFixed(5)}, '
+                      'Lng ${lng.toStringAsFixed(5)}',
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _openMapsChooser(context),
+                    style: TextButton.styleFrom(foregroundColor: _kIndigo),
+                    child: const Text('Open in Maps'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Bottom sheet listing map apps the location can be opened in.
+  void _openMapsChooser(BuildContext context) {
+    final lat = widget.event.latitude;
+    final lng = widget.event.longitude;
+    final address = Uri.encodeComponent(widget.event.address);
+    final entries = <(String, IconData, String)>[
+      (
+        'Google Maps',
+        Icons.location_on,
+        'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+      ),
+      (
+        'Apple Maps',
+        Icons.map_outlined,
+        'https://maps.apple.com/?ll=$lat,$lng&q=$address',
+      ),
+      (
+        'Waze',
+        Icons.directions_car_outlined,
+        'https://waze.com/ul?ll=$lat,$lng&navigate=yes',
+      ),
+      (
+        'OpenStreetMap',
+        Icons.public,
+        'https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=16/$lat/$lng',
+      ),
+    ];
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Open location in',
+                style: TextStyle(
+                  color: _kTextDark,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              for (final entry in entries)
+                ListTile(
+                  leading: Icon(entry.$2, color: _kIndigo),
+                  title: Text(
+                    entry.$1,
+                    style: const TextStyle(
+                      color: _kTextDark,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  trailing: const Icon(Icons.chevron_right,
+                      color: Color(0xFF9E9E9E)),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _launchMap(entry.$1, entry.$3);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchMap(String label, String url) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final uri = Uri.parse(url);
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not open $label')),
+        );
+      }
+    } catch (_) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not open $label')),
+      );
+    }
+  }
+
   Widget _organizerRow(BuildContext context) {
     final l10n = l10nOf(context);
     final organizer = widget.organizer;
@@ -824,7 +1006,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       avatar = ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Image.network(
-          EventImageApiService.fullImageUrl(organizer.logoPath!),
+          EventOrganizerApiService.fullImageUrl(organizer.logoPath!),
           width: 44,
           height: 44,
           fit: BoxFit.cover,
@@ -1051,48 +1233,13 @@ class _EventDetailPageState extends State<EventDetailPage> {
           ),
         ),
         const SizedBox(height: 10),
-        _aboutText(),
-        if (!_aboutExpanded)
-          GestureDetector(
-            onTap: () => setState(() => _aboutExpanded = true),
-            child: Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                l10n.readMore,
-                style: const TextStyle(
-                  color: _kIndigo,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
+        Text(
+          widget.event.description.isEmpty
+              ? 'No description provided.'
+              : widget.event.description,
+          style: const TextStyle(color: _kTextGrey, fontSize: 14, height: 1.55),
+        ),
       ],
-    );
-  }
-
-  /// Body copy with the tail fading out via a gradient mask, suggesting the
-  /// truncated / "read more" affordance.
-  Widget _aboutText() {
-    final description = widget.event.description.isEmpty
-        ? 'No description provided.'
-        : widget.event.description;
-    final text = Text(
-      description,
-      maxLines: 4,
-      overflow: TextOverflow.clip,
-      style: const TextStyle(color: _kTextGrey, fontSize: 14, height: 1.55),
-    );
-    if (_aboutExpanded) return text;
-    return ShaderMask(
-      shaderCallback: (rect) => LinearGradient(
-        colors: [Colors.black, Colors.black, Colors.transparent],
-        stops: const [0.0, 0.55, 1.0],
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-      ).createShader(rect),
-      blendMode: BlendMode.dstIn,
-      child: text,
     );
   }
 

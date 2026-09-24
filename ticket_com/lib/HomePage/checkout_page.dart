@@ -5,6 +5,7 @@ import 'package:ticket_com/services/attendee_response_api_service.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/event_question_api_service.dart';
 import 'package:ticket_com/services/orders_api_service.dart';
+import 'package:ticket_com/services/notification_service.dart';
 import 'package:ticket_com/services/ticket_attendence_api_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 
@@ -413,6 +414,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(l10n.orderPlaced)));
+      NotificationService.instance.refresh(force: true);
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;

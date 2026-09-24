@@ -17,7 +17,7 @@ class _OrganizerControllerPageState extends State<OrganizerControllerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Color(0xFFF5F6FA),
       body: _body(),
       bottomNavigationBar: _bottomNavBar(),
     );
@@ -44,9 +44,9 @@ class _OrganizerControllerPageState extends State<OrganizerControllerPage> {
 
   Widget _bottomNavBar() {
     return BottomNavigationBar(
-      selectedItemColor: Colors.blue,
-      unselectedItemColor: Colors.white,
-      backgroundColor: Colors.black87,
+      selectedItemColor: Color(0xFF5B4DFF),
+      unselectedItemColor: Color(0xFF5B4DFF),
+      backgroundColor: Colors.white,
       currentIndex: _selectedIndexId,
       onTap: _onItemTapped,
       items: const [

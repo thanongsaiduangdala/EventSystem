@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -31,6 +32,7 @@ class UserSession {
   final String lastname;
   final String email;
   final String phoneNum;
+  final String profileImagePath; // relative /static/... path, '' if none
 
   UserSession({
     required this.accountId,
@@ -41,14 +43,26 @@ class UserSession {
     required this.lastname,
     required this.email,
     required this.phoneNum,
+    this.profileImagePath = '',
   });
 
   bool get isSuperAdmin => role == 'SUPERADMIN' || statusId == 3;
   bool get isOrganizer => role == 'ORGANIZER' || statusId == 2;
   bool get isCustomer => role == 'CUSTOMER' || statusId == 1;
+  bool get isEmployee => role == 'EMPLOYEE' || statusId == 4;
 
   bool hasPermission(String permission) =>
       isSuperAdmin || permissions.contains(permission);
+
+  /// Absolute URL for the profile image (backend returns a relative path).
+  String get profileImageUrl {
+    if (profileImagePath.isEmpty) return '';
+    if (profileImagePath.startsWith('http://') ||
+        profileImagePath.startsWith('https://')) {
+      return profileImagePath;
+    }
+    return '${ApiConfig.baseUrl}$profileImagePath';
+  }
 
   Map<String, dynamic> toJson() => {
     'AccountID': accountId,
@@ -59,6 +73,7 @@ class UserSession {
     'lastname': lastname,
     'Email': email,
     'PhoneNum': phoneNum,
+    'ProfileImagePath': profileImagePath,
   };
 
   factory UserSession.fromJson(Map<String, dynamic> json) => UserSession(
@@ -70,6 +85,7 @@ class UserSession {
     lastname: json['lastname']?.toString() ?? '',
     email: json['Email']?.toString() ?? '',
     phoneNum: json['PhoneNum']?.toString() ?? '',
+    profileImagePath: json['ProfileImagePath']?.toString() ?? '',
   );
 
   static List<String> _parsePermissions(dynamic raw) {
@@ -196,6 +212,8 @@ class AuthService {
       lastname: old.lastname,
       email: old.email,
       phoneNum: old.phoneNum,
+      profileImagePath:
+          data['ProfileImagePath']?.toString() ?? old.profileImagePath,
     );
     currentSession = updated;
     final prefs = await SharedPreferences.getInstance();
@@ -207,4 +225,82 @@ class AuthService {
   /// True when the current session has the named permission (SUPERADMIN always passes).
   static bool hasPermission(String permission) =>
       currentSession?.hasPermission(permission) ?? false;
+
+  /// Replaces the stored session profile details (name, phone, email) and
+  /// persists the change so it survives an app restart.
+  static Future<void> updateProfile({
+    required String firstname,
+    required String lastname,
+    required String phoneNum,
+    required String email,
+  }) async {
+    final session = currentSession;
+    if (session == null) return;
+    final updated = UserSession(
+      accountId: session.accountId,
+      statusId: session.statusId,
+      role: session.role,
+      permissions: session.permissions,
+      firstname: firstname,
+      lastname: lastname,
+      phoneNum: phoneNum,
+      email: email,
+      profileImagePath: session.profileImagePath,
+    );
+    currentSession = updated;
+    final prefs = await SharedPreferences.getInstance();
+    final remembered = prefs.getBool(_rememberKey) ?? false;
+    await saveSession(updated, remembered);
+  }
+
+  /// Uploads a new profile picture for the signed-in account. Requires a
+  /// logged-in session (a bearer token). Returns the new profile image URL.
+  static Future<String> updateProfilePicture({
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    final token = currentToken;
+    if (token == null) {
+      throw Exception('Not logged in');
+    }
+
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/profile-picture'),
+    );
+    request.headers['Authorization'] = 'Bearer $token';
+    request.files.add(
+      http.MultipartFile.fromBytes('file', bytes, filename: filename),
+    );
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update profile picture');
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final path = data['ProfileImagePath']?.toString() ?? '';
+
+    final session = currentSession;
+    if (session != null) {
+      final updated = UserSession(
+        accountId: session.accountId,
+        statusId: session.statusId,
+        role: session.role,
+        permissions: session.permissions,
+        firstname: session.firstname,
+        lastname: session.lastname,
+        phoneNum: session.phoneNum,
+        email: session.email,
+        profileImagePath: path,
+      );
+      currentSession = updated;
+      final prefs = await SharedPreferences.getInstance();
+      final remembered = prefs.getBool(_rememberKey) ?? false;
+      await saveSession(updated, remembered);
+    }
+
+    return data['ProfileImagePath']?.toString() ?? '';
+  }
 }

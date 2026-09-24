@@ -128,11 +128,11 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Delete sponsor?', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: const Text('Delete sponsor?', style: TextStyle(color: Color(0xFF212121))),
         content: Text(
           'This will permanently delete "${sponsor.name}".',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -206,12 +206,17 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -241,7 +246,7 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
                 child: Text(
                   'Editing Sponsor ID: $_editingSponsorId',
                   style: const TextStyle(
-                    color: Colors.amber,
+                    color: Color(0xFF5B4DFF),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -252,7 +257,7 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
 
             TextFormField(
               controller: _nameController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Sponsor Name'),
               validator: _requiredValidator,
             ),
@@ -263,8 +268,8 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Color(0xFF5B4DFF),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _isSubmitting
@@ -285,8 +290,8 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
               child: OutlinedButton(
                 onPressed: _openTable,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
+                  foregroundColor: Color(0xFF212121),
+                  side: const BorderSide(color: Color(0x33000000)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: const Text('View / Manage Sponsors'),
@@ -316,9 +321,9 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
         width: 140,
         height: 140,
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
+          color: Color(0xFFF1F1F5),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white24),
+          border: Border.all(color: Color(0x33000000)),
         ),
         clipBehavior: Clip.antiAlias,
         child: _buildLogoPreview(),
@@ -345,12 +350,12 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.add_photo_alternate_outlined, color: Colors.white54, size: 32),
+          Icon(Icons.add_photo_alternate_outlined, color: Color(0xFF9E9E9E), size: 32),
           SizedBox(height: 6),
           Text(
             'Tap to choose logo',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white54, fontSize: 12),
+            style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 12),
           ),
         ],
       ),
@@ -368,14 +373,14 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
                 child: Text(
                   'Sponsors',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF212121),
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadSponsors,
               ),
               TextButton(
@@ -390,16 +395,16 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
           child: TextField(
             controller: _sponsorSearchController,
             onChanged: _filterSponsors,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF212121)),
             decoration: InputDecoration(
               hintText: 'Search by name or ID',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
               enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
+                borderSide: BorderSide(color: Color(0x33000000)),
               ),
               focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white),
+                borderSide: BorderSide(color: Color(0xFF5B4DFF)),
               ),
             ),
           ),
@@ -411,7 +416,7 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
                   ? const Center(
                       child: Text(
                         'No sponsors found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : Material(
@@ -434,7 +439,7 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
                                     color: const Color(0xFF2A2A2A),
                                     child: const Icon(
                                       Icons.image_not_supported_outlined,
-                                      color: Colors.white38,
+                                      color: Color(0xFF9E9E9E),
                                       size: 18,
                                     ),
                                   ),
@@ -443,17 +448,17 @@ class SponsorInfoFormState extends State<SponsorInfoForm> {
                             ),
                             title: Text(
                               sponsor.name,
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'ID: ${sponsor.id}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.white70),
+                                  icon: const Icon(Icons.edit, color: Color(0xFF757575)),
                                   onPressed: () => _startEdit(sponsor),
                                 ),
                                 IconButton(

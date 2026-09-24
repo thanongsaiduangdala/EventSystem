@@ -241,11 +241,11 @@ class EventInfoFormState extends State<EventInfoForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Delete event?', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: const Text('Delete event?', style: TextStyle(color: Color(0xFF212121))),
         content: Text(
           'This will permanently delete "${event.name}".',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -348,12 +348,17 @@ class EventInfoFormState extends State<EventInfoForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -383,7 +388,7 @@ class EventInfoFormState extends State<EventInfoForm> {
                 child: Text(
                   'Editing Event ID: $_editingEventId',
                   style: const TextStyle(
-                    color: Colors.amber,
+                    color: Color(0xFF5B4DFF),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -391,7 +396,7 @@ class EventInfoFormState extends State<EventInfoForm> {
 
             TextFormField(
               controller: _nameController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Event Name'),
               validator: _requiredValidator,
             ),
@@ -411,7 +416,7 @@ class EventInfoFormState extends State<EventInfoForm> {
                                 ? 'Loading...'
                                 : 'Tap to select organizer')
                             : _organizerNameFor(_selectedOrganizerId!),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -424,10 +429,10 @@ class EventInfoFormState extends State<EventInfoForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh organizer list',
                 ),
               ],
@@ -443,7 +448,7 @@ class EventInfoFormState extends State<EventInfoForm> {
                       decoration: _decoration('Start Date/Time'),
                       child: Text(
                         _formatForDisplay(_startDateTime),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -456,7 +461,7 @@ class EventInfoFormState extends State<EventInfoForm> {
                       decoration: _decoration('End Date/Time'),
                       child: Text(
                         _formatForDisplay(_endDateTime),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -467,7 +472,7 @@ class EventInfoFormState extends State<EventInfoForm> {
 
             TextFormField(
               controller: _addressController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Address'),
               validator: _requiredValidator,
             ),
@@ -478,7 +483,7 @@ class EventInfoFormState extends State<EventInfoForm> {
                 Expanded(
                   child: TextFormField(
                     controller: _latitudeController,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Color(0xFF212121)),
                     decoration: _decoration('Latitude'),
                     keyboardType:
                         const TextInputType.numberWithOptions(
@@ -500,7 +505,7 @@ class EventInfoFormState extends State<EventInfoForm> {
                 Expanded(
                   child: TextFormField(
                     controller: _longitudeController,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Color(0xFF212121)),
                     decoration: _decoration('Longitude'),
                     keyboardType:
                         const TextInputType.numberWithOptions(
@@ -524,7 +529,7 @@ class EventInfoFormState extends State<EventInfoForm> {
 
             TextFormField(
               controller: _descriptionController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Description'),
               maxLines: 4,
               validator: _requiredValidator,
@@ -533,15 +538,15 @@ class EventInfoFormState extends State<EventInfoForm> {
 
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              activeThumbColor: Colors.white,
+              activeThumbColor: Color(0xFF5B4DFF),
               title: const Text(
                 'One ticket per person (anti-reselling)',
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(color: Color(0xFF757575)),
               ),
               subtitle: const Text(
                 'Buyers must enter a National ID / Passport number, and '
                 'the same ID can only be used once for this event.',
-                style: TextStyle(color: Colors.white38, fontSize: 12),
+                style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 12),
               ),
               value: _onePerPerson,
               onChanged: (v) => setState(() => _onePerPerson = v),
@@ -553,8 +558,8 @@ class EventInfoFormState extends State<EventInfoForm> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Color(0xFF5B4DFF),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _isSubmitting
@@ -573,8 +578,8 @@ class EventInfoFormState extends State<EventInfoForm> {
               child: OutlinedButton(
                 onPressed: _openTable,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
+                  foregroundColor: Color(0xFF212121),
+                  side: const BorderSide(color: Color(0x33000000)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: const Text('View / Manage Events'),
@@ -613,20 +618,20 @@ class EventInfoFormState extends State<EventInfoForm> {
                       _filterOrganizerId == null
                           ? 'All Organizers -- tap to filter'
                           : _organizerNameFor(_filterOrganizerId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
               ),
               if (_filterOrganizerId != null)
                 IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white70),
+                  icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                   tooltip: 'Clear organizer filter',
                   onPressed: () => _onOrganizerFilterChanged(null),
                 ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadEvents,
               ),
               TextButton(
@@ -641,16 +646,16 @@ class EventInfoFormState extends State<EventInfoForm> {
           child: TextField(
             controller: _eventSearchController,
             onChanged: _filterEvents,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF212121)),
             decoration: InputDecoration(
               hintText: 'Search by ID, name, or address',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
               enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
+                borderSide: BorderSide(color: Color(0x33000000)),
               ),
               focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white),
+                borderSide: BorderSide(color: Color(0xFF5B4DFF)),
               ),
             ),
           ),
@@ -662,7 +667,7 @@ class EventInfoFormState extends State<EventInfoForm> {
                   ? const Center(
                       child: Text(
                         'No events found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : Material(
@@ -674,20 +679,20 @@ class EventInfoFormState extends State<EventInfoForm> {
                           return ListTile(
                             title: Text(
                               event.name,
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'ID: ${event.id}  •  ${_organizerNameFor(event.organizerId)}  •  '
                               '${_formatForDisplay(event.start)}  →  ${_formatForDisplay(event.end)}'
                               '${event.onePerPerson ? "  •  1 ticket / person" : ""}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                               overflow: TextOverflow.ellipsis,
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.white70),
+                                  icon: const Icon(Icons.edit, color: Color(0xFF757575)),
                                   onPressed: () => _startEdit(event),
                                 ),
                                 IconButton(
@@ -751,7 +756,7 @@ class _OrganizerPickerDialogState extends State<_OrganizerPickerDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 400,
         height: 480,
@@ -763,16 +768,16 @@ class _OrganizerPickerDialogState extends State<_OrganizerPickerDialog> {
                 controller: _searchController,
                 autofocus: true,
                 onChanged: _onSearchChanged,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: const InputDecoration(
                   hintText: 'Search organizers',
-                  hintStyle: TextStyle(color: Colors.white54),
-                  prefixIcon: Icon(Icons.search, color: Colors.white54),
+                  hintStyle: TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -782,17 +787,17 @@ class _OrganizerPickerDialogState extends State<_OrganizerPickerDialog> {
                   ? const Center(
                       child: Text(
                         'No organizers found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView(
                       children: [
                         if (widget.allowClear)
                           ListTile(
-                            leading: const Icon(Icons.clear, color: Colors.white70),
+                            leading: const Icon(Icons.clear, color: Color(0xFF757575)),
                             title: const Text(
                               'All Organizers',
-                              style: TextStyle(color: Colors.white),
+                              style: TextStyle(color: Color(0xFF212121)),
                             ),
                             onTap: () => Navigator.pop(
                               context,
@@ -807,11 +812,11 @@ class _OrganizerPickerDialogState extends State<_OrganizerPickerDialog> {
                           ListTile(
                             title: Text(
                               organizer.name,
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'ID: ${organizer.id}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                             ),
                             onTap: () => Navigator.pop(context, organizer),
                           ),

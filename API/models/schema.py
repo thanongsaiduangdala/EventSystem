@@ -59,6 +59,10 @@ class UpdateEventInfoRequest(BaseModel):
     Latitude: float
     OnePerPerson: bool = False
 
+class UpdateEventStatusRequest(BaseModel):
+    EventID: int
+    EventStatusID: int
+
 class AddTicketTypeRequest(BaseModel):
     EventID: int
     TypeName: str
@@ -466,3 +470,11 @@ class AddAccountCategoryRequest(BaseModel):
 class AddEventViewRequest(BaseModel):
     AccountID: int
     EventID: int
+
+
+# ---------- notificationinfo ----------
+class AddNotificationRequest(BaseModel):
+    AccountID: int
+    NotificationType: str = "system"
+    Title: str
+    Body: str

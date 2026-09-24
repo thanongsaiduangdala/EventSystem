@@ -40,7 +40,7 @@ class _SponserSearchDialogState extends State<SponserSearchDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 400,
         height: 500,
@@ -52,16 +52,16 @@ class _SponserSearchDialogState extends State<SponserSearchDialog> {
                 controller: _controller,
                 autofocus: true,
                 onChanged: _filter,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: InputDecoration(
                   hintText: 'Search by ID or sponsor name',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -71,7 +71,7 @@ class _SponserSearchDialogState extends State<SponserSearchDialog> {
                   ? const Center(
                       child: Text(
                         'No sponsors found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView.builder(
@@ -89,7 +89,7 @@ class _SponserSearchDialogState extends State<SponserSearchDialog> {
                                       color: const Color(0xFF2A2A2A),
                                       child: const Icon(
                                         Icons.handshake_outlined,
-                                        color: Colors.white38,
+                                        color: Color(0xFF9E9E9E),
                                         size: 18,
                                       ),
                                     )
@@ -103,7 +103,7 @@ class _SponserSearchDialogState extends State<SponserSearchDialog> {
                                         color: const Color(0xFF2A2A2A),
                                         child: const Icon(
                                           Icons.broken_image_outlined,
-                                          color: Colors.white38,
+                                          color: Color(0xFF9E9E9E),
                                           size: 18,
                                         ),
                                       ),
@@ -112,11 +112,11 @@ class _SponserSearchDialogState extends State<SponserSearchDialog> {
                           ),
                           title: Text(
                             s.name,
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF212121)),
                           ),
                           subtitle: Text(
                             'ID: ${s.id}',
-                            style: const TextStyle(color: Colors.white54),
+                            style: const TextStyle(color: Color(0xFF9E9E9E)),
                           ),
                           onTap: () => Navigator.pop(context, s),
                         );

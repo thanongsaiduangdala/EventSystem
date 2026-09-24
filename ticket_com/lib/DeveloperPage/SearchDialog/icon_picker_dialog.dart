@@ -38,7 +38,7 @@ class _IconPickerDialogState extends State<IconPickerDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 420,
         height: 500,
@@ -50,16 +50,16 @@ class _IconPickerDialogState extends State<IconPickerDialog> {
                 controller: _controller,
                 autofocus: true,
                 onChanged: _filter,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: InputDecoration(
                   hintText: 'Search icons',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -69,7 +69,7 @@ class _IconPickerDialogState extends State<IconPickerDialog> {
                   ? const Center(
                       child: Text(
                         'No icons found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : GridView.builder(
@@ -95,7 +95,7 @@ class _IconPickerDialogState extends State<IconPickerDialog> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(option.icon, color: Colors.white, size: 28),
+                                Icon(option.icon, color: Color(0xFF5B4DFF), size: 28),
                                 const SizedBox(height: 6),
                                 Text(
                                   option.label,
@@ -103,7 +103,7 @@ class _IconPickerDialogState extends State<IconPickerDialog> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    color: Colors.white54,
+                                    color: Color(0xFF9E9E9E),
                                     fontSize: 10,
                                   ),
                                 ),

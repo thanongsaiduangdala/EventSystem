@@ -164,6 +164,38 @@ class EventOrganizerApiService {
     }
   }
 
+  /// Self-service "become an organizer" application. Any logged-in user may
+  /// create a profile for their own account while identity verification is
+  /// pending -- no `manage_event_organizer` permission required.
+  static Future<Map<String, dynamic>> applyOrganizer({
+    required Uint8List bytes,
+    required String filename,
+    required String name,
+    required int createdByAccountId,
+    String? description,
+  }) async {
+    final req = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/eventorganizer/organizer/apply'),
+    );
+    req.headers.addAll(_multipartAuthHeaders());
+    req.fields['EventOrganizerName'] = name;
+    req.fields['CreatedByAccountID'] = createdByAccountId.toString();
+    if (description != null) {
+      req.fields['EventOrganizerDiscription'] = description;
+    }
+    req.files.add(
+      http.MultipartFile.fromBytes('logo', bytes, filename: filename),
+    );
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } else {
+      throw _handleError(res, 'Failed to submit organizer application');
+    }
+  }
+
   /// Updates an existing organizer's fields and, if provided, swaps its logo
   /// file -- same shape as SponserApiService.replaceSponserLogo.
   static Future<Map<String, dynamic>> replaceOrganizerLogo({

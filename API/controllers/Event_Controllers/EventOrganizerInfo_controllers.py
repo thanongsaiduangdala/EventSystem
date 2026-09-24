@@ -4,7 +4,10 @@ import pymysql
 from fastapi import HTTPException, status, Depends, UploadFile, File, Form
 from DB.DBConnect import getConnect
 from models.schema import AddEventOrganizerInfoRequest, UpdateEventOrganizerInfoRequest
-from auth.dependencies import require_permission
+from auth.dependencies import require_permission, get_current_account
+from controllers.Event_Controllers.Notification_controllers import (
+    notify_accounts, staff_account_ids
+)
 
 # Mirrors the sponsor logo upload convention: files land in static/<subfolder>,
 # and the DB stores the path relative to that -- fullImageUrl() on the Flutter
@@ -78,6 +81,79 @@ async def upload_eventorganizer(
             EventOrganizer_ID = cur.lastrowid
 
         return {"msg": "Event organizer created successfully", "EventOrganizer_ID": EventOrganizer_ID}
+
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def apply_eventorganizer(
+    EventOrganizerName: str = Form(...),
+    CreatedByAccountID: int = Form(...),
+    EventOrganizerDiscription: str | None = Form(None),
+    logo: UploadFile = File(...),
+    current=Depends(get_current_account),
+):
+    """Self-service "become an organizer" application. Any logged-in user may
+    create an organizer profile for their OWN account while their identity
+    verification is pending -- no `manage_event_organizer` permission needed
+    (that permission only kicks in after they are approved to be an
+    ORGANIZER). Rejects the request if the account already has a profile."""
+    try:
+        if current["account_id"] != CreatedByAccountID:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only create an organizer profile for your own account",
+            )
+
+        con = getConnect()
+        with con.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) AS cnt FROM eventorganizerinfo WHERE CreatedByAccountID = %s",
+                (CreatedByAccountID,),
+            )
+            row = cur.fetchone()
+        if row is not None and row["cnt"] > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="You already have an organizer profile",
+            )
+
+        logo_path = _save_logo_file(logo)
+
+        with con.cursor() as cur:
+            sql = """
+                INSERT INTO eventorganizerinfo
+                (EventOrganizerName, EventOrganizerLogoPath, CreatedByAccountID, EventOrganizerDiscription)
+                VALUES (%s, %s, %s, %s)
+            """
+            cur.execute(sql, (
+                EventOrganizerName,
+                logo_path,
+                CreatedByAccountID,
+                EventOrganizerDiscription,
+            ))
+            con.commit()
+            EventOrganizer_ID = cur.lastrowid
+
+            cur.execute(
+                "SELECT CONCAT(FirstName, ' ', LastName) AS FullName "
+                "FROM accountinfo WHERE AccountID = %s",
+                (CreatedByAccountID,),
+            )
+            name_row = cur.fetchone()
+
+        full_name = name_row["FullName"] if name_row else "Someone"
+        notify_accounts(
+            staff_account_ids(),
+            "system",
+            "New organizer application",
+            f"{full_name} submitted a Become Organizer application for "
+            f"'{EventOrganizerName}'. Review it in the Employee Dashboard.",
+        )
+
+        return {"msg": "Event organizer application received", "EventOrganizerID": EventOrganizer_ID}
 
     except HTTPException:
         raise

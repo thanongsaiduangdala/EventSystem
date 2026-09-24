@@ -29,6 +29,12 @@ class EventOrganizer {
   }
 }
 
+class EventStatus {
+  static const int pending = 1;
+  static const int approved = 2;
+  static const int denied = 3;
+}
+
 class EventModel {
   final int id;
   final String name;
@@ -40,6 +46,7 @@ class EventModel {
   final String description;
   final int organizerId;
   final bool onePerPerson;
+  final int eventStatusId;
 
   EventModel({
     required this.id,
@@ -52,6 +59,7 @@ class EventModel {
     required this.description,
     required this.organizerId,
     this.onePerPerson = false,
+    this.eventStatusId = EventStatus.approved,
   });
 
   factory EventModel.fromJson(Map<String, dynamic> json) {
@@ -67,6 +75,7 @@ class EventModel {
       description: json['EventDescription'] as String,
       organizerId: json['EventOrganizerID'] as int,
       onePerPerson: rawFlag == 1 || rawFlag == true,
+      eventStatusId: (json['EventStatusID'] as int?) ?? EventStatus.approved,
     );
   }
 }
@@ -122,6 +131,41 @@ class EventApiService {
           .toList();
     } else {
       throw throw _handleError(response, 'Failed to load events');
+    }
+  }
+
+  /// Management view: every event including Pending/Denied ones, so
+  /// organizers can track approval and admins can review submissions.
+  static Future<List<EventModel>> getAllEventsWithStatus() async {
+    final url = Uri.parse('$baseUrl/event/all-with-status');
+    final response = await http.get(url, headers: _authHeaders());
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final List<dynamic> events = data['events'] as List<dynamic>;
+      return events
+          .map((e) => EventModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } else {
+      throw throw _handleError(response, 'Failed to load events');
+    }
+  }
+
+  /// Admin/employee action: approve (2) or deny (3) an event.
+  static Future<void> setEventStatus({
+    required int eventId,
+    required int eventStatusId,
+  }) async {
+    final url = Uri.parse('$baseUrl/event/status');
+    final response = await http.put(
+      url,
+      headers: _authHeaders(),
+      body: jsonEncode({
+        'EventID': eventId,
+        'EventStatusID': eventStatusId,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw _handleError(response, 'Failed to update event status');
     }
   }
 

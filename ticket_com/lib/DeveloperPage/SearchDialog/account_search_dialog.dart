@@ -40,7 +40,7 @@ class _AccountSearchDialogState extends State<AccountSearchDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 400,
         height: 500,
@@ -52,16 +52,16 @@ class _AccountSearchDialogState extends State<AccountSearchDialog> {
                 controller: _controller,
                 autofocus: true,
                 onChanged: _filter,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: InputDecoration(
                   hintText: 'Search by ID, name, or email',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -71,7 +71,7 @@ class _AccountSearchDialogState extends State<AccountSearchDialog> {
                   ? const Center(
                       child: Text(
                         'No verified accounts found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView.builder(
@@ -91,12 +91,12 @@ class _AccountSearchDialogState extends State<AccountSearchDialog> {
                             a.fullName.isEmpty
                                 ? 'Account #${a.id}'
                                 : a.fullName,
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF212121)),
                           ),
                           subtitle: Text(
                             'ID: ${a.id}'
                             '${a.email.isNotEmpty ? '  •  ${a.email}' : ''}',
-                            style: const TextStyle(color: Colors.white54),
+                            style: const TextStyle(color: Color(0xFF9E9E9E)),
                           ),
                           onTap: () => Navigator.pop(context, a),
                         );

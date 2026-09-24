@@ -51,16 +51,16 @@ class _EventSearchDialogState extends State<EventSearchDialog> {
               child: TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: InputDecoration(
                   hintText: 'Search by name or ID',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -70,7 +70,7 @@ class _EventSearchDialogState extends State<EventSearchDialog> {
                   ? const Center(
                       child: Text(
                         'No events found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView.builder(
@@ -80,11 +80,11 @@ class _EventSearchDialogState extends State<EventSearchDialog> {
                         return ListTile(
                           title: Text(
                             event.name,
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF212121)),
                           ),
                           subtitle: Text(
                             'ID: ${event.id}',
-                            style: const TextStyle(color: Colors.white54),
+                            style: const TextStyle(color: Color(0xFF9E9E9E)),
                           ),
                           onTap: () => Navigator.pop(context, event),
                         );

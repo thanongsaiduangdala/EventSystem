@@ -1,9 +1,12 @@
 import os
 import uuid
+from datetime import datetime
 import pymysql
-from fastapi import HTTPException, UploadFile, File, status
+from fastapi import HTTPException, UploadFile, File, Depends, status
 from DB.DBConnect import getConnect
 from models.schema import AddIdentityVerificationRequest, UpdateIdentityVerificationRequest
+from auth.dependencies import require_employee_or_superadmin
+from controllers.Event_Controllers.Notification_controllers import notify_accounts
 
 # Relative to the backend's working directory / static file mount, matching
 # the same "<baseUrl>/static/<path>" convention CategoryIconPath already uses.
@@ -90,6 +93,51 @@ async def get_all_identityverifications():
             sql = "SELECT * FROM identityverification"
             cur.execute(sql)
             rows = cur.fetchall()
+
+        return rows
+
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def get_identityverifications_with_accounts(
+    current=Depends(require_employee_or_superadmin),
+):
+    """
+    Identity verification records joined with their account's basic details and
+    the applicant's organization profile(s). Consumed by the Employee
+    Dashboard -- pending reviews are listed first, then denied, then accepted,
+    newest submissions on top. Each row includes an "Organizers" array built
+    from eventorganizerinfo (matched by CreatedByAccountID), so the detail
+    view can show organization info without needing extra permissions.
+    """
+    try:
+        con = getConnect()
+        with con.cursor() as cur:
+            sql = """
+                SELECT iv.*, a.FirstName, a.LastName, a.Email, a.PhoneNum,
+                       a.StatusID AS AccountStatusID
+                FROM identityverification iv
+                INNER JOIN accountinfo a ON a.AccountID = iv.AccountID
+                ORDER BY FIELD(iv.VerificationStatusID, 1, 3, 2),
+                         iv.SubmittedAtYMDT DESC
+            """
+            cur.execute(sql)
+            rows = cur.fetchall()
+
+            organizers_by_account = {}
+            cur.execute(
+                """
+                SELECT *
+                FROM eventorganizerinfo
+                ORDER BY EventOrganizerName
+                """
+            )
+            for org in cur.fetchall():
+                organizers_by_account.setdefault(org["CreatedByAccountID"], []).append(org)
+
+        for row in rows:
+            row["Organizers"] = organizers_by_account.get(row["AccountID"], [])
 
         return rows
 
@@ -217,6 +265,110 @@ async def delete_identityverification(verfication_id: int):
             con.commit()
 
         return {"msg": "Identity verification deleted successfully", "VerificationID": verfication_id}
+
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+def _review_identityverification(verfication_id: int, reviewer_account_id: int, new_status_id: int):
+    """Shared review helper: marks a verification with the given status and
+    records who reviewed it and when. Returns the verification's AccountID."""
+    con = getConnect()
+    try:
+        with con.cursor() as cur:
+            cur.execute(
+                "SELECT AccountID FROM identityverification WHERE VerificationID = %s",
+                (verfication_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Identity verification not found")
+
+            cur.execute(
+                """
+                UPDATE identityverification
+                SET VerificationStatusID = %s,
+                    ReviewedByAccountID = %s,
+                    ReviewedAtYMDT = %s
+                WHERE VerificationID = %s
+                """,
+                (new_status_id, reviewer_account_id, datetime.now(), verfication_id),
+            )
+            con.commit()
+            return row["AccountID"]
+    except HTTPException:
+        con.rollback()
+        raise
+    except pymysql.MySQLError as err:
+        con.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+    finally:
+        con.close()
+
+
+async def approve_identityverification(
+    verfication_id: int,
+    current=Depends(require_employee_or_superadmin),
+):
+    """
+    Employee/Superadmin action: accepts a pending organizer identity request
+    (VerificationStatusID = 2) and grants the account ORGANIZER access
+    (accountinfo.StatusID = 2) so they can create events right away.
+    """
+    try:
+        account_id = _review_identityverification(verfication_id, current["account_id"], 2)
+
+        con = getConnect()
+        with con.cursor() as cur:
+            cur.execute(
+                "UPDATE accountinfo SET StatusID = 2 WHERE AccountID = %s",
+                (account_id,),
+            )
+            con.commit()
+            cur.execute(
+                "SELECT CONCAT(FirstName, ' ', LastName) AS FullName "
+                "FROM accountinfo WHERE AccountID = %s",
+                (account_id,),
+            )
+            name_row = cur.fetchone()
+
+        full_name = name_row["FullName"] if name_row else ""
+        greeting = f", {full_name}" if full_name else ""
+        notify_accounts(
+            [account_id],
+            "system",
+            "Organizer application approved",
+            f"Congratulations{greeting}! Your identity has been verified. "
+            "Log out and log back in to access the Organizers Dashboard.",
+        )
+
+        return {"msg": "Identity verification approved and organizer access granted", "VerificationID": verfication_id}
+
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def deny_identityverification(
+    verfication_id: int,
+    current=Depends(require_employee_or_superadmin),
+):
+    """Employee/Superadmin action: rejects a pending organizer identity request
+    (VerificationStatusID = 3). The account is NOT changed."""
+    try:
+        account_id = _review_identityverification(verfication_id, current["account_id"], 3)
+        notify_accounts(
+            [account_id],
+            "system",
+            "Organizer application denied",
+            "Your Become Organizer application was not approved. "
+            "Review the details and submit a new application with correct "
+            "information.",
+        )
+        return {"msg": "Identity verification denied", "VerificationID": verfication_id}
 
     except HTTPException:
         raise

@@ -197,15 +197,15 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Colors.white,
         title: const Text(
           'Remove team member?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Color(0xFF212121)),
         ),
         content: Text(
           'This will remove "${_accountLabelFor(member.accountId)}" from '
           '"${_organizerLabelFor(member.eventOrganizerId)}".',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -278,12 +278,17 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -305,7 +310,7 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
               child: Text(
                 'Editing Member ID: $_editingMemberId',
                 style: const TextStyle(
-                  color: Colors.amber,
+                  color: Color(0xFF5B4DFF),
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -325,7 +330,7 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
                                 ? 'Loading...'
                                 : 'Tap to search verified accounts')
                           : _accountLabelFor(_selectedAccountId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
@@ -338,10 +343,10 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white70,
+                          color: Color(0xFF757575),
                         ),
                       )
-                    : const Icon(Icons.refresh, color: Colors.white70),
+                    : const Icon(Icons.refresh, color: Color(0xFF757575)),
               ),
             ],
           ),
@@ -361,7 +366,7 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
                                 ? 'Loading...'
                                 : 'Tap to search organizers')
                           : _organizerLabelFor(_selectedOrganizerId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
@@ -374,10 +379,10 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white70,
+                          color: Color(0xFF757575),
                         ),
                       )
-                    : const Icon(Icons.refresh, color: Colors.white70),
+                    : const Icon(Icons.refresh, color: Color(0xFF757575)),
               ),
             ],
           ),
@@ -386,11 +391,11 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
           DropdownButtonFormField<int>(
             initialValue: _selectedTeamRoleId,
             decoration: _decoration('Team Role'),
-            dropdownColor: const Color(0xFF1E1E1E),
-            style: const TextStyle(color: Colors.white),
+            dropdownColor: Colors.white,
+            style: const TextStyle(color: Color(0xFF212121)),
             hint: Text(
               _loadingRoles ? 'Loading...' : 'Select a role',
-              style: const TextStyle(color: Colors.white54),
+              style: const TextStyle(color: Color(0xFF9E9E9E)),
             ),
             items: _teamRoles
                 .map(
@@ -411,8 +416,8 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
             child: ElevatedButton(
               onPressed: _isSubmitting ? null : _submit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
+                backgroundColor: Color(0xFF5B4DFF),
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               child: _isSubmitting
@@ -435,8 +440,8 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
             child: OutlinedButton(
               onPressed: _openTable,
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white24),
+                foregroundColor: Color(0xFF212121),
+                side: const BorderSide(color: Color(0x33000000)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               child: const Text('View / Manage Organizer Members'),
@@ -466,7 +471,7 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadMembers,
               ),
               const Spacer(),
@@ -482,16 +487,16 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
           child: TextField(
             controller: _searchController,
             onChanged: (_) => _applyFilter(),
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF212121)),
             decoration: InputDecoration(
               hintText: 'Search by ID, account, organizer, or role',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
               enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
+                borderSide: BorderSide(color: Color(0x33000000)),
               ),
               focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white),
+                borderSide: BorderSide(color: Color(0xFF5B4DFF)),
               ),
             ),
           ),
@@ -503,7 +508,7 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
               ? const Center(
                   child: Text(
                     'No organizer members found',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: Color(0xFF9E9E9E)),
                   ),
                 )
               : ListView.builder(
@@ -515,24 +520,24 @@ class OrganizerMemberFormState extends State<OrganizerMemberForm> {
                         backgroundColor: Color(0xFF2A2A2A),
                         child: Icon(
                           Icons.person_2_outlined,
-                          color: Colors.white70,
+                          color: Color(0xFF757575),
                           size: 18,
                         ),
                       ),
                       title: Text(
                         _accountLabelFor(m.accountId),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                       subtitle: Text(
                         'ID: ${m.id}  •  ${_organizerLabelFor(m.eventOrganizerId)}  •  ${_roleLabelFor(m.teamRoleId)}',
-                        style: const TextStyle(color: Colors.white54),
+                        style: const TextStyle(color: Color(0xFF9E9E9E)),
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.white70),
+                            icon: const Icon(Icons.edit, color: Color(0xFF757575)),
                             onPressed: () => _startEdit(m),
                           ),
                           IconButton(

@@ -241,15 +241,15 @@ class EventCategoryFormState extends State<EventCategoryForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Colors.white,
         title: const Text(
           'Remove category from event?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Color(0xFF212121)),
         ),
         content: Text(
           'This will remove "${category?.name ?? 'this category'}" from '
           '"${_eventNameFor(link.eventId)}". The category itself is not deleted.',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -305,16 +305,16 @@ class EventCategoryFormState extends State<EventCategoryForm> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1E1E),
+          backgroundColor: Colors.white,
           title: const Text(
             'Update this category?',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: Color(0xFF212121)),
           ),
           content: Text(
             'This changes the name/icon for '
             '"${_categoryFor(_editingCategoryId!)?.name ?? 'this category'}" '
             'everywhere it\'s used, not just this event. Continue?',
-            style: const TextStyle(color: Colors.white70),
+            style: const TextStyle(color: Color(0xFF757575)),
           ),
           actions: [
             TextButton(
@@ -325,7 +325,7 @@ class EventCategoryFormState extends State<EventCategoryForm> {
               onPressed: () => Navigator.pop(context, true),
               child: const Text(
                 'Update',
-                style: TextStyle(color: Colors.amber),
+                style: TextStyle(color: Color(0xFF5B4DFF)),
               ),
             ),
           ],
@@ -382,12 +382,17 @@ class EventCategoryFormState extends State<EventCategoryForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -412,7 +417,7 @@ class EventCategoryFormState extends State<EventCategoryForm> {
                 child: Text(
                   'Editing Category Link ID: $_editingEventCategoryId',
                   style: const TextStyle(
-                    color: Colors.amber,
+                    color: Color(0xFF5B4DFF),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -432,7 +437,7 @@ class EventCategoryFormState extends State<EventCategoryForm> {
                                   ? 'Loading...'
                                   : 'Tap to search event')
                             : _eventNameFor(_selectedEventId!),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -445,10 +450,10 @@ class EventCategoryFormState extends State<EventCategoryForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh event list',
                 ),
               ],
@@ -472,14 +477,14 @@ class EventCategoryFormState extends State<EventCategoryForm> {
                                   : 'Tap to search existing categories')
                             : (_categoryFor(_editingCategoryId!)?.name ??
                                   'Category #$_editingCategoryId'),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
                 ),
                 if (_editingCategoryId != null)
                   IconButton(
-                    icon: const Icon(Icons.clear, color: Colors.white70),
+                    icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                     tooltip: 'Clear selected category',
                     onPressed: _clearCategorySelection,
                   ),
@@ -491,10 +496,10 @@ class EventCategoryFormState extends State<EventCategoryForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh category list',
                 ),
               ],
@@ -503,7 +508,7 @@ class EventCategoryFormState extends State<EventCategoryForm> {
 
             TextFormField(
               controller: _categoryNameController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Category Name'),
               validator: (v) => (v == null || v.trim().isEmpty)
                   ? 'Category name is required'
@@ -513,7 +518,7 @@ class EventCategoryFormState extends State<EventCategoryForm> {
 
             const Text(
               'Category Icon',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: Color(0xFF757575)),
             ),
             const SizedBox(height: 8),
             InkWell(
@@ -526,9 +531,9 @@ class EventCategoryFormState extends State<EventCategoryForm> {
                   horizontal: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
+                  color: Color(0xFFF1F1F5),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white24),
+                  border: Border.all(color: Color(0x33000000)),
                 ),
                 child: Row(
                   children: [
@@ -536,17 +541,17 @@ class EventCategoryFormState extends State<EventCategoryForm> {
                       _selectedIconKey == null
                           ? Icons.category_outlined
                           : iconForKey(_selectedIconKey!),
-                      color: Colors.white,
+                      color: Color(0xFF5B4DFF),
                     ),
                     const SizedBox(width: 12),
                     Text(
                       _selectedIconKey == null
                           ? 'Tap to choose an icon'
                           : labelForKey(_selectedIconKey!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                     const Spacer(),
-                    const Icon(Icons.chevron_right, color: Colors.white38),
+                    const Icon(Icons.chevron_right, color: Color(0xFF9E9E9E)),
                   ],
                 ),
               ),
@@ -559,8 +564,8 @@ class EventCategoryFormState extends State<EventCategoryForm> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Color(0xFF5B4DFF),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _isSubmitting
@@ -583,8 +588,8 @@ class EventCategoryFormState extends State<EventCategoryForm> {
               child: OutlinedButton(
                 onPressed: _openTable,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
+                  foregroundColor: Color(0xFF212121),
+                  side: const BorderSide(color: Color(0x33000000)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: const Text('View / Manage Event Categories'),
@@ -623,20 +628,20 @@ class EventCategoryFormState extends State<EventCategoryForm> {
                       _filterEventId == null
                           ? 'All Events -- tap to filter'
                           : _eventNameFor(_filterEventId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
               ),
               if (_filterEventId != null)
                 IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white70),
+                  icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                   tooltip: 'Clear event filter',
                   onPressed: () => _onEventFilterChanged(null),
                 ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadLinks,
               ),
               TextButton(
@@ -651,16 +656,16 @@ class EventCategoryFormState extends State<EventCategoryForm> {
           child: TextField(
             controller: _linkSearchController,
             onChanged: _filterLinks,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF212121)),
             decoration: InputDecoration(
               hintText: 'Search by ID or category name',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
               enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
+                borderSide: BorderSide(color: Color(0x33000000)),
               ),
               focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white),
+                borderSide: BorderSide(color: Color(0xFF5B4DFF)),
               ),
             ),
           ),
@@ -672,7 +677,7 @@ class EventCategoryFormState extends State<EventCategoryForm> {
               ? const Center(
                   child: Text(
                     'No event categories found',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: Color(0xFF9E9E9E)),
                   ),
                 )
               : Material(
@@ -688,23 +693,23 @@ class EventCategoryFormState extends State<EventCategoryForm> {
                           child: Container(
                             width: 48,
                             height: 48,
-                            color: const Color(0xFF1E1E1E),
+                            color: Color(0xFFF1F1F5),
                             child: Icon(
                               category?.iconPath == null
                                   ? Icons.category_outlined
                                   : iconForKey(category!.iconPath!),
-                              color: Colors.white70,
+                              color: Color(0xFF757575),
                               size: 24,
                             ),
                           ),
                         ),
                         title: Text(
                           category?.name ?? 'Category #${link.categoryId}',
-                          style: const TextStyle(color: Colors.white),
+                          style: const TextStyle(color: Color(0xFF212121)),
                         ),
                         subtitle: Text(
                           'ID: ${link.id}  •  ${_eventNameFor(link.eventId)}',
-                          style: const TextStyle(color: Colors.white54),
+                          style: const TextStyle(color: Color(0xFF9E9E9E)),
                           overflow: TextOverflow.ellipsis,
                         ),
                         trailing: Row(
@@ -713,7 +718,7 @@ class EventCategoryFormState extends State<EventCategoryForm> {
                             IconButton(
                               icon: const Icon(
                                 Icons.edit,
-                                color: Colors.white70,
+                                color: Color(0xFF757575),
                               ),
                               onPressed: () => _startEditLink(link),
                             ),

@@ -174,12 +174,12 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
         EventOrganizerApiService.fullImageUrl(_existingLogoPath!),
         fit: BoxFit.cover,
         errorBuilder: (context, error, stack) => const Center(
-          child: Icon(Icons.broken_image_outlined, color: Colors.white38),
+          child: Icon(Icons.broken_image_outlined, color: Color(0xFF9E9E9E)),
         ),
       );
     } else {
       child = const Center(
-        child: Icon(Icons.business_outlined, color: Colors.white38, size: 40),
+        child: Icon(Icons.business_outlined, color: Color(0xFF9E9E9E), size: 40),
       );
     }
 
@@ -189,7 +189,7 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
       child: Container(
         height: 160,
         width: 160,
-        color: const Color(0xFF1E1E1E),
+        color: Color(0xFFF1F1F5),
         child: child,
       ),
     );
@@ -233,14 +233,14 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Colors.white,
         title: const Text(
           'Delete organizer?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Color(0xFF212121)),
         ),
         content: Text(
           'This will permanently delete "${org.name}".',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -358,12 +358,17 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -386,7 +391,7 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
                 child: Text(
                   'Editing Organizer ID: $_editingOrganizerId',
                   style: const TextStyle(
-                    color: Colors.amber,
+                    color: Color(0xFF5B4DFF),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -394,7 +399,7 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
 
             TextFormField(
               controller: _nameController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Organizer Name'),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Required' : null,
@@ -403,7 +408,7 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
 
             const Text(
               'Organizer Logo (must be square)',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: Color(0xFF757575)),
             ),
             const SizedBox(height: 8),
             _buildLogoPreview(),
@@ -412,7 +417,7 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
               onPressed: _pickImage,
               icon: const Icon(
                 Icons.photo_library_outlined,
-                color: Colors.white,
+                color: Color(0xFF212121),
               ),
               label: Text(
                 _pickedLogoBytes == null && _existingLogoPath == null
@@ -420,15 +425,15 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
                     : 'Choose Different Logo',
               ),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white24),
+                foregroundColor: Color(0xFF212121),
+                side: const BorderSide(color: Color(0x33000000)),
               ),
             ),
             const Padding(
               padding: EdgeInsets.only(top: 4),
               child: Text(
                 "If the picked image isn't square, you'll be asked to crop it before it's used.",
-                style: TextStyle(color: Colors.white38, fontSize: 12),
+                style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 12),
               ),
             ),
             const SizedBox(height: 16),
@@ -447,7 +452,7 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
                                   ? 'Loading...'
                                   : 'Tap to search verified accounts')
                             : _accountLabelFor(_selectedAccountId!),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -460,10 +465,10 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh verified accounts',
                 ),
               ],
@@ -472,7 +477,7 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
               padding: EdgeInsets.only(top: 4),
               child: Text(
                 'Only accounts with an accepted identity verification are shown.',
-                style: TextStyle(color: Colors.white38, fontSize: 12),
+                style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 12),
               ),
             ),
             const SizedBox(height: 16),
@@ -480,7 +485,7 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
             TextFormField(
               controller: _descriptionController,
               maxLines: 3,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Description (optional)'),
             ),
             const SizedBox(height: 24),
@@ -490,8 +495,8 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Color(0xFF5B4DFF),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _isSubmitting
@@ -514,8 +519,8 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
               child: OutlinedButton(
                 onPressed: _openTable,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
+                  foregroundColor: Color(0xFF212121),
+                  side: const BorderSide(color: Color(0x33000000)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: const Text('View / Manage Event Organizers'),
@@ -552,14 +557,14 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
                     decoration: _decoration('Search Organizer'),
                     child: const Text(
                       'Tap to search by ID or name',
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadOrganizers,
               ),
               TextButton(
@@ -576,7 +581,7 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
               ? const Center(
                   child: Text(
                     'No event organizers found',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: Color(0xFF9E9E9E)),
                   ),
                 )
               : ListView.builder(
@@ -591,10 +596,10 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
                           height: 48,
                           child: (org.logoPath == null || org.logoPath!.isEmpty)
                               ? Container(
-                                  color: const Color(0xFF1E1E1E),
+                                  color: Color(0xFFF1F1F5),
                                   child: const Icon(
                                     Icons.business_outlined,
-                                    color: Colors.white38,
+                                    color: Color(0xFF9E9E9E),
                                     size: 20,
                                   ),
                                 )
@@ -605,10 +610,10 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stack) =>
                                       Container(
-                                        color: const Color(0xFF1E1E1E),
+                                        color: Color(0xFFF1F1F5),
                                         child: const Icon(
                                           Icons.broken_image_outlined,
-                                          color: Colors.white38,
+                                          color: Color(0xFF9E9E9E),
                                           size: 20,
                                         ),
                                       ),
@@ -617,19 +622,19 @@ class EventOrganizerFormState extends State<EventOrganizerForm> {
                       ),
                       title: Text(
                         org.name,
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                       subtitle: Text(
                         'ID: ${org.id}'
                         '${org.description != null && org.description!.isNotEmpty ? '  •  ${org.description}' : ''}',
-                        style: const TextStyle(color: Colors.white54),
+                        style: const TextStyle(color: Color(0xFF9E9E9E)),
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.white70),
+                            icon: const Icon(Icons.edit, color: Color(0xFF757575)),
                             onPressed: () => _startEdit(org),
                           ),
                           IconButton(

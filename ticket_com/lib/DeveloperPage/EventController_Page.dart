@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:ticket_com/DeveloperPage/event_category_form.dart';
 //import 'package:ticket_com/DeveloperPage/event_organizer_form.dart';
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
+import 'package:ticket_com/utils/category_colors.dart';
 import 'event_info_form.dart';
 import 'ticket_type_form.dart';
 import 'event_question_form.dart';
@@ -40,7 +41,7 @@ class EventControllerBody extends StatelessWidget {
         return const EventCategoryForm();
       default:
         return const Center(
-          child: Text('Coming soon', style: TextStyle(color: Colors.white)),
+          child: Text('Coming soon', style: TextStyle(color: Color(0xFF757575))),
         );
     }
   }
@@ -85,7 +86,7 @@ class _EventControllerNavBarState extends State<EventControllerNavBar> {
     ];
 
     return Container(
-      color: Colors.black87,
+      color: Colors.white,
       height: 72,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -103,7 +104,7 @@ class _EventControllerNavBarState extends State<EventControllerNavBar> {
                   children: [
                     Icon(
                       items[index]['icon'] as IconData,
-                      color: isSelected ? Colors.white : Colors.grey,
+                      color: isSelected ? kAccent : const Color(0xFF9E9E9E),
                       size: 22,
                     ),
                     const SizedBox(height: 2),
@@ -113,9 +114,10 @@ class _EventControllerNavBarState extends State<EventControllerNavBar> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.grey,
+                        color: isSelected ? kAccent : const Color(0xFF9E9E9E),
                         fontSize: 10,
                         height: 1.1,
+                        fontWeight: isSelected ? FontWeight.w700 : null,
                       ),
                     ),
                   ],

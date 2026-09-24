@@ -40,7 +40,7 @@ class _CategorySearchDialogState extends State<CategorySearchDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 400,
         height: 500,
@@ -52,16 +52,16 @@ class _CategorySearchDialogState extends State<CategorySearchDialog> {
                 controller: _controller,
                 autofocus: true,
                 onChanged: _filter,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: InputDecoration(
                   hintText: 'Search by ID or category name',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -71,7 +71,7 @@ class _CategorySearchDialogState extends State<CategorySearchDialog> {
                   ? const Center(
                       child: Text(
                         'No categories found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView.builder(
@@ -89,18 +89,18 @@ class _CategorySearchDialogState extends State<CategorySearchDialog> {
                                 c.iconPath == null
                                     ? Icons.category_outlined
                                     : iconForKey(c.iconPath!),
-                                color: Colors.white70,
+                                color: Color(0xFF757575),
                                 size: 20,
                               ),
                             ),
                           ),
                           title: Text(
                             c.name,
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF212121)),
                           ),
                           subtitle: Text(
                             'ID: ${c.id}',
-                            style: const TextStyle(color: Colors.white54),
+                            style: const TextStyle(color: Color(0xFF9E9E9E)),
                           ),
                           onTap: () => Navigator.pop(context, c),
                         );

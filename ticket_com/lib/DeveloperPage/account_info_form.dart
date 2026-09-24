@@ -190,11 +190,11 @@ class AccountInfoFormState extends State<AccountInfoForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Delete account?', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: const Text('Delete account?', style: TextStyle(color: Color(0xFF212121))),
         content: Text(
           'This will permanently delete "${account.firstName} ${account.lastName}".',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -276,12 +276,17 @@ class AccountInfoFormState extends State<AccountInfoForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -317,7 +322,7 @@ class AccountInfoFormState extends State<AccountInfoForm> {
                 child: Text(
                   'Editing Account ID: $_editingAccountId',
                   style: const TextStyle(
-                    color: Colors.amber,
+                    color: Color(0xFF5B4DFF),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -325,7 +330,7 @@ class AccountInfoFormState extends State<AccountInfoForm> {
 
             TextFormField(
               controller: _firstNameController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('First Name'),
               validator: _requiredValidator,
             ),
@@ -333,7 +338,7 @@ class AccountInfoFormState extends State<AccountInfoForm> {
 
             TextFormField(
               controller: _lastNameController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Last Name'),
               validator: _requiredValidator,
             ),
@@ -341,7 +346,7 @@ class AccountInfoFormState extends State<AccountInfoForm> {
 
             TextFormField(
               controller: _phoneController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Phone Number'),
               keyboardType: TextInputType.phone,
               validator: _requiredValidator,
@@ -350,7 +355,7 @@ class AccountInfoFormState extends State<AccountInfoForm> {
 
             TextFormField(
               controller: _emailController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF212121)),
               decoration: _decoration('Email'),
               keyboardType: TextInputType.emailAddress,
               validator: _emailValidator,
@@ -371,7 +376,7 @@ class AccountInfoFormState extends State<AccountInfoForm> {
                                 ? 'Loading...'
                                 : 'Tap to select status')
                             : _statusNameFor(_selectedStatusId!),
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF212121)),
                       ),
                     ),
                   ),
@@ -384,10 +389,10 @@ class AccountInfoFormState extends State<AccountInfoForm> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white70,
+                            color: Color(0xFF757575),
                           ),
                         )
-                      : const Icon(Icons.refresh, color: Colors.white70),
+                      : const Icon(Icons.refresh, color: Color(0xFF757575)),
                   tooltip: 'Refresh status list',
                 ),
               ],
@@ -397,7 +402,7 @@ class AccountInfoFormState extends State<AccountInfoForm> {
             if (_editingAccountId == null) ...[
               TextFormField(
                 controller: _passwordController,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: _decoration('Password'),
                 obscureText: true,
                 validator: _requiredValidator,
@@ -410,8 +415,8 @@ class AccountInfoFormState extends State<AccountInfoForm> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Color(0xFF5B4DFF),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _isSubmitting
@@ -432,8 +437,8 @@ class AccountInfoFormState extends State<AccountInfoForm> {
               child: OutlinedButton(
                 onPressed: _openTable,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
+                  foregroundColor: Color(0xFF212121),
+                  side: const BorderSide(color: Color(0x33000000)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: const Text('View / Manage Accounts'),
@@ -472,20 +477,20 @@ class AccountInfoFormState extends State<AccountInfoForm> {
                       _filterStatusId == null
                           ? 'All Statuses -- tap to filter'
                           : _statusNameFor(_filterStatusId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
               ),
               if (_filterStatusId != null)
                 IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white70),
+                  icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                   tooltip: 'Clear status filter',
                   onPressed: () => _onStatusFilterChanged(null),
                 ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadAccounts,
               ),
               TextButton(
@@ -500,16 +505,16 @@ class AccountInfoFormState extends State<AccountInfoForm> {
           child: TextField(
             controller: _accountSearchController,
             onChanged: _filterAccounts,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF212121)),
             decoration: InputDecoration(
               hintText: 'Search by ID, name, or email',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
               enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
+                borderSide: BorderSide(color: Color(0x33000000)),
               ),
               focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white),
+                borderSide: BorderSide(color: Color(0xFF5B4DFF)),
               ),
             ),
           ),
@@ -521,7 +526,7 @@ class AccountInfoFormState extends State<AccountInfoForm> {
                   ? const Center(
                       child: Text(
                         'No accounts found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : Material(
@@ -533,20 +538,20 @@ class AccountInfoFormState extends State<AccountInfoForm> {
                           return ListTile(
                             title: Text(
                               '${account.firstName} ${account.lastName}',
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'ID: ${account.id}  •  ${account.email}  •  '
                               '${account.phoneNum}  •  '
                               '${_statusNameFor(account.statusId)}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                               overflow: TextOverflow.ellipsis,
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.white70),
+                                  icon: const Icon(Icons.edit, color: Color(0xFF757575)),
                                   onPressed: () => _startEdit(account),
                                 ),
                                 IconButton(
@@ -610,7 +615,7 @@ class _StatusPickerDialogState extends State<_StatusPickerDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 400,
         height: 480,
@@ -622,16 +627,16 @@ class _StatusPickerDialogState extends State<_StatusPickerDialog> {
                 controller: _searchController,
                 autofocus: true,
                 onChanged: _onSearchChanged,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: const InputDecoration(
                   hintText: 'Search statuses',
-                  hintStyle: TextStyle(color: Colors.white54),
-                  prefixIcon: Icon(Icons.search, color: Colors.white54),
+                  hintStyle: TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -641,17 +646,17 @@ class _StatusPickerDialogState extends State<_StatusPickerDialog> {
                   ? const Center(
                       child: Text(
                         'No statuses found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView(
                       children: [
                         if (widget.allowClear)
                           ListTile(
-                            leading: const Icon(Icons.clear, color: Colors.white70),
+                            leading: const Icon(Icons.clear, color: Color(0xFF757575)),
                             title: const Text(
                               'All Statuses',
-                              style: TextStyle(color: Colors.white),
+                              style: TextStyle(color: Color(0xFF212121)),
                             ),
                             onTap: () => Navigator.pop(
                               context,
@@ -662,11 +667,11 @@ class _StatusPickerDialogState extends State<_StatusPickerDialog> {
                           ListTile(
                             title: Text(
                               status.statusType,
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'ID: ${status.id}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                             ),
                             onTap: () => Navigator.pop(context, status),
                           ),

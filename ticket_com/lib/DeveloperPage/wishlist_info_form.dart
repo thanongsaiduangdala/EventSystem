@@ -171,12 +171,12 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Remove wish?', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: const Text('Remove wish?', style: TextStyle(color: Color(0xFF212121))),
         content: Text(
           '${_accountNameFor(wish.accountId)} will no longer have '
           '"${_eventNameFor(wish.eventId)}" wished.',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF757575)),
         ),
         actions: [
           TextButton(
@@ -240,12 +240,17 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      enabledBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
+      labelStyle: const TextStyle(color: Color(0xFF757575)),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0x33000000)),
       ),
-      focusedBorder: const UnderlineInputBorder(
-        borderSide: BorderSide(color: Colors.white),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF5B4DFF), width: 1.6),
       ),
     );
   }
@@ -275,7 +280,7 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
                       _selectedAccountId == null
                           ? (_loadingAccounts ? 'Loading...' : 'Tap to select account')
                           : _accountNameFor(_selectedAccountId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
@@ -288,10 +293,10 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white70,
+                          color: Color(0xFF757575),
                         ),
                       )
-                    : const Icon(Icons.refresh, color: Colors.white70),
+                    : const Icon(Icons.refresh, color: Color(0xFF757575)),
                 tooltip: 'Refresh account list',
               ),
             ],
@@ -310,7 +315,7 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
                       _selectedEventId == null
                           ? (_loadingEvents ? 'Loading...' : 'Tap to select event')
                           : _eventNameFor(_selectedEventId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
@@ -323,10 +328,10 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white70,
+                          color: Color(0xFF757575),
                         ),
                       )
-                    : const Icon(Icons.refresh, color: Colors.white70),
+                    : const Icon(Icons.refresh, color: Color(0xFF757575)),
                 tooltip: 'Refresh event list',
               ),
             ],
@@ -338,8 +343,8 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
             child: ElevatedButton(
               onPressed: _isSubmitting ? null : _submit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
+                backgroundColor: Color(0xFF5B4DFF),
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               child: _isSubmitting
@@ -358,8 +363,8 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
             child: OutlinedButton(
               onPressed: _openTable,
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white24),
+                foregroundColor: Color(0xFF212121),
+                side: const BorderSide(color: Color(0x33000000)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               child: const Text('View / Manage Wishlist'),
@@ -386,20 +391,20 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
                       _filterAccountId == null
                           ? 'All Accounts -- tap to filter'
                           : _accountNameFor(_filterAccountId!),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Color(0xFF212121)),
                     ),
                   ),
                 ),
               ),
               if (_filterAccountId != null)
                 IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.white70),
+                  icon: const Icon(Icons.clear, color: Color(0xFF757575)),
                   tooltip: 'Clear account filter',
                   onPressed: () => _onAccountFilterChanged(null),
                 ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white70),
+                icon: const Icon(Icons.refresh, color: Color(0xFF757575)),
                 onPressed: _loadWishes,
               ),
               TextButton(
@@ -414,16 +419,16 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
           child: TextField(
             controller: _wishSearchController,
             onChanged: _filterWishes,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF212121)),
             decoration: InputDecoration(
               hintText: 'Search by ID, account name, or event name',
-              hintStyle: const TextStyle(color: Colors.white54),
-              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              hintStyle: const TextStyle(color: Color(0xFF9E9E9E)),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF9E9E9E)),
               enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
+                borderSide: BorderSide(color: Color(0x33000000)),
               ),
               focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white),
+                borderSide: BorderSide(color: Color(0xFF5B4DFF)),
               ),
             ),
           ),
@@ -435,7 +440,7 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
                   ? const Center(
                       child: Text(
                         'No wishlist entries found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : Material(
@@ -447,11 +452,11 @@ class WishlistInfoFormState extends State<WishlistInfoForm> {
                           return ListTile(
                             title: Text(
                               _accountNameFor(wish.accountId),
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'Wished: ${_eventNameFor(wish.eventId)}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                               overflow: TextOverflow.ellipsis,
                             ),
                             trailing: IconButton(
@@ -511,7 +516,7 @@ class _AccountPickerDialogState extends State<_AccountPickerDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 400,
         height: 480,
@@ -523,16 +528,16 @@ class _AccountPickerDialogState extends State<_AccountPickerDialog> {
                 controller: _searchController,
                 autofocus: true,
                 onChanged: _onSearchChanged,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: const InputDecoration(
                   hintText: 'Search accounts',
-                  hintStyle: TextStyle(color: Colors.white54),
-                  prefixIcon: Icon(Icons.search, color: Colors.white54),
+                  hintStyle: TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -542,17 +547,17 @@ class _AccountPickerDialogState extends State<_AccountPickerDialog> {
                   ? const Center(
                       child: Text(
                         'No accounts found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView(
                       children: [
                         if (widget.allowClear)
                           ListTile(
-                            leading: const Icon(Icons.clear, color: Colors.white70),
+                            leading: const Icon(Icons.clear, color: Color(0xFF757575)),
                             title: const Text(
                               'All Accounts',
-                              style: TextStyle(color: Colors.white),
+                              style: TextStyle(color: Color(0xFF212121)),
                             ),
                             onTap: () => Navigator.pop(
                               context,
@@ -570,11 +575,11 @@ class _AccountPickerDialogState extends State<_AccountPickerDialog> {
                           ListTile(
                             title: Text(
                               '${account.firstName} ${account.lastName}',
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'ID: ${account.id}  •  ${account.email}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                             ),
                             onTap: () => Navigator.pop(context, account),
                           ),
@@ -638,7 +643,7 @@ class _EventPickerDialogState extends State<_EventPickerDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       child: SizedBox(
         width: 400,
         height: 480,
@@ -650,16 +655,16 @@ class _EventPickerDialogState extends State<_EventPickerDialog> {
                 controller: _searchController,
                 autofocus: true,
                 onChanged: _onSearchChanged,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Color(0xFF212121)),
                 decoration: const InputDecoration(
                   hintText: 'Search events',
-                  hintStyle: TextStyle(color: Colors.white54),
-                  prefixIcon: Icon(Icons.search, color: Colors.white54),
+                  hintStyle: TextStyle(color: Color(0xFF9E9E9E)),
+                  prefixIcon: Icon(Icons.search, color: Color(0xFF9E9E9E)),
                   enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24),
+                    borderSide: BorderSide(color: Color(0x33000000)),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white),
+                    borderSide: BorderSide(color: Color(0xFF5B4DFF)),
                   ),
                 ),
               ),
@@ -669,7 +674,7 @@ class _EventPickerDialogState extends State<_EventPickerDialog> {
                   ? const Center(
                       child: Text(
                         'No events found',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     )
                   : ListView(
@@ -678,11 +683,11 @@ class _EventPickerDialogState extends State<_EventPickerDialog> {
                           ListTile(
                             title: Text(
                               event.name,
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
                               'ID: ${event.id}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: Color(0xFF9E9E9E)),
                             ),
                             onTap: () => Navigator.pop(context, event),
                           ),

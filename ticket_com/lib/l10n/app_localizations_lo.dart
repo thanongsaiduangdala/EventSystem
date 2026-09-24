@@ -432,6 +432,9 @@ class AppLocalizationsLo extends AppLocalizations {
   String get unfollowedOrganizer => 'ເລີກຕິດຕາມຜູ້ຈັດງານແລ້ວ';
 
   @override
+  String get followedOrganizers => 'ຜູ້ຈັດງານທີ່ຕິດຕາມ';
+
+  @override
   String get language => 'ພາສາ';
 
   @override
@@ -453,6 +456,9 @@ class AppLocalizationsLo extends AppLocalizations {
   String get contactUs => 'ຕິດຕໍ່ພວກເຮົາ';
 
   @override
+  String get becomeOrganizer => 'ກາຍເປັນຜູ້ຈັດງານ';
+
+  @override
   String get settings => 'ຕັ້ງຄ່າ';
 
   @override
@@ -463,4 +469,60 @@ class AppLocalizationsLo extends AppLocalizations {
 
   @override
   String get comingSoon => 'ມີໄວໆນີ້';
+
+  @override
+  String get editProfile => 'ແກ້ໄຂໂປຣໄຟຼ';
+
+  @override
+  String get save => 'ບັນທຶກ';
+
+  @override
+  String get cancel => 'ຍົກເລີກ';
+
+  @override
+  String get personalInfo => 'ຂໍ້ມູນສ່ວນຕົວ';
+
+  @override
+  String get profileUpdated => 'ອັບເດດໂປຣໄຟຼສຳເລັດ';
+
+  @override
+  String get editCategories => 'ແກ້ໄຂໝວດໝູ່';
+
+  @override
+  String get noCategoriesSelected => 'ຍັງບໍ່ມີໝວດໝູ່ທີ່ມັກ';
+
+  @override
+  String get selectCategoriesHint => 'ເລືອກໝວດໝູ່ທີ່ທ່ານມັກ';
+
+  @override
+  String get done => 'ສຳເລັດ';
+
+  @override
+  String get categoriesUpdated => 'ອັບເດດໝວດໝູ່ສຳເລັດ';
+
+  @override
+  String get aboutMe => 'ກ່ຽວກັບຂ້ອຍ';
+
+  @override
+  String get aboutMeText =>
+      'ມ່ວນກັບອີເວັນບັນເທີງກັບໝູ່ເພື່ອນ ແລະ ຄອບຄົວ, ຕັ້ງແຕ່ງານອາຫານ ຈົນເຖິງດົນຕີໃນລາວ.';
+
+  @override
+  String get aboutMeDetail =>
+      'ຕິດຕາມຜູ້ຈັດງານທີ່ມັກ, ບັນທຶກອີເວັນໄວ້ໃນລາຍການທີ່ມັກ ແລະ ຮັບການແຈ້ງເຕືອນເມື່ອມີປີ້ຂາຍ. ເລືອກຄວາມສົນໃຈຂອງທ່ານ ເພື່ອໃຫ້ພວກເຮົາແນະນຳອີເວັນທີ່ເໝາະສົມກັບທ່ານ.';
+
+  @override
+  String get interest => 'ຄວາມສົນໃຈ';
+
+  @override
+  String get changeProfilePicture => 'ປ່ຽນຮູບໂປຣໄຟຼ';
+
+  @override
+  String get takePhoto => 'ຖ່າຍຮູບ';
+
+  @override
+  String get chooseFromGallery => 'ເລືອກຈາກຄັງຮູບ';
+
+  @override
+  String get profilePictureUpdated => 'ອັບເດດຮູບໂປຣໄຟຼສຳເລັດ';
 }
