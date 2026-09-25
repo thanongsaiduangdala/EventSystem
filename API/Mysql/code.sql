@@ -191,6 +191,7 @@ CREATE TABLE `eventinfo` (
   `EventOrganizerID` int NOT NULL,
   `OnePerPerson` tinyint(1) NOT NULL DEFAULT 0,
   `EventStatusID` int NOT NULL DEFAULT 2,
+  `EventVisible` tinyint(1) NOT NULL DEFAULT 1,
   PRIMARY KEY (`EventID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -201,7 +202,7 @@ CREATE TABLE `eventinfo` (
 
 LOCK TABLES `eventinfo` WRITE;
 /*!40000 ALTER TABLE `eventinfo` DISABLE KEYS */;
-INSERT INTO `eventinfo` VALUES (1,'That Luang to Mekong Marathon','2026-10-01 06:00:00','2026-10-01 13:00:00','That Luang',17.975649,102.633682,'Marathon from That Luang to Mekong and back. They is 10km and 21km',1,0,2),(4,'Pilot Training part 1','2026-05-12 09:00:00','2026-05-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2,0,2),(5,'Pilot Training part 2','2026-11-12 06:00:00','2026-11-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2,0,2),(6,'Marathon','2026-08-15 04:20:00','2026-08-16 22:20:00','ThatLuangpart1',17.976542,102.635899,'Marathon from Mekong to ThatLuang and back that is 10 km  or 21km.',1,0,2),(8,'MarathonPart2','2026-08-20 06:00:00','2026-08-06 16:00:00','ThatLuang',17.975707,102.633619,'Marathon from Thatluang to Mekong and back. For those who want to do either 10km or 21km.',1,0,2),(9,'PilotTrainingPart3','2026-08-15 10:00:00','2026-08-08 20:00:00','Wattay Airport',17.973006,102.567955,'sdkjaslkdjlksada',2,0,2);
+INSERT INTO `eventinfo` VALUES (1,'That Luang to Mekong Marathon','2026-10-01 06:00:00','2026-10-01 13:00:00','That Luang',17.975649,102.633682,'Marathon from That Luang to Mekong and back. They is 10km and 21km',1,0,2,1),(4,'Pilot Training part 1','2026-05-12 09:00:00','2026-05-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2,0,2,1),(5,'Pilot Training part 2','2026-11-12 06:00:00','2026-11-12 18:00:00','Wattay International Airport',17.973483,102.568088,'Try become a cadet for one day.',2,0,2,1),(6,'Marathon','2026-08-15 04:20:00','2026-08-16 22:20:00','ThatLuangpart1',17.976542,102.635899,'Marathon from Mekong to ThatLuang and back that is 10 km  or 21km.',1,0,2,1),(8,'MarathonPart2','2026-08-20 06:00:00','2026-08-06 16:00:00','ThatLuang',17.975707,102.633619,'Marathon from Thatluang to Mekong and back. For those who want to do either 10km or 21km.',1,0,2,1),(9,'PilotTrainingPart3','2026-08-15 10:00:00','2026-08-08 20:00:00','Wattay Airport',17.973006,102.567955,'sdkjaslkdjlksada',2,0,2,1);
 /*!40000 ALTER TABLE `eventinfo` ENABLE KEYS */;
 UNLOCK TABLES;
 

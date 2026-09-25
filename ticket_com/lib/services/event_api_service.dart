@@ -47,6 +47,7 @@ class EventModel {
   final int organizerId;
   final bool onePerPerson;
   final int eventStatusId;
+  final bool eventVisible;
 
   EventModel({
     required this.id,
@@ -60,10 +61,12 @@ class EventModel {
     required this.organizerId,
     this.onePerPerson = false,
     this.eventStatusId = EventStatus.approved,
+    this.eventVisible = true,
   });
 
   factory EventModel.fromJson(Map<String, dynamic> json) {
     final rawFlag = json['OnePerPerson'];
+    final rawVisible = json['EventVisible'];
     return EventModel(
       id: json['EventID'] as int,
       name: json['EventName'] as String,
@@ -76,6 +79,28 @@ class EventModel {
       organizerId: json['EventOrganizerID'] as int,
       onePerPerson: rawFlag == 1 || rawFlag == true,
       eventStatusId: (json['EventStatusID'] as int?) ?? EventStatus.approved,
+      // Older responses (before this field existed) should behave as visible.
+      eventVisible: rawVisible == null || rawVisible == 1 || rawVisible == true,
+    );
+  }
+
+  EventModel copyWith({
+    int? eventStatusId,
+    bool? eventVisible,
+  }) {
+    return EventModel(
+      id: id,
+      name: name,
+      start: start,
+      end: end,
+      address: address,
+      latitude: latitude,
+      longitude: longitude,
+      description: description,
+      organizerId: organizerId,
+      onePerPerson: onePerPerson,
+      eventStatusId: eventStatusId ?? this.eventStatusId,
+      eventVisible: eventVisible ?? this.eventVisible,
     );
   }
 }
@@ -169,7 +194,12 @@ class EventApiService {
     }
   }
 
-  static Future<void> updateEvent({
+  /// Updates the event's details. This never forces the event back to
+  /// Pending by itself -- an Approved or Pending event keeps its status
+  /// through an edit. The only exception (handled server-side) is an event
+  /// that was previously Denied, which is treated as a resubmission and
+  /// goes back to Pending. Returns the event's resulting EventStatusID.
+  static Future<int> updateEvent({
     required int eventId,
     required String eventName,
     required String eventStartingYMDT,
@@ -200,6 +230,29 @@ class EventApiService {
     );
     if (response.statusCode != 200) {
       throw _handleError(response, 'Failed to update event');
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return (data['EventStatusID'] as int?) ?? EventStatus.pending;
+  }
+
+  /// Organizer action: show/hide an event from the public listing (e.g.
+  /// sold out, postponed) independent of its approval status. Doesn't
+  /// require admin involvement.
+  static Future<void> setEventVisibility({
+    required int eventId,
+    required bool eventVisible,
+  }) async {
+    final url = Uri.parse('$baseUrl/event/visibility');
+    final response = await http.put(
+      url,
+      headers: _authHeaders(),
+      body: jsonEncode({
+        'EventID': eventId,
+        'EventVisible': eventVisible,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw _handleError(response, 'Failed to update event visibility');
     }
   }
 

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:ticket_com/HomePage/event_form_page.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
+import 'package:ticket_com/services/event_image_api_service.dart';
 import 'package:ticket_com/services/event_organizer_api_service.dart'
     hide EventOrganizer;
 import 'package:ticket_com/services/organizer_member_api_service.dart';
+import 'package:ticket_com/services/ticket_type_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
 
 const Color _kTextDark = Color(0xFF212121);
@@ -44,6 +46,13 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   List<VerifiedAccount> _verifiedAccounts = [];
   List<TeamRoleModel> _teamRoles = [];
   List<_TeamMemberView> _team = [];
+
+  /// Cover image per event id, and which events already have ticket types.
+  /// Both are best-effort extras: if they fail to load the dashboard still
+  /// works, it just skips the thumbnail / "no tickets" hint.
+  Map<int, EventImageModel> _coverByEvent = {};
+  Set<int> _eventsWithTickets = {};
+  bool _ticketInfoKnown = false;
 
   EventOrganizer? get _primaryOrganizer =>
       _myOrganizers.isEmpty ? null : _myOrganizers.first;
@@ -88,6 +97,31 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         roles = results[3] as List<TeamRoleModel>;
       }
 
+      final coverByEvent = <int, EventImageModel>{};
+      final eventsWithTickets = <int>{};
+      var ticketInfoKnown = false;
+      if (events.isNotEmpty) {
+        final eventIds = events.map((e) => e.id).toSet();
+        try {
+          final images = await EventImageApiService.getAllEventImages();
+          for (final image in images) {
+            if (!eventIds.contains(image.eventId)) continue;
+            if (image.isThumbnail || !coverByEvent.containsKey(image.eventId)) {
+              coverByEvent[image.eventId] = image;
+            }
+          }
+        } catch (_) {
+          // thumbnails are optional
+        }
+        try {
+          final tickets = await TicketTypeApiService.getAllTicketTypes();
+          eventsWithTickets.addAll(tickets.map((t) => t.eventId));
+          ticketInfoKnown = true;
+        } catch (_) {
+          // the "no ticket types" hint is optional
+        }
+      }
+
       final accountsById = {for (final v in verified) v.id: v};
       final rolesById = {for (final r in roles) r.id: r};
 
@@ -96,6 +130,9 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         _myOrganizers = myOrganizers;
         _allOrganizers = organizers;
         _myEvents = events;
+        _coverByEvent = coverByEvent;
+        _eventsWithTickets = eventsWithTickets;
+        _ticketInfoKnown = ticketInfoKnown;
         _verifiedAccounts = verified;
         _teamRoles = roles;
         _team = members
@@ -137,15 +174,38 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   }
 
   void _openEditEvent(EventModel event) {
+    // Editing keeps the event's current approval status (Approved stays
+    // Approved, Pending stays Pending); only a previously-Denied event goes
+    // back to Pending, since editing it is effectively a resubmission.
+    final wasDenied = event.eventStatusId == EventStatus.denied;
     Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (context) => EventFormPage(event: event)),
     ).then((saved) {
       if (saved == true) {
-        _snack('Event updated. Changes need to be approved again.');
+        _snack(wasDenied
+            ? 'Event updated and resubmitted for approval.'
+            : 'Event updated.');
         _load();
       }
     });
+  }
+
+  Future<void> _toggleEventVisibility(EventModel event, bool visible) async {
+    final index = _myEvents.indexWhere((e) => e.id == event.id);
+    if (index == -1) return;
+    final previous = _myEvents[index];
+    setState(() => _myEvents[index] = previous.copyWith(eventVisible: visible));
+    try {
+      await EventApiService.setEventVisibility(
+        eventId: event.id,
+        eventVisible: visible,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _myEvents[index] = previous);
+      _snack('Could not update visibility: $e');
+    }
   }
 
   Future<void> _confirmDeleteEvent(EventModel event) async {
@@ -441,7 +501,8 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
           _emptyCard(
             icon: Icons.event_available_outlined,
             title: 'No events yet',
-            message: 'Tap "Create Event" below to publish your first event.',
+            message: 'Tap "Create Event" to add your first event, with its photos, '
+                'categories, sponsors, ticket types and questions.',
           )
         else
           ..._myEvents.map((e) => Padding(
@@ -452,74 +513,192 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     );
   }
 
+  Widget _eventThumb(EventModel event) {
+    final cover = _coverByEvent[event.id];
+    final placeholder = Container(
+      color: const Color(0xFFEFEEFC),
+      alignment: Alignment.center,
+      child: Icon(
+        cover == null ? Icons.add_photo_alternate_outlined : Icons.event,
+        color: kAccent,
+        size: 26,
+      ),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 64,
+        height: 64,
+        child: cover == null
+            ? placeholder
+            : Image.network(
+                EventImageApiService.thumbnailUrl(cover.imagePath),
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => placeholder,
+              ),
+      ),
+    );
+  }
+
   Widget _eventCard(EventModel event) {
     final orgName = _organizerNameFor(event.organizerId);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x18000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _statusChip(event.eventStatusId),
-              const Spacer(),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.edit_outlined,
-                    color: Color(0xFF1E88E5), size: 20),
-                tooltip: 'Edit',
-                onPressed: () => _openEditEvent(event),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.delete_outline, color: _kRed, size: 20),
-                tooltip: 'Remove',
-                onPressed: () => _confirmDeleteEvent(event),
-              ),
-            ],
-          ),
-          Text(
-            event.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: _kTextDark,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
+    final needsTickets =
+        _ticketInfoKnown && !_eventsWithTickets.contains(event.id);
+    return GestureDetector(
+      onTap: () => _openEditEvent(event),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x18000000),
+              blurRadius: 12,
+              offset: Offset(0, 4),
             ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.business_outlined, color: _kTextGrey, size: 14),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  orgName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _kTextGrey, fontSize: 12.5),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _statusChip(event.eventStatusId),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => _openEditEvent(event),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF1E88E5),
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text(
+                    'Edit',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.delete_outline, color: _kRed, size: 20),
+                  tooltip: 'Remove',
+                  onPressed: () => _confirmDeleteEvent(event),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _eventThumb(event),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        event.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _kTextDark,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.business_outlined,
+                            color: _kTextGrey,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              orgName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _kTextGrey,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_fmt(event.start)}  \u2192  ${_fmt(event.end)}',
+                        style: const TextStyle(color: _kTextGrey, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(
+                  event.eventVisible
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  size: 16,
+                  color: event.eventVisible ? _kGreen : _kTextGrey,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    event.eventVisible
+                        ? 'Visible to the public'
+                        : 'Hidden from the public',
+                    style: const TextStyle(
+                      color: _kTextGrey,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Switch(
+                  value: event.eventVisible,
+                  activeColor: _kGreen,
+                  onChanged: (val) => _toggleEventVisibility(event, val),
+                ),
+              ],
+            ),
+            if (needsTickets) ...[
+              const SizedBox(height: 4),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3E0),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.confirmation_number_outlined,
+                      color: _kAmber,
+                      size: 16,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'No ticket types yet. Tap Edit to add some so people '
+                        'can buy tickets.',
+                        style: TextStyle(color: _kAmber, fontSize: 12),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${_fmt(event.start)}  →  ${_fmt(event.end)}',
-            style: const TextStyle(color: _kTextGrey, fontSize: 12),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

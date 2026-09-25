@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_com/DeveloperPage/event_approvals_page.dart';
 import 'package:ticket_com/services/event_organizer_api_service.dart';
 import 'package:ticket_com/services/identity_verification_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
@@ -11,9 +12,11 @@ const int _kStatusPending = 1;
 const int _kStatusApproved = 2;
 const int _kStatusDenied = 3;
 
-/// Employee Dashboard: review organizer identity verification requests and
-/// approve (grants the applicant ORGANIZER access) or deny them. Available to
-/// SUPERADMIN and EMPLOYEE accounts.
+/// Employee Dashboard shell: a bottom nav bar switching between Identity
+/// Verifications (approve/deny organizer applications) and Event Approvals
+/// (approve/deny submitted events). Available to SUPERADMIN and EMPLOYEE
+/// accounts. Both tabs are kept alive in an [IndexedStack] so switching
+/// tabs doesn't re-fetch or lose scroll position.
 class EmployeeDashboardPage extends StatefulWidget {
   const EmployeeDashboardPage({super.key});
 
@@ -22,6 +25,50 @@ class EmployeeDashboardPage extends StatefulWidget {
 }
 
 class _EmployeeDashboardPageState extends State<EmployeeDashboardPage> {
+  int _tabIndex = 0;
+
+  static const _tabs = [
+    _VerificationsTab(),
+    EventApprovalsTab(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(index: _tabIndex, children: _tabs),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tabIndex,
+        onDestinationSelected: (index) => setState(() => _tabIndex = index),
+        backgroundColor: Colors.white,
+        indicatorColor: const Color(0x1F5B4DFF),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.verified_user_outlined, color: _kTextGrey),
+            selectedIcon: Icon(Icons.verified_user, color: kAccent),
+            label: 'Verifications',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.event_available_outlined, color: _kTextGrey),
+            selectedIcon: Icon(Icons.event_available, color: kAccent),
+            label: 'Events',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Identity Verifications tab: review organizer identity verification
+/// requests and approve (grants the applicant ORGANIZER access) or deny
+/// them. Shown as one tab of [EmployeeDashboardPage].
+class _VerificationsTab extends StatefulWidget {
+  const _VerificationsTab();
+
+  @override
+  State<_VerificationsTab> createState() => _VerificationsTabState();
+}
+
+class _VerificationsTabState extends State<_VerificationsTab> {
   List<IdentityVerificationDetailModel> _items = [];
   List<VerificationTypeModel> _types = [];
   List<VerificationStatusModel> _statuses = [];
@@ -192,7 +239,7 @@ class _EmployeeDashboardPageState extends State<EmployeeDashboardPage> {
         foregroundColor: _kTextDark,
         elevation: 0,
         title: const Text(
-          'Employee Dashboard',
+          'Identity Verifications',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [

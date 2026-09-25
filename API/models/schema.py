@@ -63,6 +63,10 @@ class UpdateEventStatusRequest(BaseModel):
     EventID: int
     EventStatusID: int
 
+class UpdateEventVisibilityRequest(BaseModel):
+    EventID: int
+    EventVisible: bool
+
 class AddTicketTypeRequest(BaseModel):
     EventID: int
     TypeName: str

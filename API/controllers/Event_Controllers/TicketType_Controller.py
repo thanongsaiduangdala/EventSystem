@@ -24,7 +24,7 @@ async def create_TicketType(req_data: AddTicketTypeRequest, current=Depends(requ
             ))
             con.commit()
             tickettype_id = cur.lastrowid
-        return {"msg": "Event created successfully", "event_id": tickettype_id}
+        return {"msg": "Ticket type created successfully", "TicketTypeID": tickettype_id, "event_id": tickettype_id}
     except HTTPException:
         raise
     except pymysql.MySQLError as err:

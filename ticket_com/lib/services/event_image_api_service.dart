@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'api_errors.dart';
 import 'auth_service.dart';
 import '../config/api_config.dart';
 
@@ -47,7 +48,7 @@ class EventImageApiService {
       return Exception('Session expired. Please log in again.');
     }
     if (response.statusCode == 403) {
-      return Exception('Developer access required.');
+      return Exception(forbiddenMessage(response));
     }
     try {
       final error = jsonDecode(response.body);

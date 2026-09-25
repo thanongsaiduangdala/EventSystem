@@ -390,6 +390,36 @@ class _OrganizersPageState extends State<OrganizersPage> {
             '${_fmt(event.start)}  →  ${_fmt(event.end)}',
             style: const TextStyle(color: _kTextGrey, fontSize: 12),
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(
+                event.eventVisible
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                size: 16,
+                color: event.eventVisible ? _kGreen : _kTextGrey,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  event.eventVisible
+                      ? 'Visible to the public'
+                      : 'Hidden from the public',
+                  style: const TextStyle(
+                    color: _kTextGrey,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Switch(
+                value: event.eventVisible,
+                activeColor: _kGreen,
+                onChanged: (val) => _toggleEventVisibility(event, val),
+              ),
+            ],
+          ),
           if (_canApprove && event.eventStatusId != EventStatus.approved) ...[
             const SizedBox(height: 12),
             Row(
@@ -480,15 +510,38 @@ class _OrganizersPageState extends State<OrganizersPage> {
   }
 
   void _openEditEvent(EventModel event) {
+    // Editing keeps the event's current approval status (Approved stays
+    // Approved, Pending stays Pending); only a previously-Denied event goes
+    // back to Pending, since editing it is effectively a resubmission.
+    final wasDenied = event.eventStatusId == EventStatus.denied;
     Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (context) => EventFormPage(event: event)),
     ).then((saved) {
       if (saved == true) {
-        _snack('Event updated. Changes need to be approved again.');
+        _snack(wasDenied
+            ? 'Event updated and resubmitted for approval.'
+            : 'Event updated.');
         _load();
       }
     });
+  }
+
+  Future<void> _toggleEventVisibility(EventModel event, bool visible) async {
+    final index = _events.indexWhere((e) => e.id == event.id);
+    if (index == -1) return;
+    final previous = _events[index];
+    setState(() => _events[index] = previous.copyWith(eventVisible: visible));
+    try {
+      await EventApiService.setEventVisibility(
+        eventId: event.id,
+        eventVisible: visible,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _events[index] = previous);
+      _snack('Could not update visibility: $e');
+    }
   }
 
   Future<void> _setEventStatus(EventModel event, int status, String msg) async {
