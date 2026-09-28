@@ -9,7 +9,8 @@ from fastapi import HTTPException, UploadFile, status, Depends
 from PIL import Image, UnidentifiedImageError
 from DB.DBConnect import getConnect
 from models.schema import AddEventImageInfoRequest, UpdateEventImageInfoRequest
-from auth.dependencies import require_permission
+from auth.dependencies import require_permission, get_current_account
+from auth.team_access import ensure_event_editor
 
 # ---------------------------------------------------------------------------
 # File storage config
@@ -97,11 +98,12 @@ def _delete_image_file(image_path: Optional[str]) -> None:
             pass
 
 
-async def create_eventimage(req_data: AddEventImageInfoRequest, current=Depends(require_permission("manage_event_images"))):
+async def create_eventimage(req_data: AddEventImageInfoRequest, current=Depends(get_current_account)):
     """Kept for compatibility (e.g. re-pointing an image at an already-hosted URL).
     For actual file uploads use upload_eventimage instead."""
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "manage_event_images")
         with con.cursor() as cur:
             sql = """
                 INSERT INTO eventimageinfo
@@ -124,10 +126,12 @@ async def create_eventimage(req_data: AddEventImageInfoRequest, current=Depends(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def upload_eventimage(event_id: int, file: UploadFile, image_name: Optional[str] = None, current=Depends(require_permission("manage_event_images"))):
+async def upload_eventimage(event_id: int, file: UploadFile, image_name: Optional[str] = None, current=Depends(get_current_account)):
     """Saves an uploaded file to disk under static/event_images/{event_id}/ and
     creates the eventimageinfo row pointing at it."""
     try:
+        con = getConnect()
+        await ensure_event_editor(con, current, event_id, "manage_event_images")
         relative_path = await _save_image_file(event_id, file)
         display_name = image_name or file.filename or "image"
 
@@ -154,7 +158,7 @@ async def upload_eventimage(event_id: int, file: UploadFile, image_name: Optiona
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def replace_eventimage_file(image_id: int, file: UploadFile, image_name: Optional[str] = None, current=Depends(require_permission("manage_event_images"))):
+async def replace_eventimage_file(image_id: int, file: UploadFile, image_name: Optional[str] = None, current=Depends(get_current_account)):
     """Uploads a new file for an existing eventimageinfo row, swaps ImagePath
     to point at it, and deletes the old file from disk."""
     try:
@@ -168,8 +172,11 @@ async def replace_eventimage_file(image_id: int, file: UploadFile, image_name: O
             event_id = row["EventID"] if isinstance(row, dict) else row[0]
             old_path = row["ImagePath"] if isinstance(row, dict) else row[1]
 
-            new_path = await _save_image_file(event_id, file)
+        await ensure_event_editor(con, current, event_id, "manage_event_images")
 
+        new_path = await _save_image_file(event_id, file)
+
+        with con.cursor() as cur:
             if image_name:
                 cur.execute(
                     "UPDATE eventimageinfo SET ImageName = %s, ImagePath = %s WHERE ImageID = %s",
@@ -196,7 +203,7 @@ async def replace_eventimage_file(image_id: int, file: UploadFile, image_name: O
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def set_thumbnail_eventimage(image_id: int, current=Depends(require_permission("manage_event_images"))):
+async def set_thumbnail_eventimage(image_id: int, current=Depends(get_current_account)):
     """Marks this image as THE thumbnail for its event, and unmarks whichever
     other image (if any) previously held that spot for the same EventID.
     Only one row per EventID can have IsThumbnail = 1 at a time."""
@@ -209,6 +216,9 @@ async def set_thumbnail_eventimage(image_id: int, current=Depends(require_permis
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="eventimageinfo not found")
             event_id = row["EventID"] if isinstance(row, dict) else row[0]
 
+        await ensure_event_editor(con, current, event_id, "manage_event_images")
+
+        with con.cursor() as cur:
             # Clear the old thumbnail for this event first, then set the new one --
             # keeps it to a single UPDATE pass per direction and avoids a moment
             # where two rows are both flagged if something in between fails.
@@ -267,11 +277,12 @@ async def get_eventimage_by_id(image_id: int, current=Depends(require_permission
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def update_eventimage(req_data: UpdateEventImageInfoRequest, current=Depends(require_permission("manage_event_images"))):
+async def update_eventimage(req_data: UpdateEventImageInfoRequest, current=Depends(get_current_account)):
     """Renames / re-points a record without touching the file (use replace_eventimage_file
     to actually swap the underlying image)."""
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "manage_event_images")
         with con.cursor() as cur:
             sql = """
                 UPDATE eventimageinfo
@@ -301,13 +312,20 @@ async def update_eventimage(req_data: UpdateEventImageInfoRequest, current=Depen
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def delete_eventimage(image_id: int, current=Depends(require_permission("manage_event_images"))):
+async def delete_eventimage(image_id: int, current=Depends(get_current_account)):
     try:
         con = getConnect()
         with con.cursor() as cur:
-            cur.execute("SELECT ImagePath FROM eventimageinfo WHERE ImageID = %s", (image_id,))
+            cur.execute("SELECT EventID, ImagePath FROM eventimageinfo WHERE ImageID = %s", (image_id,))
             row = cur.fetchone()
 
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+        event_id = row["EventID"] if isinstance(row, dict) else row[0]
+        await ensure_event_editor(con, current, event_id, "manage_event_images")
+
+        with con.cursor() as cur:
             cur.execute("DELETE FROM eventimageinfo WHERE ImageID = %s", (image_id,))
             rows_deleted = cur.rowcount
             con.commit()
@@ -316,7 +334,7 @@ async def delete_eventimage(image_id: int, current=Depends(require_permission("m
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
 
         if row:
-            old_path = row["ImagePath"] if isinstance(row, dict) else row[0]
+            old_path = row["ImagePath"] if isinstance(row, dict) else row[1]
             _delete_image_file(old_path)
 
         return {"msg": "Event deleted successfully", "image_id": image_id}

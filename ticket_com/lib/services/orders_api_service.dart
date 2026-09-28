@@ -20,14 +20,14 @@ class PaymentType {
 class OrderModel {
   final int id;
   final int accountId;
-  final int paymentTypeId;
+  final int? paymentTypeId;
   final DateTime? paymentDate;
   final String? proveOfPayment;
 
   OrderModel({
     required this.id,
     required this.accountId,
-    required this.paymentTypeId,
+    this.paymentTypeId,
     this.paymentDate,
     this.proveOfPayment,
   });
@@ -36,7 +36,7 @@ class OrderModel {
     return OrderModel(
       id: json['OrderID'] as int,
       accountId: json['AccountID'] as int,
-      paymentTypeId: json['PaymentTypeID'] as int,
+      paymentTypeId: json['PaymentTypeID'] as int?,
       paymentDate: json['PaymentDateYMDT'] == null
           ? null
           : DateTime.parse(json['PaymentDateYMDT'].toString()),
@@ -119,7 +119,7 @@ class OrdersApiService {
 
   static Future<Map<String, dynamic>> createOrder({
     required int accountId,
-    required int paymentTypeId,
+    int? paymentTypeId,
     String? paymentDateYMDT,
     String? proveOfPayment,
   }) async {
@@ -146,7 +146,7 @@ class OrdersApiService {
   static Future<void> updateOrder({
     required int orderId,
     required int accountId,
-    required int paymentTypeId,
+    int? paymentTypeId,
     String? paymentDateYMDT,
     String? proveOfPayment,
   }) async {

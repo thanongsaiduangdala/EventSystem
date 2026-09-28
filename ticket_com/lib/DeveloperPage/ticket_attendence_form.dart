@@ -775,7 +775,7 @@ class _OrderPickerDialogState extends State<_OrderPickerDialog> {
                               style: const TextStyle(color: Color(0xFF212121)),
                             ),
                             subtitle: Text(
-                              'Account #${order.accountId}  •  Payment Type #${order.paymentTypeId}',
+                              'Account #${order.accountId}  •  Payment Type #${order.paymentTypeId ?? '-'}',
                               style: const TextStyle(color: Color(0xFF9E9E9E)),
                             ),
                             onTap: () => Navigator.pop(context, order),

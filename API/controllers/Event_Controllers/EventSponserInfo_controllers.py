@@ -2,10 +2,12 @@ import os
 import uuid
 import pymysql
 import aiofiles
-from fastapi import HTTPException, status, UploadFile, File, Form
+from fastapi import HTTPException, status, UploadFile, File, Form, Depends
 from typing import Optional
 from DB.DBConnect import getConnect
 from models.schema import AddSponserInfoRequest, UpdateSponserInfoRequest, AddEventSponserInfoRequest, UpdateEventSponserInfoRequest
+from auth.dependencies import get_current_account
+from auth.team_access import ensure_event_editor
 
 # Where sponsor logo files get written to disk. Adjust this to match wherever
 # your event-image uploads are already being stored/served from (e.g. if you
@@ -223,9 +225,10 @@ async def delete_Sponser(Sponser_id: int):
 
     #----------------------------------------------------------------------------------------------------------------------
 
-async def create_EventSponser(req_data: AddEventSponserInfoRequest):
+async def create_EventSponser(req_data: AddEventSponserInfoRequest, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "update_event")
         with con.cursor() as cur:
             sql = """
                 INSERT INTO eventsponserinfo
@@ -284,9 +287,10 @@ async def get_EventSponser_by_id(eventsponser_id: int):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def update_EventSponser(req_data: UpdateEventSponserInfoRequest):
+async def update_EventSponser(req_data: UpdateEventSponserInfoRequest, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "update_event")
         with con.cursor() as cur:
             sql = """
                 UPDATE eventsponserinfo
@@ -314,9 +318,18 @@ async def update_EventSponser(req_data: UpdateEventSponserInfoRequest):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def delete_EventSponser(EventSponser_ID: int):
+async def delete_EventSponser(EventSponser_ID: int, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        with con.cursor() as cur:
+            cur.execute("SELECT EventID FROM eventsponserinfo WHERE EventSponserID = %s", (EventSponser_ID,))
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+            event_id = row["EventID"] if isinstance(row, dict) else row[0]
+
+        await ensure_event_editor(con, current, event_id, "update_event")
+
         with con.cursor() as cur:
             cur.execute("DELETE FROM eventsponserinfo WHERE EventSponserID = %s", (EventSponser_ID,))
             rows_deleted = cur.rowcount

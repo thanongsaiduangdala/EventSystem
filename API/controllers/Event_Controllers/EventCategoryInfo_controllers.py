@@ -2,12 +2,14 @@ import pymysql
 from fastapi import HTTPException, status, Depends
 from DB.DBConnect import getConnect
 from models.schema import AddEventCategoryInfoRequest, UpdateEventCategoryInfoRequest
-from auth.dependencies import require_permission
+from auth.dependencies import require_permission, get_current_account
+from auth.team_access import ensure_event_editor
 
 
-async def create_eventcategory(req_data: AddEventCategoryInfoRequest, current=Depends(require_permission("manage_categories"))):
+async def create_eventcategory(req_data: AddEventCategoryInfoRequest, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "manage_categories")
         with con.cursor() as cur:
             sql = """
                 INSERT INTO eventcategoryinfo
@@ -77,9 +79,10 @@ async def get_categories_by_event_id(event_id: int, current=Depends(require_perm
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def update_eventcategory(req_data: UpdateEventCategoryInfoRequest, current=Depends(require_permission("manage_categories"))):
+async def update_eventcategory(req_data: UpdateEventCategoryInfoRequest, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "manage_categories")
         with con.cursor() as cur:
             sql = """
                 UPDATE eventcategoryinfo
@@ -107,9 +110,18 @@ async def update_eventcategory(req_data: UpdateEventCategoryInfoRequest, current
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def delete_eventcategory(event_category_id: int, current=Depends(require_permission("manage_categories"))):
+async def delete_eventcategory(event_category_id: int, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        with con.cursor() as cur:
+            cur.execute("SELECT EventID FROM eventcategoryinfo WHERE EventCategoryID = %s", (event_category_id,))
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event category not found")
+            event_id = row["EventID"] if isinstance(row, dict) else row[0]
+
+        await ensure_event_editor(con, current, event_id, "manage_categories")
+
         with con.cursor() as cur:
             sql = "DELETE FROM eventcategoryinfo WHERE EventCategoryID = %s"
             cur.execute(sql, (event_category_id,))

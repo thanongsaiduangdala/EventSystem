@@ -139,7 +139,7 @@ class _AttendeeSlot {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  late int _paymentTypeId;
+  int? _paymentTypeId;
   final Map<int, int> _qtyByType = {};
   List<_AttendeeSlot> _slots = [];
   List<EventQuestionModel> _questions = [];
@@ -151,8 +151,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   void initState() {
     super.initState();
-    _paymentTypeId =
-        widget.paymentTypes.isEmpty ? 0 : widget.paymentTypes.first.id;
+    if (widget.paymentTypes.isNotEmpty) {
+      _paymentTypeId = widget.paymentTypes.first.id;
+    }
     if (widget.ticketTypes.isNotEmpty) {
       _qtyByType[widget.ticketTypes.first.id] = 1;
     }
@@ -205,6 +206,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
     return total;
   }
+
+  bool get _isFree => _totalPrice == 0;
 
   void _setQty(TicketTypeModel ticket, int delta) {
     setState(() {
@@ -328,8 +331,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
     var valid = true;
     var firstBadSlot = -1;
     setState(() {
-      _proofError = proof.isEmpty;
+      _proofError = !_isFree && proof.isEmpty;
       if (_proofError) valid = false;
+      if (!_isFree && _paymentTypeId == null) valid = false;
       final seenIds = <String>{};
       for (var s = 0; s < _slots.length; s++) {
         final slot = _slots[s];
@@ -376,9 +380,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
     try {
       final order = await OrdersApiService.createOrder(
         accountId: widget.session.accountId,
-        paymentTypeId: _paymentTypeId,
+        paymentTypeId: _isFree ? null : _paymentTypeId,
         paymentDateYMDT: _formatApiDateTime(DateTime.now()),
-        proveOfPayment: _proofController.text.trim(),
+        proveOfPayment: _isFree ? null : _proofController.text.trim(),
       );
       final orderId = int.tryParse(order['OrderID'].toString());
       if (orderId == null) {
@@ -453,8 +457,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
           _ticketSelectionSection(l10n),
           const SizedBox(height: 20),
           _orderSummary(l10n),
-          const SizedBox(height: 20),
-          _paymentSection(l10n),
+          if (!_isFree) ...[
+            const SizedBox(height: 20),
+            _paymentSection(l10n),
+          ],
           if (_slots.isNotEmpty) ...[
             const SizedBox(height: 20),
             _attendeesSection(l10n),
@@ -1138,7 +1144,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         ),
                       )
                     : Text(
-                        '${l10n.confirmOrder.toUpperCase()}  ${_formatKip(_totalPrice)}',
+                        _isFree
+                            ? l10n.confirmOrder.toUpperCase()
+                            : '${l10n.confirmOrder.toUpperCase()}  ${_formatKip(_totalPrice)}',
                         textAlign: TextAlign.center,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(

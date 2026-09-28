@@ -6,7 +6,12 @@ from controllers.Event_Controllers.EventOrganizerInfo_controllers import (
 )
 from controllers.Event_Controllers.OrganizerMember_controllers import (
     create_organizermember, get_all_OrganizerMembers, get_organizermember_by_id,
-    update_organizermember, delete_organizermember
+    update_organizermember, delete_organizermember,
+    invite_organizermember, accept_organizermember, decline_organizermember,
+    get_organizermembers_with_accounts,
+    get_my_memberships, get_my_team_member_events, get_org_team,
+    change_member_role, transfer_org_ownership,
+    assign_member_to_event, unassign_member_from_event
 )
 
 router = APIRouter(prefix="/eventorganizer", tags=["EventOrganizer"])
@@ -23,7 +28,19 @@ router.delete("/organizer/{event_organizer_id}")(delete_eventorganizer)
 
 # organizermember
 router.post("/member/create")(create_organizermember)
+router.post("/member/invite")(invite_organizermember)
 router.get("/member/all")(get_all_OrganizerMembers)
+router.get("/member/all-with-accounts")(get_organizermembers_with_accounts)
+# team member dashboard (static paths MUST precede /member/{member_id})
+router.get("/member/my-memberships")(get_my_memberships)
+router.get("/member/member-events")(get_my_team_member_events)
+router.get("/member/team/{org_id}")(get_org_team)
+router.put("/member/change-role")(change_member_role)
+router.post("/member/transfer-ownership")(transfer_org_ownership)
+router.post("/member/assign-event")(assign_member_to_event)
+router.post("/member/unassign-event")(unassign_member_from_event)
+router.post("/member/{member_id}/accept")(accept_organizermember)
+router.post("/member/{member_id}/decline")(decline_organizermember)
 router.get("/member/{member_id}")(get_organizermember_by_id)
 router.put("/member/update")(update_organizermember)
 router.delete("/member/{member_id}")(delete_organizermember)

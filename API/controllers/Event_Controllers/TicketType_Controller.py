@@ -2,11 +2,13 @@ import pymysql
 from fastapi import HTTPException, status, Depends
 from DB.DBConnect import getConnect
 from models.schema import AddTicketTypeRequest, UpdateTicketTypeRequest
-from auth.dependencies import require_permission
+from auth.dependencies import require_permission, get_current_account
+from auth.team_access import ensure_event_editor
 
-async def create_TicketType(req_data: AddTicketTypeRequest, current=Depends(require_permission("manage_ticket_types"))):
+async def create_TicketType(req_data: AddTicketTypeRequest, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "manage_ticket_types")
         with con.cursor() as cur:
             sql = """
                 INSERT INTO tickettype
@@ -111,9 +113,10 @@ async def get_TicketType_by_Anything(value: str, current=Depends(require_permiss
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def update_TicketType(req_data: UpdateTicketTypeRequest, current=Depends(require_permission("manage_ticket_types"))):
+async def update_TicketType(req_data: UpdateTicketTypeRequest, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "manage_ticket_types")
         with con.cursor() as cur:
             sql = """
                 UPDATE tickettype
@@ -148,9 +151,18 @@ async def update_TicketType(req_data: UpdateTicketTypeRequest, current=Depends(r
     except pymysql.MySQLError as err:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
-async def delete_TicketType(tickettype_id: int, current=Depends(require_permission("manage_ticket_types"))):
+async def delete_TicketType(tickettype_id: int, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        with con.cursor() as cur:
+            cur.execute("SELECT EventID FROM tickettype WHERE TicketTypeID = %s", (tickettype_id,))
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tickettype not found")
+            event_id = row["EventID"] if isinstance(row, dict) else row[0]
+
+        await ensure_event_editor(con, current, event_id, "manage_ticket_types")
+
         with con.cursor() as cur:
             cur.execute("DELETE FROM tickettype WHERE TicketTypeID = %s", (tickettype_id,))
             rows_deleted = cur.rowcount

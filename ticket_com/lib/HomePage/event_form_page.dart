@@ -162,10 +162,16 @@ class _EventFormPageState extends State<EventFormPage> {
     try {
       final organizers = await EventApiService.getAllOrganizers();
       final session = AuthService.currentSession;
+      // While creating, only your own organizers are offered. While editing,
+      // the event's own organizer is always kept so team members (e.g. a Page
+      // Designer) who did not create the organization can still edit the event.
+      final evOrgId = widget.event?.organizerId;
       final visible = session != null && !session.isSuperAdmin
           ? organizers
-                .where((o) => o.createdByAccountId == session.accountId)
-                .toList()
+              .where((o) =>
+                  o.createdByAccountId == session.accountId ||
+                  (evOrgId != null && o.id == evOrgId))
+              .toList()
           : organizers;
       if (!mounted) return;
       setState(() {

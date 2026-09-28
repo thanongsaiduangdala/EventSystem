@@ -19,6 +19,7 @@ class AppNotification {
     required this.body,
     required this.time,
     this.read = false,
+    this.link = '',
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
@@ -32,6 +33,7 @@ class AppNotification {
           : DateTime.tryParse(json['CreatedAtYMDT'].toString()) ??
                 DateTime.now(),
       read: (json['IsRead'] ?? 0) == 1,
+      link: (json['Link'] ?? '').toString(),
     );
   }
 
@@ -42,6 +44,11 @@ class AppNotification {
   final DateTime time;
   final bool read;
 
+  /// Optional deep-link payload attached to the notification, e.g.
+  /// `org_invite:<MemberID>`. Empty means the notification has no target
+  /// screen and taps fall back to the detail dialog.
+  final String link;
+
   AppNotification copyWith({bool? read}) => AppNotification(
     id: id,
     type: type,
@@ -49,6 +56,7 @@ class AppNotification {
     body: body,
     time: time,
     read: read ?? this.read,
+    link: link,
   );
 }
 

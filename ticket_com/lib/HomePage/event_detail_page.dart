@@ -64,6 +64,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
   List<TicketTypeModel> _ticketTypes = [];
   List<PaymentType> _paymentTypes = [];
+
+  bool get _isFreeEvent =>
+      _ticketTypes.isNotEmpty &&
+      _ticketTypes.every((t) => t.priceInKip == 0);
   List<EventImageModel> _heroImages = [];
   List<TicketPurchase> _purchases = [];
   List<SponserModel> _sponsors = [];
@@ -254,7 +258,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       messenger.showSnackBar(SnackBar(content: Text(l10n.noTicketsAvailable)));
       return;
     }
-    if (_paymentTypes.isEmpty) {
+    if (_paymentTypes.isEmpty && !_isFreeEvent) {
       messenger.showSnackBar(
         const SnackBar(content: Text('No payment method available')),
       );

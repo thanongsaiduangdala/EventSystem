@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_com/HomePage/event_analytics_page.dart';
 import 'package:ticket_com/HomePage/event_form_page.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
-import 'package:ticket_com/services/event_organizer_api_service.dart'
-    hide EventOrganizer;
 import 'package:ticket_com/services/organizer_member_api_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
@@ -15,12 +14,15 @@ const Color _kGreen = Color(0xFF2E9E5B);
 const Color _kAmber = Color(0xFFB26A00);
 const Color _kRed = Color(0xFFE53935);
 
-class _TeamMemberView {
-  final OrganizerMemberModel member;
-  final VerifiedAccount account;
-  final TeamRoleModel role;
+const int _kMemberPending = 1;
+const int _kMemberActive = 2;
+const int _kMemberDeclined = 3;
+const int _kMemberRemoved = 4;
 
-  _TeamMemberView({required this.member, required this.account, required this.role});
+class _TeamMemberView {
+  final OrganizerMemberDetail detail;
+
+  _TeamMemberView(this.detail);
 }
 
 /// Organizer dashboard. Shows the organizer profiles owned by the signed-in
@@ -43,9 +45,44 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   List<EventModel> _myEvents = [];
   List<EventOrganizer> _allOrganizers = [];
 
-  List<VerifiedAccount> _verifiedAccounts = [];
   List<TeamRoleModel> _teamRoles = [];
   List<_TeamMemberView> _team = [];
+
+  int _tabIndex = 0;
+  final _eventSearch = TextEditingController();
+  final _memberSearch = TextEditingController();
+  int? _statusFilter;
+  bool? _visibleFilter;
+
+  List<EventModel> get _filteredEvents {
+    final query = _eventSearch.text.trim().toLowerCase();
+    return _myEvents.where((e) {
+      if (_statusFilter != null && e.eventStatusId != _statusFilter) {
+        return false;
+      }
+      if (_visibleFilter != null && e.eventVisible != _visibleFilter) {
+        return false;
+      }
+      if (query.isNotEmpty) {
+        final name = e.name.toLowerCase();
+        final org = _organizerNameFor(e.organizerId).toLowerCase();
+        if (!name.contains(query) && !org.contains(query)) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  List<_TeamMemberView> get _filteredTeam {
+    final query = _memberSearch.text.trim().toLowerCase();
+    if (query.isEmpty) return _team;
+    return _team.where((t) {
+      final d = t.detail;
+      return d.fullName.toLowerCase().contains(query) ||
+          d.email.toLowerCase().contains(query) ||
+          d.roleName.toLowerCase().contains(query) ||
+          d.statusName.toLowerCase().contains(query);
+    }).toList();
+  }
 
   /// Cover image per event id, and which events already have ticket types.
   /// Both are best-effort extras: if they fail to load the dashboard still
@@ -64,6 +101,13 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _eventSearch.dispose();
+    _memberSearch.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -77,24 +121,19 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
       final myIds = myOrganizers.map((o) => o.id).toSet();
 
       List<EventModel> events = [];
-      List<OrganizerMemberModel> members = [];
-      List<VerifiedAccount> verified = [];
+      List<OrganizerMemberDetail> teamDetails = [];
       List<TeamRoleModel> roles = [];
       if (myIds.isNotEmpty) {
         final results = await Future.wait<Object>([
           EventApiService.getAllEventsWithStatus(),
-          OrganizerMemberApiService.getAllMembers(),
-          EventOrganizerApiService.getVerifiedAccounts(),
+          OrganizerMemberApiService.getMembersWithAccounts(),
           OrganizerMemberApiService.getAllTeamRoles(),
         ]);
         events = (results[0] as List<EventModel>)
             .where((e) => myIds.contains(e.organizerId))
             .toList();
-        members = (results[1] as List<OrganizerMemberModel>)
-            .where((m) => myIds.contains(m.eventOrganizerId))
-            .toList();
-        verified = results[2] as List<VerifiedAccount>;
-        roles = results[3] as List<TeamRoleModel>;
+        teamDetails = results[1] as List<OrganizerMemberDetail>;
+        roles = results[2] as List<TeamRoleModel>;
       }
 
       final coverByEvent = <int, EventImageModel>{};
@@ -122,9 +161,6 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         }
       }
 
-      final accountsById = {for (final v in verified) v.id: v};
-      final rolesById = {for (final r in roles) r.id: r};
-
       if (!mounted) return;
       setState(() {
         _myOrganizers = myOrganizers;
@@ -133,18 +169,17 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         _coverByEvent = coverByEvent;
         _eventsWithTickets = eventsWithTickets;
         _ticketInfoKnown = ticketInfoKnown;
-        _verifiedAccounts = verified;
         _teamRoles = roles;
-        _team = members
-            .where((m) => accountsById.containsKey(m.accountId))
-            .map((m) => _TeamMemberView(
-                  member: m,
-                  account: accountsById[m.accountId]!,
-                  role: rolesById[m.teamRoleId] ??
-                      TeamRoleModel(id: m.teamRoleId, name: 'Role #${m.teamRoleId}'),
-                ))
+        _team = teamDetails
+            .map((d) => _TeamMemberView(d))
             .toList()
-          ..sort((a, b) => a.account.fullName.compareTo(b.account.fullName));
+          ..sort((a, b) {
+            final byStatus = a.detail.memberStatusId
+                .compareTo(b.detail.memberStatusId);
+            return byStatus != 0
+                ? byStatus
+                : a.detail.fullName.compareTo(b.detail.fullName);
+          });
         _loading = false;
       });
     } catch (e) {
@@ -189,6 +224,22 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         _load();
       }
     });
+  }
+
+  Future<void> _openAnalytics(EventModel event) async {
+    List<TicketTypeModel> tickets = const [];
+    try {
+      tickets = await TicketTypeApiService.getTicketTypesByEvent(event.id);
+    } catch (_) {
+      // analytics works without ticket config; charts just stay empty
+    }
+    if (!mounted) return;
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventAnalyticsPage(event: event, ticketTypes: tickets),
+      ),
+    );
   }
 
   Future<void> _toggleEventVisibility(EventModel event, bool visible) async {
@@ -243,51 +294,43 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
 
   // ---------------- team members ----------------
 
-  Future<void> _openAddMember() async {
+  Future<void> _openInviteMember() async {
     final organizer = _primaryOrganizer;
     if (organizer == null) return;
-    if (_verifiedAccounts.isEmpty) {
-      _snack('No verified accounts available to hire yet.');
-      return;
-    }
-    final allAccounts = _verifiedAccounts.where((v) {
-      final already = _team.any((t) => t.member.accountId == v.id);
-      return v.id != _accountId && !already;
-    }).toList();
-    if (allAccounts.isEmpty) {
-      _snack('Every verified account is already on your team.');
+    if (_teamRoles.isEmpty) {
+      _snack('No team roles configured yet.');
       return;
     }
 
-    final result = await showModalBottomSheet<_TeamMemberCreate>(
+    final result = await showModalBottomSheet<_TeamInviteCreate>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => _AddMemberSheet(
-        accounts: allAccounts,
+      builder: (context) => _InviteMemberSheet(
         roles: _teamRoles,
         organizerName: organizer.name,
       ),
     );
     if (result == null) return;
     try {
-      await OrganizerMemberApiService.createMember(
-        accountId: result.account.id,
+      await OrganizerMemberApiService.inviteMember(
+        email: result.email,
         eventOrganizerId: organizer.id,
         teamRoleId: result.role.id,
       );
       if (!mounted) return;
-      _snack('${result.account.fullName} added to your team as ${result.role.name}.');
+      _snack('Invitation sent to ${result.email} as ${result.role.name}.');
       _load();
     } catch (e) {
-      _snack('Could not add member: $e');
+      _snack('Could not send invitation: $e');
     }
   }
 
   Future<void> _confirmRemoveMember(_TeamMemberView view) async {
+    final detail = view.detail;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -295,8 +338,9 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         title: const Text('Remove from team?',
             style: TextStyle(color: _kTextDark)),
         content: Text(
-          'Remove ${view.account.fullName} (${view.role.name}) from your '
-          'organizer team?',
+          'Remove ${detail.fullName} (${detail.roleName}) from your '
+          'organizer team?'
+          '${detail.memberStatusId == _kMemberPending ? ' This will revoke their pending invitation.' : ''}',
           style: const TextStyle(color: _kTextGrey),
         ),
         actions: [
@@ -313,9 +357,9 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     );
     if (confirmed != true) return;
     try {
-      await OrganizerMemberApiService.deleteMember(view.member.id);
+      await OrganizerMemberApiService.deleteMember(detail.id);
       if (!mounted) return;
-      _snack('${view.account.fullName} removed from your team.');
+      _snack('${detail.fullName} removed from your team.');
       _load();
     } catch (e) {
       _snack('Remove failed: $e');
@@ -332,6 +376,7 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   @override
   Widget build(BuildContext context) {
     final organizer = _primaryOrganizer;
+    final showNav = _myOrganizers.isNotEmpty && _error == null;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
@@ -351,18 +396,33 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
               ? _errorBox()
               : _myOrganizers.isEmpty
                   ? _noOrganizerBox()
-                  : ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
-                      children: [
-                        _organizerHeader(organizer!),
-                        const SizedBox(height: 20),
-                        _eventsSection(),
-                        const SizedBox(height: 24),
-                        _teamSection(),
-                      ],
+                  : AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: _tabIndex == 0
+                          ? _eventsTab(organizer!)
+                          : _teamTab(organizer!),
                     ),
-      floatingActionButton: _myOrganizers.isNotEmpty && _error == null
+      bottomNavigationBar: showNav
+          ? NavigationBar(
+              selectedIndex: _tabIndex,
+              backgroundColor: Colors.white,
+              indicatorColor: kAccent.withValues(alpha: 0.14),
+              onDestinationSelected: (i) => setState(() => _tabIndex = i),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.event_outlined),
+                  selectedIcon: Icon(Icons.event),
+                  label: 'Events',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.groups_outlined),
+                  selectedIcon: Icon(Icons.groups),
+                  label: 'My Team',
+                ),
+              ],
+            )
+          : null,
+      floatingActionButton: showNav && _tabIndex == 0
           ? FloatingActionButton.extended(
               backgroundColor: kAccent,
               foregroundColor: Colors.white,
@@ -374,6 +434,32 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
               ),
             )
           : null,
+    );
+  }
+
+  Widget _eventsTab(EventOrganizer organizer) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+      children: [
+        _organizerHeader(organizer),
+        const SizedBox(height: 20),
+        _searchAndFilters(),
+        const SizedBox(height: 16),
+        _eventsSection(),
+      ],
+    );
+  }
+
+  Widget _teamTab(EventOrganizer organizer) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+      children: [
+        _organizerHeader(organizer),
+        const SizedBox(height: 20),
+        _teamSection(),
+      ],
     );
   }
 
@@ -475,7 +561,130 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     );
   }
 
+  Widget _searchAndFilters() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _eventSearch,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            hintText: 'Search events by name or organizer...',
+            hintStyle: const TextStyle(color: _kTextGrey, fontSize: 13.5),
+            prefixIcon: const Icon(Icons.search, color: _kTextGrey),
+            suffixIcon: _eventSearch.text.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.clear, color: _kTextGrey, size: 20),
+                    onPressed: () {
+                      _eventSearch.clear();
+                      setState(() {});
+                    },
+                  ),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(vertical: 4),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: kAccent, width: 1.6),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _filterChip(
+                label: 'Status: All',
+                selected: _statusFilter == null,
+                onTap: () => setState(() => _statusFilter = null),
+              ),
+              _filterChip(
+                label: 'Approved',
+                selected: _statusFilter == EventStatus.approved,
+                onTap: () => setState(
+                  () => _statusFilter = EventStatus.approved,
+                ),
+              ),
+              _filterChip(
+                label: 'Pending',
+                selected: _statusFilter == EventStatus.pending,
+                onTap: () => setState(
+                  () => _statusFilter = EventStatus.pending,
+                ),
+              ),
+              _filterChip(
+                label: 'Denied',
+                selected: _statusFilter == EventStatus.denied,
+                onTap: () => setState(() => _statusFilter = EventStatus.denied),
+              ),
+              const SizedBox(width: 6),
+              const VerticalDivider(width: 16, color: _kTextGrey),
+              _filterChip(
+                label: 'Visibility: All',
+                selected: _visibleFilter == null,
+                onTap: () => setState(() => _visibleFilter = null),
+              ),
+              _filterChip(
+                label: 'Public',
+                selected: _visibleFilter == true,
+                onTap: () => setState(() => _visibleFilter = true),
+              ),
+              _filterChip(
+                label: 'Not public',
+                selected: _visibleFilter == false,
+                onTap: () => setState(() => _visibleFilter = false),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : _kTextDark,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        selected: selected,
+        selectedColor: kAccent,
+        backgroundColor: Colors.white,
+        checkmarkColor: Colors.white,
+        showCheckmark: false,
+        side: BorderSide(
+          color: selected ? kAccent : const Color(0xFFD5D2EC),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        onSelected: (_) => onTap(),
+      ),
+    );
+  }
+
   Widget _eventsSection() {
+    final visible = _filteredEvents;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -491,7 +700,7 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
             ),
             const Spacer(),
             Text(
-              '${_myEvents.length}',
+              '${visible.length} / ${_myEvents.length}',
               style: const TextStyle(color: _kTextGrey, fontSize: 13),
             ),
           ],
@@ -504,8 +713,15 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
             message: 'Tap "Create Event" to add your first event, with its photos, '
                 'categories, sponsors, ticket types and questions.',
           )
+        else if (visible.isEmpty)
+          _emptyCard(
+            icon: Icons.search_off,
+            title: 'No matching events',
+            message: 'No events match your search and filters. Clear them to see '
+                'everything.',
+          )
         else
-          ..._myEvents.map((e) => Padding(
+          ...visible.map((e) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _eventCard(e),
               )),
@@ -545,7 +761,7 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     final needsTickets =
         _ticketInfoKnown && !_eventsWithTickets.contains(event.id);
     return GestureDetector(
-      onTap: () => _openEditEvent(event),
+      onTap: () => _openAnalytics(event),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -566,6 +782,12 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
               children: [
                 _statusChip(event.eventStatusId),
                 const Spacer(),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.bar_chart, color: kAccent, size: 20),
+                  tooltip: 'Analytics',
+                  onPressed: () => _openAnalytics(event),
+                ),
                 TextButton.icon(
                   onPressed: () => _openEditEvent(event),
                   style: TextButton.styleFrom(
@@ -664,7 +886,7 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
                 ),
                 Switch(
                   value: event.eventVisible,
-                  activeColor: _kGreen,
+                  activeThumbColor: _kGreen,
                   onChanged: (val) => _toggleEventVisibility(event, val),
                 ),
               ],
@@ -727,6 +949,7 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   }
 
   Widget _teamSection() {
+    final visibleTeam = _filteredTeam;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -742,11 +965,11 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
             ),
             const Spacer(),
             TextButton.icon(
-              onPressed: _openAddMember,
+              onPressed: _openInviteMember,
               style: TextButton.styleFrom(foregroundColor: kAccent),
               icon: const Icon(Icons.person_add_alt_1, size: 18),
               label: const Text(
-                'Hire / Add',
+                'Invite',
                 style: TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
@@ -754,18 +977,60 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         ),
         const SizedBox(height: 4),
         const Text(
-          'Add verified accounts as your employees or volunteers.',
+          'Invite people to join your team as your employees or volunteers. '
+          'They get a notification they can accept.',
           style: TextStyle(color: _kTextGrey, fontSize: 12.5),
         ),
         const SizedBox(height: 10),
+        TextField(
+          controller: _memberSearch,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            hintText: 'Search team by name, email or role...',
+            hintStyle: const TextStyle(color: _kTextGrey, fontSize: 13.5),
+            prefixIcon: const Icon(Icons.search, color: _kTextGrey),
+            suffixIcon: _memberSearch.text.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.clear, color: _kTextGrey, size: 20),
+                    onPressed: () {
+                      _memberSearch.clear();
+                      setState(() {});
+                    },
+                  ),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(vertical: 4),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: kAccent, width: 1.6),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
         if (_team.isEmpty)
           _emptyCard(
             icon: Icons.groups_outlined,
             title: 'No team members yet',
-            message: 'Hire an account to help you run your events.',
+            message: 'Invite someone to help you run your events. They will get '
+                'a notification they can accept.',
+          )
+        else if (visibleTeam.isEmpty)
+          _emptyCard(
+            icon: Icons.search_off,
+            title: 'No matching members',
+            message: 'No team members match your search.',
           )
         else
-          ..._team.map((t) => Padding(
+          ...visibleTeam.map((t) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _memberCard(t),
               )),
@@ -774,10 +1039,12 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   }
 
   Widget _memberCard(_TeamMemberView view) {
-    final account = view.account;
-    final initial = account.fullName.isEmpty
+    final detail = view.detail;
+    final initial = detail.fullName.isEmpty
         ? '?'
-        : account.fullName.characters.first.toUpperCase();
+        : detail.fullName.characters.first.toUpperCase();
+    final canRemove = detail.memberStatusId == _kMemberPending ||
+        detail.memberStatusId == _kMemberActive;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -820,7 +1087,7 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  account.fullName,
+                  detail.fullName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -829,42 +1096,87 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                if (account.email.isNotEmpty) ...[
+                if (detail.email.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
-                    account.email,
+                    detail.email,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: _kTextGrey, fontSize: 12.5),
                   ),
                 ],
                 const SizedBox(height: 6),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: kAccent.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    view.role.name,
-                    style: const TextStyle(
-                      color: kAccent,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _roleChip(detail.roleName),
+                    _memberStatusChip(detail.memberStatusId),
+                  ],
                 ),
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.person_remove_outlined,
-                color: _kRed, size: 21),
-            tooltip: 'Remove from team',
-            onPressed: () => _confirmRemoveMember(view),
-          ),
+          if (canRemove)
+            IconButton(
+              icon: const Icon(Icons.person_remove_outlined,
+                  color: _kRed, size: 21),
+              tooltip: 'Remove from team',
+              onPressed: () => _confirmRemoveMember(view),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _roleChip(String roleName) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: kAccent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        roleName.isEmpty ? 'Member' : roleName,
+        style: const TextStyle(
+          color: kAccent,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _memberStatusChip(int statusId) {
+    final (bg, fg, label) = switch (statusId) {
+      _kMemberPending => (
+          const Color(0xFFFFF3E0),
+          _kAmber,
+          'Invited'
+        ),
+      _kMemberActive => (_kGreen, Colors.white, 'Active'),
+      _kMemberDeclined => (
+          const Color(0xFFEEEEEE),
+          const Color(0xFF616161),
+          'Declined'
+        ),
+      _kMemberRemoved => (const Color(0xFFFFEBEE), _kRed, 'Removed'),
+      _ => (const Color(0xFFF5F5F5), _kTextGrey, 'Unknown'),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: fg,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -977,44 +1289,49 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
       '${dt.minute.toString().padLeft(2, '0')}';
 }
 
-class _TeamMemberCreate {
-  final VerifiedAccount account;
+class _TeamInviteCreate {
+  final String email;
   final TeamRoleModel role;
 
-  _TeamMemberCreate({required this.account, required this.role});
+  _TeamInviteCreate({required this.email, required this.role});
 }
 
-class _AddMemberSheet extends StatefulWidget {
-  final List<VerifiedAccount> accounts;
+class _InviteMemberSheet extends StatefulWidget {
   final List<TeamRoleModel> roles;
   final String organizerName;
 
-  const _AddMemberSheet({
-    required this.accounts,
+  const _InviteMemberSheet({
     required this.roles,
     required this.organizerName,
   });
 
   @override
-  State<_AddMemberSheet> createState() => _AddMemberSheetState();
+  State<_InviteMemberSheet> createState() => _InviteMemberSheetState();
 }
 
-class _AddMemberSheetState extends State<_AddMemberSheet> {
-  VerifiedAccount? _selectedAccount;
+class _InviteMemberSheetState extends State<_InviteMemberSheet> {
+  final _emailController = TextEditingController();
   TeamRoleModel? _selectedRole;
 
   @override
   void initState() {
     super.initState();
-    if (widget.accounts.isNotEmpty) _selectedAccount = widget.accounts.first;
     if (widget.roles.isNotEmpty) _selectedRole = widget.roles.first;
   }
 
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
   void _submit() {
-    if (_selectedAccount == null || _selectedRole == null) return;
+    final email = _emailController.text.trim();
+    if (email.isEmpty) return;
+    if (_selectedRole == null) return;
     Navigator.pop(
       context,
-      _TeamMemberCreate(account: _selectedAccount!, role: _selectedRole!),
+      _TeamInviteCreate(email: email, role: _selectedRole!),
     );
   }
 
@@ -1032,7 +1349,7 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
               const Icon(Icons.person_add_alt_1, color: kAccent),
               const SizedBox(width: 8),
               const Text(
-                'Hire a team member',
+                'Invite a team member',
                 style: TextStyle(
                   color: _kTextDark,
                   fontSize: 18,
@@ -1043,12 +1360,13 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Add them to "${widget.organizerName}" as an employee or volunteer.',
+            'The invited person will get a notification to review and accept '
+            'joining "${widget.organizerName}".',
             style: const TextStyle(color: _kTextGrey, fontSize: 13),
           ),
           const SizedBox(height: 18),
           const Text(
-            'Account (verified)',
+            'Email of an existing account',
             style: TextStyle(
               color: _kTextDark,
               fontSize: 13.5,
@@ -1056,22 +1374,10 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
             ),
           ),
           const SizedBox(height: 6),
-          DropdownButtonFormField<VerifiedAccount>(
-            initialValue: _selectedAccount,
-            decoration: _decoration('Select account'),
-            items: widget.accounts
-                .map((a) => DropdownMenuItem<VerifiedAccount>(
-                      value: a,
-                      child: Text(
-                        a.fullName.isEmpty
-                            ? 'Account #${a.id}'
-                            : '${a.fullName} (${a.email})',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ))
-                .toList(),
-            onChanged: (v) => setState(() => _selectedAccount = v),
+          TextField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: _decoration('e.g. member@example.com'),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -1105,7 +1411,7 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
               ),
             ),
             child: const Text(
-              'Add to Team',
+              'Send Invitation',
               style: TextStyle(fontWeight: FontWeight.w800),
             ),
           ),

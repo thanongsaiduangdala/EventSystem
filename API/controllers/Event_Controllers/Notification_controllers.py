@@ -41,10 +41,12 @@ def staff_account_ids() -> list:
     return _account_ids_by_status([3, 4])
 
 
-def notify_accounts(recipient_ids, notification_type: str, title: str, body: str) -> None:
+def notify_accounts(recipient_ids, notification_type: str, title: str, body: str, link: str = None) -> None:
     """
-    Inserts one notification row per recipient. Best-effort: failures are
-    swallowed so a notification problem never breaks the caller's flow.
+    Inserts one notification row per recipient. `link` is an optional
+    app deep-link payload (e.g. "org_invite:<MemberID>"). Best-effort:
+    failures are swallowed so a notification problem never breaks the
+    caller's flow.
     """
     if not recipient_ids:
         return
@@ -54,10 +56,10 @@ def notify_accounts(recipient_ids, notification_type: str, title: str, body: str
             for account_id in set(recipient_ids):
                 cur.execute(
                     """
-                    INSERT INTO notificationinfo (AccountID, NotificationType, Title, Body)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO notificationinfo (AccountID, NotificationType, Title, Body, Link)
+                    VALUES (%s, %s, %s, %s, %s)
                     """,
-                    (account_id, notification_type, title, body),
+                    (account_id, notification_type, title, body, link),
                 )
         con.commit()
     except pymysql.MySQLError:
@@ -114,14 +116,15 @@ async def create_notification(req_data: AddNotificationRequest):
         with con.cursor() as cur:
             sql = """
                 INSERT INTO notificationinfo
-                (AccountID, NotificationType, Title, Body)
-                VALUES (%s, %s, %s, %s)
+                (AccountID, NotificationType, Title, Body, Link)
+                VALUES (%s, %s, %s, %s, %s)
             """
             cur.execute(sql, (
                 req_data.AccountID,
                 req_data.NotificationType,
                 req_data.Title,
                 req_data.Body,
+                req_data.Link,
             ))
             con.commit()
             notification_id = cur.lastrowid

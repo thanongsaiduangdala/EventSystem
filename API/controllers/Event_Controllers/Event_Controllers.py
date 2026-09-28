@@ -5,7 +5,8 @@ from models.schema import (
     AddEventInfoRequest, UpdateEventInfoRequest, UpdateEventStatusRequest,
     UpdateEventVisibilityRequest,
 )
-from auth.dependencies import require_permission, ROLE_SUPERADMIN
+from auth.dependencies import require_permission, ROLE_SUPERADMIN, get_current_account
+from auth.team_access import ensure_event_editor, ensure_org_editor
 from controllers.Event_Controllers.Notification_controllers import (
     notify_accounts, staff_account_ids
 )
@@ -28,9 +29,10 @@ def _event_status_for(current) -> int:
     return EVENT_STATUS_APPROVED if current.get("status_id") == ROLE_SUPERADMIN else EVENT_STATUS_PENDING
 
 
-async def create_event(req_data: AddEventInfoRequest, current=Depends(require_permission("create_event"))):
+async def create_event(req_data: AddEventInfoRequest, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        await ensure_org_editor(con, current, req_data.EventOrganizerID, "create_event")
         with con.cursor() as cur:
             sql = """
                 INSERT INTO eventinfo
@@ -130,7 +132,7 @@ async def get_event_by_id(event_id: int, current=Depends(require_permission("vie
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def update_event(req_data: UpdateEventInfoRequest, current=Depends(require_permission("update_event"))):
+async def update_event(req_data: UpdateEventInfoRequest, current=Depends(get_current_account)):
     """Editing an event does NOT require a fresh admin review by itself --
     that would make events flicker in and out of public view for routine
     edits (a typo fix, a time change), and it's especially bad right before
@@ -144,6 +146,7 @@ async def update_event(req_data: UpdateEventInfoRequest, current=Depends(require
     """
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "update_event")
         with con.cursor() as cur:
             # Needed both to know whether this is a resubmission (for the
             # notification) and to give a clean 404 if the event is gone.
@@ -207,7 +210,7 @@ async def update_event(req_data: UpdateEventInfoRequest, current=Depends(require
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def set_event_visibility(req_data: UpdateEventVisibilityRequest, current=Depends(require_permission("update_event"))):
+async def set_event_visibility(req_data: UpdateEventVisibilityRequest, current=Depends(get_current_account)):
     """Organizer action: show/hide an event from the public listing (e.g.
     sold out, postponed) without touching its approval status. Distinct from
     admin approval on purpose: approval is "is this content OK", visibility
@@ -215,6 +218,7 @@ async def set_event_visibility(req_data: UpdateEventVisibilityRequest, current=D
     latter without needing an admin at all."""
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "update_event")
         with con.cursor() as cur:
             cur.execute(
                 "UPDATE eventinfo SET EventVisible = %s WHERE EventID = %s",
@@ -309,9 +313,10 @@ async def update_event_status(req_data: UpdateEventStatusRequest, current=Depend
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def delete_event(event_id: int, current=Depends(require_permission("delete_event"))):
+async def delete_event(event_id: int, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, event_id, "delete_event", delete=True)
         with con.cursor() as cur:
             cur.execute("DELETE FROM eventinfo WHERE EventID = %s", (event_id,))
             rows_deleted = cur.rowcount

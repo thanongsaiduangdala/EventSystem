@@ -518,7 +518,8 @@ class _MyTicketPageState extends State<MyTicketPage> {
       'TICKET:EV${widget.event.id}:O${p.order.id}:'
       'A${p.attendee.id}:T${p.ticketType.id}';
 
-  String _paymentName(int paymentTypeId) {
+  String _paymentName(int? paymentTypeId) {
+    if (paymentTypeId == null) return '-';
     for (final p in widget.paymentTypes) {
       if (p.id == paymentTypeId) return p.paymentTypeName;
     }

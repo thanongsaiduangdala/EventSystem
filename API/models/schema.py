@@ -185,33 +185,82 @@ class AddOrganizerMemberRequest(BaseModel):
     AccountID: int
     EventOrganizerID: int
     TeamRoleID: int
- 
- 
+    MemberStatusID: int = 1
+
+
 class UpdateOrganizerMemberRequest(BaseModel):
     MemberID: int
     AccountID: int
     EventOrganizerID: int
     TeamRoleID: int
- 
- 
+    MemberStatusID: Optional[int] = None
+
+
+class InviteOrganizerMemberRequest(BaseModel):
+    Email: str
+    EventOrganizerID: int
+    TeamRoleID: int
+
+
+class AddMemberStatusInfoRequest(BaseModel):
+    StatusName: str
+
+
+class UpdateMemberStatusInfoRequest(BaseModel):
+    MemberStatusID: int
+    StatusName: str
+
+
+# ---------- team member dashboard ----------
+class CheckInAttendeeRequest(BaseModel):
+    EventID: int
+    AttendeeID: int
+
+
+class RevokeTicketRequest(BaseModel):
+    AttendeeID: int
+    IsValid: bool = False
+
+
+class ChangeMemberRoleRequest(BaseModel):
+    MemberID: int
+    TeamRoleID: int
+
+
+class TransferOwnershipRequest(BaseModel):
+    EventOrganizerID: int
+    NewOwnerMemberID: int
+
+
+class AssignMemberEventRequest(BaseModel):
+    MemberID: int
+    EventID: int
+    EventRoleID: int = 1
+
+
+class UnassignMemberEventRequest(BaseModel):
+    MemberID: int
+    EventID: int
+
+
 # ---------- eventRole ----------
 class AddEventRoleRequest(BaseModel):
     RoleName: str
- 
- 
+
+
 class UpdateEventRoleRequest(BaseModel):
     EventRoleID: int
     RoleName: str
- 
- 
+
+
 # ---------- eventstaff ----------
 class AddEventStaffRequest(BaseModel):
     EventID: int
     MemberID: int
     EventRoleID: int
     AssignedAtYMDT: Optional[datetime] = None
- 
- 
+
+
 class UpdateEventStaffRequest(BaseModel):
     AssignmentID: int
     EventID: int
@@ -264,20 +313,22 @@ class AddOrganizerMemberRequest(BaseModel):
     AccountID: int
     EventOrganizerID: int
     TeamRoleID: int
- 
- 
+    MemberStatusID: int = 1
+
+
 class UpdateOrganizerMemberRequest(BaseModel):
     MemberID: int
     AccountID: int
     EventOrganizerID: int
     TeamRoleID: int
- 
- 
+    MemberStatusID: Optional[int] = None
+
+
 # ---------- eventRole ----------
 class AddEventRoleRequest(BaseModel):
     RoleName: str
- 
- 
+
+
 class UpdateEventRoleRequest(BaseModel):
     EventRoleID: int
     RoleName: str
@@ -312,15 +363,15 @@ class UpdatePaymentTypeInfoRequest(BaseModel):
 # ---------- ordersinfo ----------
 class AddOrdersInfoRequest(BaseModel):
     AccountID: int
-    PaymentTypeID: int
+    PaymentTypeID: Optional[int] = None
     PaymentDateYMDT: Optional[datetime] = None
     ProveOfPayment: Optional[str] = None
- 
- 
+
+
 class UpdateOrdersInfoRequest(BaseModel):
     OrderID: int
     AccountID: int
-    PaymentTypeID: int
+    PaymentTypeID: Optional[int] = None
     PaymentDateYMDT: Optional[datetime] = None
     ProveOfPayment: Optional[str] = None
  
@@ -482,3 +533,4 @@ class AddNotificationRequest(BaseModel):
     NotificationType: str = "system"
     Title: str
     Body: str
+    Link: Optional[str] = None

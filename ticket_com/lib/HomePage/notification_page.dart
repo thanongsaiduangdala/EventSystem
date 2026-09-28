@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'package:ticket_com/services/notification_service.dart';
 
+import 'organizer_invite_page.dart';
+
 const Color _kAccent = Color(0xFF7C4DFF);
 const Color _kTextDark = Color(0xFF212121);
 const Color _kTextGrey = Color(0xFF757575);
@@ -97,13 +99,33 @@ class _NotificationPageState extends State<NotificationPage> {
               padding: const EdgeInsets.only(bottom: 10),
               child: _NotificationTile(
                 notification: items[index],
-                onOpenDetail: (n) => _showNotificationDetail(context, n),
+                onOpenDetail: (n) => openNotification(context, n),
               ),
             ),
           );
         },
       ),
     );
+  }
+}
+
+/// Opens the notification's deep-link target screen when it has one
+/// (`org_invite:<MemberID>` opens the invite/join page), otherwise shows the
+/// detail dialog below.
+void openNotification(BuildContext context, AppNotification notification) {
+    const prefix = 'org_invite:';
+    if (notification.link.startsWith(prefix)) {
+      final memberId = int.tryParse(notification.link.substring(prefix.length));
+      if (memberId != null) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => OrganizerInvitePage(memberId: memberId),
+          ),
+        );
+        return;
+      }
+    }
+    _showNotificationDetail(context, notification);
   }
 
   /// Floating rectangle card in the middle of the screen showing the full
@@ -268,7 +290,6 @@ class _NotificationPageState extends State<NotificationPage> {
         return 'GAEA';
     }
   }
-}
 
 String _formatFullTime(DateTime time) {
   const months = [
@@ -283,9 +304,18 @@ String _formatFullTime(DateTime time) {
 /// The small rectangle shown below the home-page bell icon. Lists the newest
 /// few notifications and a "See all" action that opens [NotificationPage].
 class NotificationDropdown extends StatelessWidget {
-  const NotificationDropdown({super.key, required this.onSeeAll});
+  const NotificationDropdown({
+    super.key,
+    required this.onSeeAll,
+    this.onOpenNotification,
+  });
 
   final VoidCallback onSeeAll;
+
+  /// Called when a notification in the dropdown is tapped (instead of the
+  /// default mark-read + detail dialog). The home page uses this to close the
+  /// panel and navigate to the notification's deep-link target.
+  final void Function(AppNotification notification)? onOpenNotification;
 
   @override
   Widget build(BuildContext context) {
@@ -387,8 +417,10 @@ class NotificationDropdown extends StatelessWidget {
                       shrinkWrap: true,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       itemCount: shown.length,
-                      itemBuilder: (context, index) =>
-                          _NotificationTile(notification: shown[index]),
+                      itemBuilder: (context, index) => _NotificationTile(
+                        notification: shown[index],
+                        onOpenDetail: onOpenNotification,
+                      ),
                     ),
                   ),
                 const Divider(height: 1, color: Color(0x14000000)),
@@ -435,7 +467,13 @@ class _NotificationTile extends StatelessWidget {
     if (!notification.read) {
       NotificationService.instance.markRead(notification.id);
     }
-    onOpenDetail?.call(notification);
+    if (onOpenDetail != null) {
+      onOpenDetail!(notification);
+      return;
+    }
+    if (notification.link.isNotEmpty) {
+      openNotification(context, notification);
+    }
   }
 
   @override

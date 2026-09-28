@@ -13,6 +13,7 @@ import 'package:ticket_com/HomePage/my_profile_page.dart';
 import 'package:ticket_com/HomePage/nearby_auto_scroll.dart';
 import 'package:ticket_com/HomePage/nearby_event_card.dart';
 import 'package:ticket_com/HomePage/notification_page.dart';
+import 'package:ticket_com/services/notification_service.dart';
 import 'package:ticket_com/LogSignPage/MainLoginSignUp.dart';
 import 'package:ticket_com/MainPage/Panel/SettingPanel.dart';
 import 'package:ticket_com/MainPage/Panel/TicketPanel.dart';
@@ -28,7 +29,6 @@ import 'package:ticket_com/services/event_view_api_service.dart';
 import 'package:ticket_com/services/follow_api_service.dart';
 import 'package:ticket_com/services/orders_api_service.dart';
 import 'package:ticket_com/services/location_service.dart';
-import 'package:ticket_com/services/notification_service.dart';
 import 'package:ticket_com/services/ticket_attendence_api_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 import 'package:ticket_com/services/wishlist_api_service.dart';
@@ -680,7 +680,10 @@ class _HomePageState extends State<HomePage>
             targetAnchor: Alignment.topRight,
             followerAnchor: Alignment.topRight,
             offset: const Offset(4, 64),
-            child: NotificationDropdown(onSeeAll: _openNotificationPage),
+            child: NotificationDropdown(
+              onSeeAll: _openNotificationPage,
+              onOpenNotification: _handleNotificationAction,
+            ),
           ),
         ],
       ),
@@ -699,6 +702,13 @@ class _HomePageState extends State<HomePage>
     Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const NotificationPage()),
     );
+  }
+
+  /// Tapping a dropdown notification closes the panel, then routes to the
+  /// notification's deep-link target (e.g. an org invite) or shows its detail.
+  void _handleNotificationAction(AppNotification notification) {
+    _closeNotificationPanel();
+    openNotification(context, notification);
   }
 
   /// Slides the main screen to the right along with the drawer using the same

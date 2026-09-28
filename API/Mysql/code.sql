@@ -405,9 +405,9 @@ DROP TABLE IF EXISTS `ordersinfo`;
 CREATE TABLE `ordersinfo` (
   `OrderID` int NOT NULL AUTO_INCREMENT,
   `AccountID` int NOT NULL,
-  `PaymentTypeID` int NOT NULL,
+  `PaymentTypeID` int DEFAULT NULL,
   `PaymentDateYMDT` datetime NOT NULL,
-  `ProveOfPayment` varchar(255) NOT NULL,
+  `ProveOfPayment` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`OrderID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

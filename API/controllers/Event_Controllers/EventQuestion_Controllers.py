@@ -9,7 +9,8 @@ from models.schema import (
     AddEventQuestionType,
     UpdateEventQuestionType,
 )
-from auth.dependencies import require_permission
+from auth.dependencies import require_permission, get_current_account
+from auth.team_access import ensure_event_editor
 
 # ---------------------------------------------------------------------------
 # eventquestioninfo.Options is stored as a JSON-encoded text column (a list
@@ -39,9 +40,10 @@ def _deserialize_row(row):
 # ---------------- eventquestioninfo ----------------
 
 
-async def create_event(req_data: AddEventQuestionInfo, current=Depends(require_permission("manage_event_questions"))):
+async def create_event(req_data: AddEventQuestionInfo, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "manage_event_questions")
         with con.cursor() as cur:
             sql = """
                 INSERT INTO eventquestioninfo
@@ -127,9 +129,10 @@ async def get_eventquestions_by_event_id(event_id: int, current=Depends(require_
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def update_event(req_data: UpdateEventQuestionInfo, current=Depends(require_permission("manage_event_questions"))):
+async def update_event(req_data: UpdateEventQuestionInfo, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        await ensure_event_editor(con, current, req_data.EventID, "manage_event_questions")
         with con.cursor() as cur:
             sql = """
                 UPDATE eventquestioninfo
@@ -165,9 +168,18 @@ async def update_event(req_data: UpdateEventQuestionInfo, current=Depends(requir
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def delete_event(eventquestion_id: int, current=Depends(require_permission("manage_event_questions"))):
+async def delete_event(eventquestion_id: int, current=Depends(get_current_account)):
     try:
         con = getConnect()
+        with con.cursor() as cur:
+            cur.execute("SELECT EventID FROM eventquestioninfo WHERE EventQuestionID = %s", (eventquestion_id,))
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event question not found")
+            event_id = row["EventID"] if isinstance(row, dict) else row[0]
+
+        await ensure_event_editor(con, current, event_id, "manage_event_questions")
+
         with con.cursor() as cur:
             cur.execute("DELETE FROM eventquestioninfo WHERE EventQuestionID = %s", (eventquestion_id,))
             rows_deleted = cur.rowcount

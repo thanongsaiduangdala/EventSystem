@@ -129,7 +129,8 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
         : 'Account #$accountId';
   }
 
-  String _paymentTypeNameFor(int paymentTypeId) {
+  String _paymentTypeNameFor(int? paymentTypeId) {
+    if (paymentTypeId == null) return '-';
     final match = _paymentTypes.where((t) => t.id == paymentTypeId);
     return match.isNotEmpty ? match.first.paymentTypeName : 'Type #$paymentTypeId';
   }
@@ -304,10 +305,6 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
       _snack('Please select an account');
       return;
     }
-    if (_selectedPaymentTypeId == null) {
-      _snack('Please select a payment type');
-      return;
-    }
 
     final proveOfPayment = _proveOfPaymentController.text.trim();
 
@@ -317,7 +314,7 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
       if (_editingOrderId == null) {
         final result = await OrdersApiService.createOrder(
           accountId: _selectedAccountId!,
-          paymentTypeId: _selectedPaymentTypeId!,
+          paymentTypeId: _selectedPaymentTypeId,
           paymentDateYMDT: _paymentDateTime == null
               ? null
               : _formatForApi(_paymentDateTime!),
@@ -328,7 +325,7 @@ class OrdersInfoFormState extends State<OrdersInfoForm> {
         await OrdersApiService.updateOrder(
           orderId: _editingOrderId!,
           accountId: _selectedAccountId!,
-          paymentTypeId: _selectedPaymentTypeId!,
+          paymentTypeId: _selectedPaymentTypeId,
           paymentDateYMDT: _paymentDateTime == null
               ? null
               : _formatForApi(_paymentDateTime!),
