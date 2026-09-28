@@ -35,6 +35,9 @@ class _BecomeOrganizerPageState extends State<BecomeOrganizerPage> {
   String? _error;
 
   bool _hasOrganizerProfile = false;
+  // Approval state of the account's own organization: null = none yet,
+  // 1 pending, 2 approved, 3 denied.
+  int? _orgStatusId;
 
   List<VerificationTypeModel> _types = [];
   List<IdentityVerificationModel> _verifications = [];
@@ -88,7 +91,12 @@ class _BecomeOrganizerPageState extends State<BecomeOrganizerPage> {
       final types = await IdentityVerificationApiService.getAllTypes();
       final verifications = await IdentityVerificationApiService
           .getVerificationsByAccount(session.accountId);
-      final myOrganizers = await EventOrganizerApiService.getAllOrganizers();
+      final allOrganizers = await EventOrganizerApiService.getAllOrganizers(
+        includeUnapproved: true,
+      );
+      final myOrganizers = allOrganizers
+          .where((o) => o.createdByAccountId == session.accountId)
+          .toList();
       if (!mounted) return;
       setState(() {
         _types = types;
@@ -96,8 +104,9 @@ class _BecomeOrganizerPageState extends State<BecomeOrganizerPage> {
           _selectedTypeId = types.first.id;
         }
         _verifications = verifications;
-        _hasOrganizerProfile = myOrganizers
-            .any((o) => o.createdByAccountId == session.accountId);
+        _hasOrganizerProfile = myOrganizers.isNotEmpty;
+        _orgStatusId =
+            myOrganizers.isEmpty ? null : myOrganizers.first.statusId;
         _loading = false;
       });
     } catch (e) {
@@ -281,7 +290,8 @@ class _BecomeOrganizerPageState extends State<BecomeOrganizerPage> {
       setState(() => _isSubmitting = false);
       await _load();
       if (!mounted) return;
-      _snack('Application submitted. Our team will review it shortly.$orgNote');
+      _snack('Application submitted. An admin or employee will review your '
+          'identity and your organization.$orgNote');
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
@@ -371,7 +381,25 @@ class _BecomeOrganizerPageState extends State<BecomeOrganizerPage> {
                   ? _loginBox()
                   : session.isOrganizer || session.isSuperAdmin
                       ? _hasOrganizerProfile
-                          ? _statusView(
+                          ? _orgStatusId == 1
+                              ? _statusView(
+                                  icon: Icons.hourglass_top,
+                                  color: kAccent,
+                                  title: 'Organization Pending',
+                                  message: 'Your identity is verified. Your '
+                                      'organization is now waiting for an '
+                                      'admin/employee to approve it.',
+                                )
+                              : _orgStatusId == 3
+                                  ? _statusView(
+                                      icon: Icons.gpp_bad,
+                                      color: const Color(0xFFE53935),
+                                      title: 'Organization Not Approved',
+                                      message: 'Your organization was not '
+                                          'approved. Please contact support '
+                                          'if you think this is a mistake.',
+                                    )
+                                  : _statusView(
                               icon: Icons.storefront,
                               color: const Color(0xFF2E9E5B),
                               title: 'You already have organizer access',
@@ -397,9 +425,12 @@ class _BecomeOrganizerPageState extends State<BecomeOrganizerPage> {
           color: const Color(0xFF2E9E5B),
           title: 'Application Approved',
           message:
-              'Your identity has been verified. Please log out and log back '
-              'in to access the Organizers Dashboard and create events from '
-              'the app.',
+              _orgStatusId == 1
+                  ? 'Your identity has been verified. Your organization is '
+                      'still waiting for admin/employee approval.'
+                  : 'Your identity has been verified. Please log out and log '
+                      'back in to access Organizers and create events from '
+                      'the app.',
         );
       case _kDenied:
         return _deniedView();
@@ -410,7 +441,8 @@ class _BecomeOrganizerPageState extends State<BecomeOrganizerPage> {
           color: kAccent,
           title: 'Application Pending',
           message: 'You\'re almost there! Your application has been submitted '
-              'and is waiting for admin/employee review.',
+              'and is waiting for admin/employee review of your identity and '
+              'your organization.',
         );
     }
   }

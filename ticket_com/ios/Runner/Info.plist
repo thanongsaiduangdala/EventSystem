@@ -41,10 +41,14 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photos are used to upload event images and identity documents.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Your location is used to show events near you and to place a marker at your position on the map.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Your location is used to show events near you and to place a marker at your position on the map.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>The camera is used to scan ticket QR codes at the event door.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

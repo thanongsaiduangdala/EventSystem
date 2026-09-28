@@ -11,12 +11,21 @@ class EventOrganizer {
   final int createdByAccountId;
   final String? description;
 
+  /// Approval state set by an employee/superadmin: 1 Pending, 2 Approved,
+  /// 3 Denied. Older API responses without the field count as Approved.
+  final int statusId;
+
+  bool get isApproved => statusId == 2;
+  bool get isPending => statusId == 1;
+  bool get isDenied => statusId == 3;
+
   EventOrganizer({
     required this.id,
     required this.name,
     this.logoPath,
     required this.createdByAccountId,
     this.description,
+    this.statusId = 2,
   });
 
   factory EventOrganizer.fromJson(Map<String, dynamic> json) {
@@ -26,6 +35,7 @@ class EventOrganizer {
       logoPath: json['EventOrganizerLogoPath'] as String?,
       createdByAccountId: json['CreatedByAccountID'] as int,
       description: json['EventOrganizerDiscription'] as String?,
+      statusId: (json['OrganizerStatusID'] as int?) ?? 2,
     );
   }
 }
@@ -92,17 +102,45 @@ class EventOrganizerApiService {
   }
 
   /// Backend returns a bare list (not wrapped in a key) for this endpoint.
-  static Future<List<EventOrganizer>> getAllOrganizers() async {
+  ///
+  /// Pending/denied organizations are hidden unless [includeUnapproved] is
+  /// true (used by the applicant's own screens and the approvals tab).
+  static Future<List<EventOrganizer>> getAllOrganizers({
+    bool includeUnapproved = false,
+  }) async {
     final url = Uri.parse('$baseUrl/eventorganizer/organizer/all');
     final response = await http.get(url, headers: _authHeaders());
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
-      return data
+      final all = data
           .map((e) => EventOrganizer.fromJson(e as Map<String, dynamic>))
           .toList();
+      return includeUnapproved ? all : all.where((o) => o.isApproved).toList();
     } else {
       throw _handleError(response, 'Failed to load organizers');
+    }
+  }
+
+  /// Employee/Superadmin: approve a submitted organization.
+  static Future<void> approveOrganizer(int id) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/eventorganizer/organizer/$id/approve'),
+      headers: _authHeaders(),
+    );
+    if (response.statusCode != 200) {
+      throw _handleError(response, 'Failed to approve organization');
+    }
+  }
+
+  /// Employee/Superadmin: deny a submitted organization.
+  static Future<void> denyOrganizer(int id) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/eventorganizer/organizer/$id/deny'),
+      headers: _authHeaders(),
+    );
+    if (response.statusCode != 200) {
+      throw _handleError(response, 'Failed to deny organization');
     }
   }
 

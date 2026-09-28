@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_com/HomePage/event_analytics_page.dart';
 import 'package:ticket_com/HomePage/event_form_page.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/organizer_member_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
 
+import 'pill_toggle.dart';
 import 'team_manage_page.dart';
 import 'team_checkin_page.dart';
 
@@ -18,8 +20,33 @@ const Color _kTextGrey = Color(0xFF757575);
 ///   Page Designer-> edit event page content (description, media, tickets, Q&A)
 ///   Org Admin   -> everything above on every event + manage the team
 ///   Org Owner   -> everything Admin does + transfer ownership
+/// Sections of the Team tab, switched with the pill toggle at the top
+/// (same look as the Wish / Followed Organizers toggle).
+enum _TeamSection { role, events, manage }
+
 class TeamMemberDashboardPage extends StatefulWidget {
-  const TeamMemberDashboardPage({super.key, this.membership});
+  const TeamMemberDashboardPage({
+    super.key,
+    this.membership,
+    this.embedded = false,
+    this.showOrgPicker = true,
+    this.title,
+    this.orgIds,
+  });
+
+  /// Only show memberships of these organizations (e.g. "My Team" shows just
+  /// the organizations the person owns, not the ones they joined).
+  final Set<int>? orgIds;
+
+  /// Hide the organization dropdown (used when one specific organization was
+  /// already chosen from the Team Member list).
+  final bool showOrgPicker;
+
+  /// App bar title when not embedded (defaults to 'Team Member Dashboard').
+  final String? title;
+
+  /// True when shown as a tab inside another page (no own app bar).
+  final bool embedded;
 
   /// The membership loaded by the Settings screen. When null the page loads
   /// it itself (keeps this page usable directly / after refresh).
@@ -33,10 +60,12 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
   bool _loading = true;
   String? _error;
   List<TeamMembership> _memberships = [];
+  TeamMembership? _selected;
   MyEventsResult? _result;
+  _TeamSection _section = _TeamSection.role;
 
-  TeamMembership? get _membership => widget.membership ??
-      (_memberships.isNotEmpty ? _memberships.first : null);
+  TeamMembership? get _membership =>
+      _selected ?? (_memberships.isNotEmpty ? _memberships.first : null);
 
   @override
   void initState() {
@@ -44,25 +73,45 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({int? orgId}) async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final results = await Future.wait<Object>([
-        OrganizerMemberApiService.getMyMemberships(),
-        OrganizerMemberApiService.getMyMemberEvents(),
-      ]);
+      final all = await OrganizerMemberApiService.getMyMemberships();
+      final filter = widget.orgIds;
+      final memberships = filter == null
+          ? all
+          : all.where((m) => filter.contains(m.eventOrganizerId)).toList();
+      if (!mounted) return;
+      if (memberships.isEmpty) {
+        setState(() {
+          _memberships = [];
+          _selected = null;
+          _result = null;
+          _error = 'You are not part of an organization team yet.';
+          _loading = false;
+        });
+        return;
+      }
+      // Keep the org the person picked; otherwise the one they came in with.
+      final wanted = orgId ?? _selected?.eventOrganizerId ??
+          widget.membership?.eventOrganizerId;
+      final selected = memberships.firstWhere(
+        (m) => m.eventOrganizerId == wanted,
+        orElse: () => memberships.first,
+      );
+      final result = await OrganizerMemberApiService.getMyMemberEvents(
+        orgId: selected.eventOrganizerId,
+      );
       if (!mounted) return;
       setState(() {
-        _memberships = (results[0] as List<TeamMembership>);
-        _result = results[1] as MyEventsResult;
+        _memberships = memberships;
+        _selected = selected;
+        _result = result;
         _loading = false;
       });
-      if (_memberships.isEmpty) {
-        setState(() => _error = 'You are not part of an organization team yet.');
-      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -78,17 +127,60 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F6FA),
-        elevation: 0,
-        title: const Text(
-          'Team Member Dashboard',
-          style: TextStyle(color: _kTextDark, fontWeight: FontWeight.w800),
-        ),
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              backgroundColor: const Color(0xFFF5F6FA),
+              elevation: 0,
+              foregroundColor: _kTextDark,
+              title: Text(
+                widget.title ?? 'Team Member Dashboard',
+                style: const TextStyle(
+                  color: _kTextDark,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: _buildBody(),
+      ),
+    );
+  }
+
+  Widget _orgPicker() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          isExpanded: true,
+          value: _membership?.eventOrganizerId,
+          icon: const Icon(Icons.unfold_more, color: kAccent),
+          items: [
+            for (final m in _memberships)
+              DropdownMenuItem(
+                value: m.eventOrganizerId,
+                child: Text(
+                  '${m.organizerName} · ${m.teamRoleName}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _kTextDark,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+          ],
+          onChanged: (id) {
+            if (id != null && id != _membership?.eventOrganizerId) {
+              _load(orgId: id);
+            }
+          },
+        ),
       ),
     );
   }
@@ -129,49 +221,130 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
       );
     }
 
-    final events = _result?.events ?? [];
+    // Members without team-management rights only get the first two sections.
+    final canManage = membership.canManageTeam;
+    final section =
+        (_section == _TeamSection.manage && !canManage)
+            ? _TeamSection.role
+            : _section;
 
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+    return Column(
       children: [
-        _orgHeader(membership),
-        const SizedBox(height: 16),
-        _capabilitiesCard(membership),
-        const SizedBox(height: 16),
-        if (membership.isManager) ...[
-          _manageTeamCard(membership),
-          const SizedBox(height: 16),
-        ],
-        if (membership.isManager || membership.isDesigner)
-          _permissionNote(membership),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            const Text(
-              'My Events',
-              style: TextStyle(
-                color: _kTextDark,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              '${events.length}',
-              style: const TextStyle(color: _kTextGrey, fontSize: 13),
-            ),
-          ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Column(
+            children: [
+              if (_memberships.length > 1 && widget.showOrgPicker) ...[
+                _orgPicker(),
+                const SizedBox(height: 12),
+              ],
+              _sectionToggle(canManage: canManage, current: section),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
-        if (events.isEmpty)
-          const _EmptyCard(text: 'No events in your organization yet.')
-        else
-          for (final event in events) ...[
-            _eventCard(context, membership, event),
-            const SizedBox(height: 12),
-          ],
+        Expanded(
+          child: switch (section) {
+            _TeamSection.role => _roleSection(membership),
+            _TeamSection.events => _eventsSection(membership),
+            _TeamSection.manage => TeamManagePage(
+                key: ValueKey('manage-${membership.eventOrganizerId}'),
+                membership: membership,
+                embedded: true,
+                onChanged: _refresh,
+              ),
+          },
+        ),
       ],
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Section toggle (shared PillToggle, same style as the Wish page)
+  // -------------------------------------------------------------------------
+
+  Widget _sectionToggle({
+    required bool canManage,
+    required _TeamSection current,
+  }) {
+    final sections = [
+      _TeamSection.role,
+      _TeamSection.events,
+      if (canManage) _TeamSection.manage,
+    ];
+    const names = {
+      _TeamSection.role: 'Your role',
+      _TeamSection.events: 'Team Events',
+      _TeamSection.manage: 'Manage Team',
+    };
+    return PillToggle(
+      labels: [for (final s in sections) names[s]!],
+      selected: sections.indexOf(current),
+      onChanged: (i) => setState(() => _section = sections[i]),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Sections
+  // -------------------------------------------------------------------------
+
+  Widget _roleSection(TeamMembership membership) {
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+        children: [
+          _orgHeader(membership),
+          const SizedBox(height: 16),
+          _capabilitiesCard(membership),
+          if (membership.isManager || membership.isDesigner) ...[
+            const SizedBox(height: 16),
+            _permissionNote(membership),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _eventsSection(TeamMembership membership) {
+    final events = _result?.events ?? [];
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Team Events',
+                style: TextStyle(
+                  color: _kTextDark,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${events.length}',
+                style: const TextStyle(color: _kTextGrey, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (events.isEmpty)
+            _EmptyCard(
+              text: membership.isManager
+                  ? 'No events in your organization yet.'
+                  : 'You are not assigned to any events yet. Ask an Admin to assign you.',
+            )
+          else
+            for (final event in events) ...[
+              _eventCard(context, membership, event),
+              const SizedBox(height: 12),
+            ],
+        ],
+      ),
     );
   }
 
@@ -319,6 +492,7 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
     }
     if (m.isStaff || m.isManager) {
       caps.add((icon: Icons.event_available, text: 'Check in attendees & view attendee details'));
+      caps.add((icon: Icons.insights_outlined, text: 'View full event details & analytics'));
     }
     if (m.isStaff || m.isManager) {
       caps.add((icon: Icons.block, text: 'Decline / revoke tickets at the door'));
@@ -336,49 +510,6 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
       caps.add((icon: Icons.workspace_premium, text: 'Transfer organization ownership'));
     }
     return caps;
-  }
-
-  Widget _manageTeamCard(TeamMembership membership) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        leading: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: kAccent.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.groups, color: kAccent, size: 22),
-        ),
-        title: const Text(
-          'Manage Team',
-          style: TextStyle(
-            color: _kTextDark,
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        subtitle: const Text(
-          'Invite members, change roles & assign events',
-          style: TextStyle(color: _kTextGrey, fontSize: 12.5),
-        ),
-        trailing: const Icon(Icons.chevron_right, color: Colors.black26),
-        onTap: () async {
-          final changed = await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(
-              builder: (context) => TeamManagePage(membership: membership),
-            ),
-          );
-          if (changed == true) _refresh();
-        },
-      ),
-    );
   }
 
   Widget _permissionNote(TeamMembership membership) {
@@ -415,9 +546,12 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
   Widget _eventCard(BuildContext context, TeamMembership membership, MemberEvent event) {
     final isManager = membership.isManager;
     final canCheckIn = isManager || event.canCheckIn;
-    final canDesign = membership.isManager ||
-        membership.isDesigner ||
-        membership.isStaff;
+    // Page content is edited by Page Designers and managers only; Staff can
+    // see full event details and attendees but never edit the page.
+    final canDesign = membership.isManager || membership.isDesigner;
+    // Full event details + analytics: Staff (assigned events) and managers.
+    final canSeeDetails =
+        membership.isManager || (membership.isStaff && event.assigned);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -495,6 +629,12 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
                   onTap: () => _openCheckIn(context, membership, event,
                       canRevoke: true),
                 ),
+              if (canSeeDetails)
+                _actionButton(
+                  icon: Icons.insights_outlined,
+                  label: 'Details & analytics',
+                  onTap: () => _openAnalytics(context, event),
+                ),
               if (canDesign)
                 _actionButton(
                   icon: Icons.edit_outlined,
@@ -553,6 +693,9 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
     MemberEvent event, {
     required bool canRevoke,
   }) async {
+    // Browsing the attendee list and revoking tickets are both Staff+
+    // capabilities; a Volunteer only gets the scan box.
+    final canBrowseAttendees = membership.isStaff || membership.isManager;
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -561,6 +704,21 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
           eventId: event.eventId,
           eventName: event.eventName,
           canRevoke: canRevoke,
+          canBrowseAttendees: canBrowseAttendees,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAnalytics(BuildContext context, MemberEvent event) async {
+    // The analytics screen loads its own data through the role-scoped
+    // /analytics endpoint, so no ticket types need to be passed in.
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EventAnalyticsPage(
+          event: event.toEventModel(),
+          ticketTypes: const [],
         ),
       ),
     );

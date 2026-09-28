@@ -12,7 +12,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:ticket_com/services/attendee_response_api_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_question_api_service.dart';
-import 'package:ticket_com/services/orders_api_service.dart';
+import 'package:ticket_com/services/orders_api_service.dart' show OrderModel;
+import 'package:ticket_com/services/organizer_member_api_service.dart';
 import 'package:ticket_com/services/ticket_attendence_api_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
@@ -109,25 +110,41 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
       _error = null;
     });
     try {
-      _typeById = {for (final t in widget.ticketTypes) t.id: t};
-      final eventTypeIds =
-          widget.ticketTypes.map((t) => t.id).toSet();
+      // One role-scoped call (Admin / Owner, or Staff assigned to the event)
+      // replaces the old global list endpoints, which were SUPERADMIN-only or
+      // needed the global view_events permission and 403'd for organizers.
+      final data =
+          await OrganizerMemberApiService.getEventAnalytics(widget.event.id);
+      final ticketTypes =
+          data.ticketTypes.isNotEmpty ? data.ticketTypes : widget.ticketTypes;
+      _typeById = {for (final t in ticketTypes) t.id: t};
 
-      // All fetches are full-list (backend has no per-event join), so filter
-      // locally by the event's ticket type ids.
-      final attendees = await TicketAttendenceApiService
-          .getAllTicketAttendees();
-      final orders = await OrdersApiService.getAllOrders();
-      final questions = await EventQuestionApiService
-          .getEventQuestionsByEvent(widget.event.id);
-      final responses = await AttendeeResponseApiService
-          .getAllAttendeeResponses();
+      final questions = data.questions;
+      final responses = data.responses;
 
-      final eventAttendees = attendees
-          .where((a) => eventTypeIds.contains(a.ticketTypeId))
-          .toList();
+      // Revoked tickets are not real sales; keep them out of the numbers.
+      final eventAttendees = <TicketAttendeeModel>[];
+      final orderById = <int, OrderModel>{};
+      for (final a in data.attendees) {
+        if (!a.isValid) continue;
+        eventAttendees.add(TicketAttendeeModel(
+          id: a.attendeeId,
+          ticketTypeId: a.ticketTypeId,
+          orderId: a.orderId,
+          firstName: a.firstName,
+          lastName: a.lastName,
+          phoneNum: a.phoneNum,
+          email: a.email,
+          nationalId: a.nationalId,
+        ));
+        orderById[a.orderId] = OrderModel(
+          id: a.orderId,
+          accountId: 0,
+          paymentDate:
+              a.paymentDate == null ? null : DateTime.tryParse(a.paymentDate!),
+        );
+      }
       final attendeeIds = eventAttendees.map((a) => a.id).toSet();
-      final orderById = {for (final o in orders) o.id: o};
 
       // Group responses by attendee id and by question id.
       final byAttendee = <int, List<AttendeeResponseModel>>{};

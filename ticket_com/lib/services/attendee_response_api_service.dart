@@ -26,6 +26,31 @@ class AttendeeResponseModel {
   }
 }
 
+/// A registration question plus the attendee's answer, as returned by the
+/// door check-in endpoint (/response/event/{event_id}/attendee/{attendee_id}).
+class EventQuestionAnswerModel {
+  final int questionId;
+  final String question;
+  final int sortOrder;
+  final String? answer;
+
+  EventQuestionAnswerModel({
+    required this.questionId,
+    required this.question,
+    required this.sortOrder,
+    this.answer,
+  });
+
+  factory EventQuestionAnswerModel.fromJson(Map<String, dynamic> json) {
+    return EventQuestionAnswerModel(
+      questionId: json['EventQuestionID'] as int,
+      question: json['EventQuestion'] as String,
+      sortOrder: json['SortOrder'] as int,
+      answer: json['attendeeAnswer'] as String?,
+    );
+  }
+}
+
 class AttendeeResponseApiService {
   static String get baseUrl => ApiConfig.baseUrl;
 
@@ -92,6 +117,29 @@ class AttendeeResponseApiService {
       final List<dynamic> data = jsonDecode(response.body);
       return data
           .map((e) => AttendeeResponseModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } else if (response.statusCode == 404) {
+      return [];
+    } else {
+      throw _handleError(response, 'Failed to load responses for attendee');
+    }
+  }
+
+  /// Questions + answers for a scanned attendee, used at the door by
+  /// Volunteers / Staff / managers assigned to the event.
+  static Future<List<EventQuestionAnswerModel>> getQuestionResponsesForCheckIn({
+    required int eventId,
+    required int attendeeId,
+  }) async {
+    final url = Uri.parse('$baseUrl/response/event/$eventId/attendee/$attendeeId');
+    final response = await http.get(url, headers: _authHeaders());
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> body =
+          jsonDecode(response.body) as Map<String, dynamic>;
+      final List<dynamic> data = body['questions'] as List<dynamic>? ?? [];
+      return data
+          .map((e) => EventQuestionAnswerModel.fromJson(e as Map<String, dynamic>))
           .toList();
     } else if (response.statusCode == 404) {
       return [];

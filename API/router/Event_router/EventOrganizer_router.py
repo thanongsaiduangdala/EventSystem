@@ -2,14 +2,15 @@ from fastapi import APIRouter
 from controllers.Event_Controllers.EventOrganizerInfo_controllers import (
     create_eventorganizer, get_all_EventOrganizers, get_eventorganizer_by_id,
     update_eventorganizer, delete_eventorganizer,
-    upload_eventorganizer, replace_eventorganizer_logo, apply_eventorganizer
+    upload_eventorganizer, replace_eventorganizer_logo, apply_eventorganizer,
+    approve_eventorganizer, deny_eventorganizer
 )
 from controllers.Event_Controllers.OrganizerMember_controllers import (
     create_organizermember, get_all_OrganizerMembers, get_organizermember_by_id,
     update_organizermember, delete_organizermember,
     invite_organizermember, accept_organizermember, decline_organizermember,
     get_organizermembers_with_accounts,
-    get_my_memberships, get_my_team_member_events, get_org_team,
+    get_my_memberships, get_my_invites, get_my_team_member_events, get_org_team,
     change_member_role, transfer_org_ownership,
     assign_member_to_event, unassign_member_from_event
 )
@@ -21,6 +22,8 @@ router.post("/organizer/create")(create_eventorganizer)
 router.post("/organizer/upload")(upload_eventorganizer)
 router.post("/organizer/apply")(apply_eventorganizer)
 router.put("/organizer/replace")(replace_eventorganizer_logo)
+router.post("/organizer/{event_organizer_id}/approve")(approve_eventorganizer)
+router.post("/organizer/{event_organizer_id}/deny")(deny_eventorganizer)
 router.get("/organizer/all")(get_all_EventOrganizers)
 router.get("/organizer/{event_organizer_id}")(get_eventorganizer_by_id)
 router.put("/organizer/update")(update_eventorganizer)
@@ -33,6 +36,7 @@ router.get("/member/all")(get_all_OrganizerMembers)
 router.get("/member/all-with-accounts")(get_organizermembers_with_accounts)
 # team member dashboard (static paths MUST precede /member/{member_id})
 router.get("/member/my-memberships")(get_my_memberships)
+router.get("/member/my-invites")(get_my_invites)
 router.get("/member/member-events")(get_my_team_member_events)
 router.get("/member/team/{org_id}")(get_org_team)
 router.put("/member/change-role")(change_member_role)

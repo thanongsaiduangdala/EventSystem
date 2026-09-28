@@ -10,10 +10,12 @@ from models.schema import (
 from auth.dependencies import get_current_account
 from auth.team_access import (
     ensure_team_access,
+    ensure_attendee_list_access,
     ensure_staff_or_manager,
     ensure_member_row,
     event_org_id,
 )
+from controllers.Event_Controllers.EventQuestion_Controllers import _deserialize_row
 
 # An ID we can successfully match against at the door: Gov ID / National ID /
 # Passport. When the event enforces OnePerPerson this value must be unique for
@@ -221,12 +223,16 @@ async def delete_ticketattendee(attendee_id: int):
 async def get_event_attendees(event_id: int, current=Depends(get_current_account)):
     """
     Every attendee of an event with ticket, order, ticket-validity and
-    check-in state, so the check-in screen can render one list for both
-    volunteers (scan/verify) and staff (manage/revoke).
+    check-in state, so the check-in screen can render one list for staff
+    (scan/verify plus manage/revoke).
+
+    Staff+ only: the payload carries PhoneNum, Email and NationalID for every
+    attendee, so a Volunteer uses resolve_attendee_for_checkin instead, which
+    returns a single attendee without those fields.
     """
     try:
         con = getConnect()
-        await ensure_team_access(con, current, event_id)
+        await ensure_attendee_list_access(con, current, event_id)
 
         with con.cursor() as cur:
             cur.execute(
@@ -234,7 +240,8 @@ async def get_event_attendees(event_id: int, current=Depends(get_current_account
                 SELECT ta.attendeeID, ta.TicketTypeID, ta.OrderID,
                        ta.FirstName, ta.LastName, ta.PhoneNum, ta.Email,
                        ta.NationalID, ta.IsValid,
-                       tt.TicketTypeName, tt.TicketPrice, tt.EventID,
+                       tt.TypeName AS TicketTypeName,
+                       tt.PriceInKIP AS TicketPrice, tt.EventID,
                        o.PaymentDateYMDT,
                        tc.CheckInID, tc.CheckedInByMemberID, tc.CheckedInAtYMDT
                 FROM ticketattendence ta
@@ -250,6 +257,49 @@ async def get_event_attendees(event_id: int, current=Depends(get_current_account
             rows = cur.fetchall()
 
         return rows
+
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def resolve_attendee_for_checkin(event_id: int, attendee_id: int, current=Depends(get_current_account)):
+    """
+    Resolves one attendee of an event from a scanned ticket, for door
+    verification. Available to any role that may work the door (Volunteer,
+    Staff, and managers).
+
+    Deliberately narrow: it returns only what is needed to confirm the person
+    in front of you holds a valid ticket for this event -- no PhoneNum, Email
+    or NationalID, and no way to enumerate the other attendees.
+    """
+    try:
+        con = getConnect()
+        await ensure_team_access(con, current, event_id)
+
+        with con.cursor() as cur:
+            cur.execute(
+                """
+                SELECT ta.attendeeID, ta.FirstName, ta.LastName, ta.IsValid,
+                       tt.TypeName AS TicketTypeName, tt.EventID,
+                       tc.CheckInID, tc.CheckedInAtYMDT
+                FROM ticketattendence ta
+                JOIN tickettype tt ON ta.TicketTypeID = tt.TicketTypeID
+                LEFT JOIN ticketcheckin tc
+                    ON tc.attendeeID = ta.attendeeID AND tc.EventID = %s
+                WHERE ta.attendeeID = %s AND tt.EventID = %s
+                """,
+                (event_id, attendee_id, event_id),
+            )
+            row = cur.fetchone()
+
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Attendee not found for this event",
+            )
+        return row
 
     except HTTPException:
         raise
@@ -357,6 +407,86 @@ async def revoke_ticket(req_data: RevokeTicketRequest, current=Depends(get_curre
 
         action = "revoked" if not req_data.IsValid else "re-validated"
         return {"msg": f"Ticket {action}", "attendeeID": req_data.AttendeeID, "IsValid": req_data.IsValid}
+
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+
+async def get_event_analytics(event_id: int, current=Depends(get_current_account)):
+    """
+    Everything the event analytics screen needs in one call: attendees (with
+    check-in + payment date), ticket types, registration questions and the
+    attendees' answers.
+
+    The screen used to assemble this from global endpoints (/response/all is
+    SUPERADMIN-only, /tickettype/event and /eventquestion/event need the
+    global view_events permission), so an organizer -- and any invited team
+    member -- got a 403. Access here follows the team rules instead: Admin /
+    Owner of the event's organization, or Staff / Employee assigned to it.
+    Volunteers and Page Designers have no attendee-list access.
+    """
+    try:
+        con = getConnect()
+        await ensure_attendee_list_access(con, current, event_id)
+
+        with con.cursor() as cur:
+            cur.execute(
+                """
+                SELECT ta.attendeeID, ta.TicketTypeID, ta.OrderID,
+                       ta.FirstName, ta.LastName, ta.PhoneNum, ta.Email,
+                       ta.NationalID, ta.IsValid,
+                       tt.TypeName AS TicketTypeName,
+                       tt.PriceInKIP AS TicketPrice, tt.EventID,
+                       o.PaymentDateYMDT,
+                       tc.CheckInID, tc.CheckedInByMemberID, tc.CheckedInAtYMDT
+                FROM ticketattendence ta
+                JOIN tickettype tt ON ta.TicketTypeID = tt.TicketTypeID
+                LEFT JOIN ordersinfo o ON o.OrderID = ta.OrderID
+                LEFT JOIN ticketcheckin tc
+                    ON tc.attendeeID = ta.attendeeID AND tc.EventID = %s
+                WHERE tt.EventID = %s
+                ORDER BY ta.attendeeID ASC
+                """,
+                (event_id, event_id),
+            )
+            attendees = cur.fetchall()
+
+            cur.execute("SELECT * FROM tickettype WHERE EventID = %s", (event_id,))
+            tickettypes = cur.fetchall()
+
+            cur.execute(
+                """
+                SELECT EventQuestionID, EventID, EventQuestion, EventQuestionTypeID,
+                       IsRequire, SortOrder, Options
+                FROM eventquestioninfo
+                WHERE EventID = %s
+                ORDER BY SortOrder
+                """,
+                (event_id,),
+            )
+            questions = [_deserialize_row(r) for r in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT r.ResponseID, r.EventQuestionID, r.attendeeID, r.attendeeAnswer
+                FROM attendeeresponse r
+                JOIN ticketattendence ta ON ta.attendeeID = r.attendeeID
+                JOIN tickettype tt ON tt.TicketTypeID = ta.TicketTypeID
+                WHERE tt.EventID = %s
+                """,
+                (event_id,),
+            )
+            responses = cur.fetchall()
+
+        return {
+            "attendees": attendees,
+            "tickettypes": tickettypes,
+            "questions": questions,
+            "responses": responses,
+        }
 
     except HTTPException:
         raise

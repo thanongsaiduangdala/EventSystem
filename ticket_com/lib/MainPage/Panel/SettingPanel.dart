@@ -6,9 +6,7 @@ import 'package:ticket_com/DeveloperPage/employee_dashboard_page.dart';
 import 'package:ticket_com/HomePage/become_organizer_page.dart';
 import 'package:ticket_com/HomePage/my_profile_page.dart';
 import 'package:ticket_com/HomePage/organizer_dashboard_page.dart';
-import 'package:ticket_com/HomePage/organizers_page.dart';
-import 'package:ticket_com/HomePage/team_member_dashboard_page.dart';
-import 'package:ticket_com/LogSignPage/MainLoginSignUp.dart'; // adjust path
+import 'package:ticket_com/LogSignPage/MainLoginSignUp.dart';
 import 'package:ticket_com/main.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/organizer_member_api_service.dart';
@@ -24,6 +22,7 @@ class SettingPanel extends StatefulWidget {
 class _SettingPanelState extends State<SettingPanel> {
   bool _checkingDeveloper = false;
   List<TeamMembership> _teamMemberships = [];
+  int _pendingInvites = 0;
 
   @override
   void initState() {
@@ -37,29 +36,12 @@ class _SettingPanelState extends State<SettingPanel> {
       if (!mounted) return;
       setState(() => _teamMemberships = members);
     } catch (_) {
-      // The dashboard tile simply stays hidden if this fails.
     }
-  }
-
-  Future<void> _openTeamDashboard() async {
-    if (_teamMemberships.isEmpty) await _loadMemberships();
-    if (!mounted) return;
-    if (_teamMemberships.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You are not part of an organization team yet.'),
-        ),
-      );
-      return;
-    }
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            TeamMemberDashboardPage(membership: _teamMemberships.first),
-      ),
-    );
-    _loadMemberships();
+    try {
+      final invites = await OrganizerMemberApiService.getMyInvites();
+      if (!mounted) return;
+      setState(() => _pendingInvites = invites.length);
+    } catch (_) {}
   }
 
   String? get _roleName {
@@ -378,6 +360,8 @@ class _SettingPanelState extends State<SettingPanel> {
   }
 
   Widget _actionsCard(bool canAdmin, bool canEmployee, bool isOrganizer) {
+    final memberOnly = !isOrganizer &&
+        (_teamMemberships.isNotEmpty || _pendingInvites > 0);
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -425,19 +409,6 @@ class _SettingPanelState extends State<SettingPanel> {
               onTap: _openEmployeeDashboard,
             ),
           if (canEmployee) const _CardDivider(),
-          if (_teamMemberships.isNotEmpty) ...[
-            _actionTile(
-              icon: Icons.groups_2_outlined,
-              iconColor: const Color(0xFF8E24AA),
-              title: 'Team Dashboard',
-              subtitle: 'Check-in, manage team & assigned events',
-              titleColor: const Color(0xFF212121),
-              subtitleColor: const Color(0xFF757575),
-              trailing: const Icon(Icons.chevron_right, color: Colors.black26),
-              onTap: _openTeamDashboard,
-            ),
-            const _CardDivider(),
-          ],
           _actionTile(
             icon: Icons.person_outline,
             iconColor: kAccent,
@@ -456,30 +427,16 @@ class _SettingPanelState extends State<SettingPanel> {
             },
           ),
           const _CardDivider(),
-          _actionTile(
-            icon: Icons.business_outlined,
-            iconColor: const Color(0xFF1E88E5),
-            title: 'Organizers',
-            subtitle: 'Verified organizer users',
-            titleColor: const Color(0xFF212121),
-            subtitleColor: const Color(0xFF757575),
-            trailing: const Icon(Icons.chevron_right, color: Colors.black26),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const OrganizersPage(),
-                ),
-              );
-            },
-          ),
-          const _CardDivider(),
-          if (isOrganizer)
+          if (isOrganizer || _teamMemberships.isNotEmpty || _pendingInvites > 0)
             _actionTile(
-              icon: Icons.dashboard_customize_outlined,
+              icon: memberOnly
+                  ? Icons.groups_2_outlined
+                  : Icons.dashboard_customize_outlined,
               iconColor: const Color(0xFFFF8F00),
-              title: 'Organizers Dashboard',
-              subtitle: 'Create events & manage your team',
+              title: memberOnly ? 'Org Team Member' : 'Organization',
+              subtitle: memberOnly
+                  ? 'Your teams, invitations & events'
+                  : 'Events, team, check-in & analytics',
               titleColor: const Color(0xFF212121),
               subtitleColor: const Color(0xFF757575),
               trailing: const Icon(Icons.chevron_right, color: Colors.black26),

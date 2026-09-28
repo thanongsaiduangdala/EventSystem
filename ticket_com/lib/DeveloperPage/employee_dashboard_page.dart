@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ticket_com/DeveloperPage/event_approvals_page.dart';
+import 'package:ticket_com/DeveloperPage/organizer_approvals_page.dart';
 import 'package:ticket_com/services/event_organizer_api_service.dart';
 import 'package:ticket_com/services/identity_verification_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
@@ -29,6 +30,7 @@ class _EmployeeDashboardPageState extends State<EmployeeDashboardPage> {
 
   static const _tabs = [
     _VerificationsTab(),
+    OrganizerApprovalsTab(),
     EventApprovalsTab(),
   ];
 
@@ -46,6 +48,11 @@ class _EmployeeDashboardPageState extends State<EmployeeDashboardPage> {
             icon: Icon(Icons.verified_user_outlined, color: _kTextGrey),
             selectedIcon: Icon(Icons.verified_user, color: kAccent),
             label: 'Verifications',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.apartment_outlined, color: _kTextGrey),
+            selectedIcon: Icon(Icons.apartment, color: kAccent),
+            label: 'Organizations',
           ),
           NavigationDestination(
             icon: Icon(Icons.event_available_outlined, color: _kTextGrey),

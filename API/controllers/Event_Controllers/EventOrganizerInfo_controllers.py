@@ -4,7 +4,9 @@ import pymysql
 from fastapi import HTTPException, status, Depends, UploadFile, File, Form
 from DB.DBConnect import getConnect
 from models.schema import AddEventOrganizerInfoRequest, UpdateEventOrganizerInfoRequest
-from auth.dependencies import require_permission, get_current_account
+from auth.dependencies import (
+    require_permission, get_current_account, require_employee_or_superadmin
+)
 from controllers.Event_Controllers.Notification_controllers import (
     notify_accounts, staff_account_ids
 )
@@ -123,10 +125,13 @@ async def apply_eventorganizer(
         logo_path = _save_logo_file(logo)
 
         with con.cursor() as cur:
+            # New applications start Pending (OrganizerStatusID = 1) until an
+            # employee / superadmin approves the organization.
             sql = """
                 INSERT INTO eventorganizerinfo
-                (EventOrganizerName, EventOrganizerLogoPath, CreatedByAccountID, EventOrganizerDiscription)
-                VALUES (%s, %s, %s, %s)
+                (EventOrganizerName, EventOrganizerLogoPath, CreatedByAccountID,
+                 EventOrganizerDiscription, OrganizerStatusID)
+                VALUES (%s, %s, %s, %s, 1)
             """
             cur.execute(sql, (
                 EventOrganizerName,
@@ -150,11 +155,77 @@ async def apply_eventorganizer(
             "system",
             "New organizer application",
             f"{full_name} submitted a Become Organizer application for "
-            f"'{EventOrganizerName}'. Review it in the Employee Dashboard.",
+            f"'{EventOrganizerName}'. Review the organization in the Employee "
+            "Dashboard (Organizations tab).",
         )
 
         return {"msg": "Event organizer application received", "EventOrganizerID": EventOrganizer_ID}
 
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+def _review_eventorganizer(organizer_id: int, new_status_id: int):
+    """Sets OrganizerStatusID on a pending/denied organization and returns
+    (CreatedByAccountID, EventOrganizerName) so the owner can be notified."""
+    con = getConnect()
+    with con.cursor() as cur:
+        cur.execute(
+            "SELECT CreatedByAccountID, EventOrganizerName FROM eventorganizerinfo "
+            "WHERE EventOrganizerID = %s",
+            (organizer_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event organizer not found")
+        cur.execute(
+            "UPDATE eventorganizerinfo SET OrganizerStatusID = %s WHERE EventOrganizerID = %s",
+            (new_status_id, organizer_id),
+        )
+        con.commit()
+    return row["CreatedByAccountID"], row["EventOrganizerName"]
+
+
+async def approve_eventorganizer(
+    event_organizer_id: int,
+    current=Depends(require_employee_or_superadmin),
+):
+    """Employee/Superadmin action: approves a submitted organization
+    (OrganizerStatusID = 2) so it becomes visible and usable."""
+    try:
+        owner_id, org_name = _review_eventorganizer(event_organizer_id, 2)
+        notify_accounts(
+            [owner_id],
+            "system",
+            "Organization approved",
+            f"Your organization '{org_name}' has been approved. You can now "
+            "create events and build your team.",
+        )
+        return {"msg": "Organization approved", "EventOrganizerID": event_organizer_id}
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def deny_eventorganizer(
+    event_organizer_id: int,
+    current=Depends(require_employee_or_superadmin),
+):
+    """Employee/Superadmin action: rejects a submitted organization
+    (OrganizerStatusID = 3)."""
+    try:
+        owner_id, org_name = _review_eventorganizer(event_organizer_id, 3)
+        notify_accounts(
+            [owner_id],
+            "system",
+            "Organization denied",
+            f"Your organization '{org_name}' was not approved. Please contact "
+            "support if you think this is a mistake.",
+        )
+        return {"msg": "Organization denied", "EventOrganizerID": event_organizer_id}
     except HTTPException:
         raise
     except pymysql.MySQLError as err:

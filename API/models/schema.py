@@ -218,6 +218,7 @@ class CheckInAttendeeRequest(BaseModel):
 
 
 class RevokeTicketRequest(BaseModel):
+    EventID: int
     AttendeeID: int
     IsValid: bool = False
 

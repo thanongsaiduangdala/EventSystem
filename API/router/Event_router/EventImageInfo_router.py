@@ -1,6 +1,7 @@
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
+from auth.dependencies import get_current_account
 from controllers.Event_Controllers.EventImageInfo_controllers import (
     create_eventimage,
     get_all_eventimages,
@@ -26,9 +27,12 @@ async def upload_eventimage_route(
     event_id: int = Form(...),
     image_name: Optional[str] = Form(None),
     file: UploadFile = File(...),
+    current: dict = Depends(get_current_account),
 ):
     """Multipart upload: saves the file to disk and creates the DB row in one step."""
-    return await upload_eventimage(event_id=event_id, file=file, image_name=image_name)
+    return await upload_eventimage(
+        event_id=event_id, file=file, image_name=image_name, current=current
+    )
 
 
 @router.post("/{image_id}/replace")
@@ -36,9 +40,12 @@ async def replace_eventimage_route(
     image_id: int,
     image_name: Optional[str] = Form(None),
     file: UploadFile = File(...),
+    current: dict = Depends(get_current_account),
 ):
     """Multipart upload: swaps the file backing an existing image row and deletes the old one."""
-    return await replace_eventimage_file(image_id=image_id, file=file, image_name=image_name)
+    return await replace_eventimage_file(
+        image_id=image_id, file=file, image_name=image_name, current=current
+    )
 
 
 router.post("/{image_id}/set-thumbnail")(set_thumbnail_eventimage)

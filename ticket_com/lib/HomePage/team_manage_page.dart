@@ -8,9 +8,21 @@ const Color _kTextGrey = Color(0xFF757575);
 /// Team management for Admins / Owners: invite members, change roles, assign
 /// members to events, remove members, and (Owner only) transfer ownership.
 class TeamManagePage extends StatefulWidget {
-  const TeamManagePage({super.key, required this.membership});
+  const TeamManagePage({
+    super.key,
+    required this.membership,
+    this.embedded = false,
+    this.onChanged,
+  });
 
   final TeamMembership membership;
+
+  /// True when shown as a section inside the Team tab (no own app bar).
+  final bool embedded;
+
+  /// Called (embedded mode only) after something that changes the caller's
+  /// own membership, e.g. an ownership transfer.
+  final VoidCallback? onChanged;
 
   @override
   State<TeamManagePage> createState() => _TeamManagePageState();
@@ -40,7 +52,9 @@ class _TeamManagePageState extends State<TeamManagePage> {
     try {
       final results = await Future.wait<Object>([
         OrganizerMemberApiService.getOrgTeam(_membership.eventOrganizerId),
-        OrganizerMemberApiService.getMyMemberEvents(),
+        OrganizerMemberApiService.getMyMemberEvents(
+          orgId: _membership.eventOrganizerId,
+        ),
         OrganizerMemberApiService.getAllTeamRoles(),
       ]);
       if (!mounted) return;
@@ -207,6 +221,7 @@ class _TeamManagePageState extends State<TeamManagePage> {
   Future<void> _editAssignments(OrgTeamMember member) async {
     final assigned =
         member.assignedEvents.map((e) => e.eventId).toSet();
+    final selected = {...assigned};
     final result = await showModalBottomSheet<Set<int>>(
       context: context,
       isScrollControlled: true,
@@ -215,7 +230,6 @@ class _TeamManagePageState extends State<TeamManagePage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        final selected = {...assigned};
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return DraggableScrollableSheet(
@@ -246,6 +260,11 @@ class _TeamManagePageState extends State<TeamManagePage> {
                         ],
                       ),
                     ),
+                    if (_events.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text('This organization has no events yet.'),
+                      ),
                     Expanded(
                       child: ListView.builder(
                         controller: scroll,
@@ -352,7 +371,11 @@ class _TeamManagePageState extends State<TeamManagePage> {
       );
       if (!mounted) return;
       _snack('Ownership transferred to ${member.fullName}');
-      Navigator.pop(context, true);
+      if (widget.embedded) {
+        widget.onChanged?.call();
+      } else {
+        Navigator.pop(context, true);
+      }
     } catch (e) {
       if (!mounted) return;
       _snack('$e');
@@ -363,6 +386,13 @@ class _TeamManagePageState extends State<TeamManagePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) {
+      // Lives inside the Team tab: the parent provides the Scaffold/app bar.
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: _buildBody(),
+      );
+    }
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
@@ -438,6 +468,18 @@ class _TeamManagePageState extends State<TeamManagePage> {
               '${active.length}',
               style: const TextStyle(color: _kTextGrey, fontSize: 13),
             ),
+            if (widget.embedded) ...[
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: _invite,
+                icon: const Icon(Icons.person_add_alt, size: 18),
+                label: const Text(
+                  'Invite',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                style: TextButton.styleFrom(foregroundColor: kAccent),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 10),
@@ -546,27 +588,8 @@ class _TeamManagePageState extends State<TeamManagePage> {
             ],
           ),
           const SizedBox(height: 10),
-          if (canEdit || isOwnerMember)
-            DropdownButtonFormField<int>(
-              initialValue: member.teamRoleId,
-              isDense: true,
-              decoration: const InputDecoration(
-                labelText: 'Role',
-                isDense: true,
-                border: OutlineInputBorder(),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              ),
-              items: [
-                for (final r in _roles)
-                  DropdownMenuItem(value: r.id, child: Text(r.name)),
-              ],
-              onChanged: isOwnerMember
-                  ? null
-                  : (v) {
-                      if (v != null) _changeRole(member, v);
-                    },
-            )
+          if (canEdit)
+            _roleDropdown(member)
           else
             Text(
               member.teamRoleName,
@@ -581,7 +604,7 @@ class _TeamManagePageState extends State<TeamManagePage> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              if (canEdit)
+              if (canEdit && !_seesAllEvents(member.teamRoleId))
                 _chipAction(
                   icon: Icons.event_note,
                   label: 'Assign events',
@@ -603,7 +626,16 @@ class _TeamManagePageState extends State<TeamManagePage> {
                 ),
             ],
           ),
-          if (member.assignedEvents.isNotEmpty) ...[
+          if (_seesAllEvents(member.teamRoleId))
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Has access to every event of the organization.',
+                style: TextStyle(color: _kTextGrey, fontSize: 12),
+              ),
+            ),
+          if (member.assignedEvents.isNotEmpty &&
+              !_seesAllEvents(member.teamRoleId)) ...[
             const SizedBox(height: 8),
             Wrap(
               spacing: 6,
@@ -645,54 +677,130 @@ class _TeamManagePageState extends State<TeamManagePage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF3CD),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.schedule,
-              color: Color(0xFF8A6D00),
-              size: 22,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3CD),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.schedule,
+                  color: Color(0xFF8A6D00),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      member.fullName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _kTextDark,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      '${member.email} · waiting for reply',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _kTextGrey, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 10),
+          _roleDropdown(member),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (!_seesAllEvents(member.teamRoleId))
+                _chipAction(
+                  icon: Icons.event_note,
+                  label: 'Assign events',
+                  onTap: () => _editAssignments(member),
+                ),
+              _chipAction(
+                icon: Icons.close,
+                label: 'Cancel invite',
+                color: const Color(0xFFE53935),
+                onTap: () => _removeMember(member),
+              ),
+            ],
+          ),
+          if (member.assignedEvents.isNotEmpty &&
+              !_seesAllEvents(member.teamRoleId)) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
               children: [
-                Text(
-                  '${member.fullName} · ${member.teamRoleName}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _kTextDark,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+                for (final e in member.assignedEvents)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFEEFC),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      e.eventName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: kAccent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
-                Text(
-                  member.email,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _kTextGrey, fontSize: 12),
-                ),
               ],
             ),
-          ),
-          TextButton(
-            onPressed: () => _removeMember(member),
-            child: const Text(
-              'Cancel invite',
-              style: TextStyle(color: Color(0xFFE53935)),
-            ),
-          ),
+          ],
         ],
       ),
+    );
+  }
+
+  /// Admin / Owner are never event-scoped, so assigning them is meaningless.
+  bool _seesAllEvents(int roleId) =>
+      roleId == TeamRole.orgAdmin || roleId == TeamRole.orgOwner;
+
+  Widget _roleDropdown(OrgTeamMember member) {
+    final hasValue = _roles.any((r) => r.id == member.teamRoleId);
+    return DropdownButtonFormField<int>(
+      key: ValueKey('role-${member.memberId}-${member.teamRoleId}'),
+      initialValue: hasValue ? member.teamRoleId : null,
+      isDense: true,
+      decoration: const InputDecoration(
+        labelText: 'Role',
+        isDense: true,
+        border: OutlineInputBorder(),
+        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      ),
+      items: [
+        for (final r in _roles)
+          DropdownMenuItem(value: r.id, child: Text(r.name)),
+      ],
+      onChanged: _working
+          ? null
+          : (v) {
+              if (v != null) _changeRole(member, v);
+            },
     );
   }
 

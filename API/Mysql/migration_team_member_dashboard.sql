@@ -71,6 +71,56 @@ CREATE TABLE IF NOT EXISTS ticketcheckin (
 
 -- ---------------------------------------------------------------------------
 -- 4. Ticket revocation flag (Staff/Admins can refuse entry)
+--    MySQL has no "ADD COLUMN IF NOT EXISTS", so guard on information_schema
+--    to keep this file safely re-runnable after a partial run.
 -- ---------------------------------------------------------------------------
-ALTER TABLE ticketattendence
-    ADD COLUMN IsValid TINYINT(1) NOT NULL DEFAULT 1 AFTER NationalID;
+SET @add_isvalid := (
+    SELECT IF(
+        EXISTS (
+            SELECT 1
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'ticketattendence'
+              AND COLUMN_NAME = 'IsValid'
+        ),
+        'SELECT 1',
+        'ALTER TABLE ticketattendence
+             ADD COLUMN IsValid TINYINT(1) NOT NULL DEFAULT 1 AFTER NationalID'
+    )
+);
+PREPARE stmt_add_isvalid FROM @add_isvalid;
+EXECUTE stmt_add_isvalid;
+DEALLOCATE PREPARE stmt_add_isvalid;
+
+-- ---------------------------------------------------------------------------
+-- 5. One live membership per account per organization, enforced by the schema.
+--    An account may belong to several organizations (it can own more than
+--    one), but never twice to the same one. Removed rows (MemberStatusID = 4)
+--    are exempt so a former member can be re-invited.
+--
+--    MySQL has no partial/filtered unique index, so the constraint is built on
+--    a generated column that is NULL for Removed rows -- a unique index allows
+--    any number of NULLs, which is exactly the exemption we need.
+-- ---------------------------------------------------------------------------
+SET @add_ukey := (
+    SELECT IF(
+        EXISTS (
+            SELECT 1
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'organizermember'
+              AND INDEX_NAME = 'uq_organizer_active_member'
+        ),
+        'SELECT 1',
+        'ALTER TABLE organizermember
+             ADD COLUMN ActiveMembershipKey VARCHAR(64)
+                 GENERATED ALWAYS AS (
+                     IF(MemberStatusID = 4, NULL,
+                        CONCAT(AccountID, '':'', EventOrganizerID))
+                 ) STORED,
+             ADD UNIQUE KEY uq_organizer_active_member (ActiveMembershipKey)'
+    )
+);
+PREPARE stmt_add_ukey FROM @add_ukey;
+EXECUTE stmt_add_ukey;
+DEALLOCATE PREPARE stmt_add_ukey;

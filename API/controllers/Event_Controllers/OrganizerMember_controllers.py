@@ -1,3 +1,5 @@
+from typing import Optional
+
 import pymysql
 from fastapi import HTTPException, status, Depends
 from DB.DBConnect import getConnect
@@ -14,6 +16,8 @@ from auth.dependencies import require_permission, get_current_account
 from auth.team_access import (
     TEAM_ROLE_ORG_OWNER,
     active_membership,
+    active_memberships,
+    sync_owner_memberships,
     ensure_org_manager,
     ensure_org_owner,
 )
@@ -68,17 +72,18 @@ async def create_organizermember(req_data: AddOrganizerMemberRequest, current=De
     try:
         con = getConnect()
         with con.cursor() as cur:
-            # An account may only belong to one organization at a time.
-            # Removed (MemberStatusID = 4) rows do not count, so a former
-            # member can be re-added.
+            # An account may hold memberships in several organizations, but
+            # only one per organization at a time. Removed (MemberStatusID = 4)
+            # rows do not count, so a former member can be re-added.
             cur.execute(
-                "SELECT MemberID FROM organizermember WHERE AccountID = %s AND MemberStatusID != %s",
-                (req_data.AccountID, MEMBER_STATUS_REMOVED),
+                "SELECT MemberID FROM organizermember "
+                "WHERE AccountID = %s AND EventOrganizerID = %s AND MemberStatusID != %s",
+                (req_data.AccountID, req_data.EventOrganizerID, MEMBER_STATUS_REMOVED),
             )
             if cur.fetchone() is not None:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="This account already belongs to an organization",
+                    detail="This account is already part of (or invited to) this organization",
                 )
 
             sql = """
@@ -220,13 +225,14 @@ async def invite_organizermember(req_data: InviteOrganizerMemberRequest, current
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
 
             cur.execute(
-                "SELECT MemberID FROM organizermember WHERE AccountID = %s AND MemberStatusID != %s",
-                (account_id, MEMBER_STATUS_REMOVED),
+                "SELECT MemberID FROM organizermember "
+                "WHERE AccountID = %s AND EventOrganizerID = %s AND MemberStatusID != %s",
+                (account_id, req_data.EventOrganizerID, MEMBER_STATUS_REMOVED),
             )
             if cur.fetchone() is not None:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="This account is already part of (or invited to) an organization",
+                    detail="This account is already part of (or invited to) this organization",
                 )
 
             cur.execute(
@@ -432,7 +438,7 @@ async def delete_organizermember(member_id: int, current=Depends(get_current_acc
         con = getConnect()
         with con.cursor() as cur:
             cur.execute(
-                "SELECT MemberID FROM organizermember WHERE MemberID = %s",
+                "SELECT MemberID, AccountID, EventOrganizerID FROM organizermember WHERE MemberID = %s",
                 (member_id,),
             )
             target = cur.fetchone()
@@ -480,30 +486,67 @@ async def get_my_memberships(current=Depends(get_current_account)):
     """
     The caller's active organization memberships: the org they belong to, the
     team role they hold, and the org owner's account id (to avoid an extra
-    round-trip when rendering the dashboard header).
+    round-trip when rendering the dashboard header). One row per organization.
     """
     try:
         con = getConnect()
-        row = active_membership(con, current["account_id"])
-        return [row] if row else []
+        sync_owner_memberships(con, current["account_id"])
+        return active_memberships(con, current["account_id"])
 
     except pymysql.MySQLError as err:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def get_my_team_member_events(current=Depends(get_current_account)):
+async def get_my_invites(current=Depends(get_current_account)):
     """
-    Events of the caller's organization the caller may work on. Managers
-    (Admin / Owner) see every event of the org; assigned volunteers and staff
-    see their own events. Each event carries `assigned` so the app can hide
-    check-in/attendee buttons for unassigned members and the full event row so
-    designers can hand it straight to the event form.
+    Pending invitations addressed to the caller: organizations that invited
+    them to join their team and are waiting for an answer. Only approved
+    organizations are listed. Same row shape as the single-member detail so the
+    join page can open any of them by MemberID.
     """
     try:
         con = getConnect()
-        member = active_membership(con, current["account_id"])
+        with con.cursor() as cur:
+            cur.execute(
+                """
+                SELECT om.MemberID, om.AccountID, om.EventOrganizerID, om.TeamRoleID,
+                       om.MemberStatusID,
+                       a.FirstName, a.LastName, a.Email,
+                       tr.TeamRoleName, ms.StatusName,
+                       eo.EventOrganizerName, eo.EventOrganizerLogoPath,
+                       eo.EventOrganizerDiscription, eo.CreatedByAccountID
+                FROM organizermember om
+                LEFT JOIN accountinfo a ON a.AccountID = om.AccountID
+                LEFT JOIN teamrole tr ON tr.TeamRoleID = om.TeamRoleID
+                LEFT JOIN memberstatusinfo ms ON ms.MemberStatusID = om.MemberStatusID
+                LEFT JOIN eventorganizerinfo eo ON eo.EventOrganizerID = om.EventOrganizerID
+                WHERE om.AccountID = %s AND om.MemberStatusID = %s
+                  AND eo.OrganizerStatusID = 2
+                ORDER BY om.MemberID DESC
+                """,
+                (current["account_id"], MEMBER_STATUS_PENDING),
+            )
+            return cur.fetchall()
+
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def get_my_team_member_events(org_id: Optional[int] = None, current=Depends(get_current_account)):
+    """
+    Events of one organization the caller may work on. Pass `org_id` when the
+    caller belongs to several organizations (the team screens do); without it
+    the caller's first membership is used.
+
+    Managers (Admin / Owner) see every event of the org. Everyone else sees
+    ONLY the events they are assigned to (no visibility into other events).
+    """
+    try:
+        con = getConnect()
+        sync_owner_memberships(con, current["account_id"])
+        member = active_membership(con, current["account_id"], org_id)
         if member is None:
-            return []
+            return {"org": None, "events": []}
 
         org_id = member["EventOrganizerID"]
         owner_id = member["CreatedByAccountID"]
@@ -522,6 +565,7 @@ async def get_my_team_member_events(current=Depends(get_current_account)):
                 LEFT JOIN eventstaff es ON es.EventID = e.EventID AND es.MemberID = %s
                 LEFT JOIN eventrole ev ON ev.EventRoleID = es.EventRoleID
                 WHERE e.EventOrganizerID = %s
+                """ + ("" if is_manager else " AND es.MemberID IS NOT NULL ") + """
                 ORDER BY e.EventStartingYMDT DESC
                 """,
                 (member["MemberID"], org_id),
@@ -549,6 +593,10 @@ async def get_my_team_member_events(current=Depends(get_current_account)):
                 "TeamRoleID": role_id,
             })
         return {"org": {
+            "MemberID": member["MemberID"],
+            "AccountID": member["AccountID"],
+            "MemberStatusID": member["MemberStatusID"],
+            "EventOrganizerDiscription": member["EventOrganizerDiscription"],
             "EventOrganizerID": org_id,
             "EventOrganizerName": member["EventOrganizerName"],
             "EventOrganizerLogoPath": member["EventOrganizerLogoPath"],
@@ -655,6 +703,8 @@ async def change_member_role(req_data: ChangeMemberRoleRequest, current=Depends(
                 )
             if not 1 <= req_data.TeamRoleID <= 4:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid team role")
+            if target["MemberStatusID"] not in (MEMBER_STATUS_PENDING, MEMBER_STATUS_ACTIVE):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only active or pending members can change role")
 
             cur.execute(
                 "SELECT CreatedByAccountID FROM eventorganizerinfo WHERE EventOrganizerID = %s",
@@ -758,8 +808,10 @@ async def assign_member_to_event(req_data: AssignMemberEventRequest, current=Dep
             target = _member_row(cur, req_data.MemberID)
             if not target:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organizer member not found")
-            if target["MemberStatusID"] != MEMBER_STATUS_ACTIVE:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only active members can be assigned")
+            # Pending invitees can be pre-assigned so their access is ready the
+            # moment they accept; access itself still requires an Active row.
+            if target["MemberStatusID"] not in (MEMBER_STATUS_PENDING, MEMBER_STATUS_ACTIVE):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only active or pending members can be assigned")
 
             await ensure_org_manager(con, current, target["EventOrganizerID"])
 
@@ -779,7 +831,8 @@ async def assign_member_to_event(req_data: AssignMemberEventRequest, current=Dep
                 return {"msg": "Member is already assigned to this event", "AssigmentID": existing["AssigmentID"]}
 
             cur.execute(
-                "INSERT INTO eventstaff (EventID, MemberID, EventRoleID) VALUES (%s, %s, %s)",
+                "INSERT INTO eventstaff (EventID, MemberID, EventRoleID, AssignedAtYMDT) "
+                "VALUES (%s, %s, %s, CURRENT_TIMESTAMP)",
                 (req_data.EventID, req_data.MemberID, req_data.EventRoleID),
             )
             con.commit()

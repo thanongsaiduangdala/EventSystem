@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_com/HomePage/become_organizer_page.dart';
 import 'package:ticket_com/HomePage/event_analytics_page.dart';
 import 'package:ticket_com/HomePage/event_form_page.dart';
+import 'package:ticket_com/HomePage/organizer_invite_page.dart';
+import 'package:ticket_com/HomePage/pill_toggle.dart';
+import 'package:ticket_com/HomePage/team_member_dashboard_page.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
@@ -14,20 +18,6 @@ const Color _kGreen = Color(0xFF2E9E5B);
 const Color _kAmber = Color(0xFFB26A00);
 const Color _kRed = Color(0xFFE53935);
 
-const int _kMemberPending = 1;
-const int _kMemberActive = 2;
-const int _kMemberDeclined = 3;
-const int _kMemberRemoved = 4;
-
-class _TeamMemberView {
-  final OrganizerMemberDetail detail;
-
-  _TeamMemberView(this.detail);
-}
-
-/// Organizer dashboard. Shows the organizer profiles owned by the signed-in
-/// account, lets the organizer create/manage events and hire other accounts
-/// as their employees/volunteers (organizer team members).
 class OrganizerDashboardPage extends StatefulWidget {
   const OrganizerDashboardPage({super.key});
 
@@ -45,12 +35,16 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   List<EventModel> _myEvents = [];
   List<EventOrganizer> _allOrganizers = [];
 
-  List<TeamRoleModel> _teamRoles = [];
-  List<_TeamMemberView> _team = [];
+  List<TeamMembership> _memberships = [];
 
-  int _tabIndex = 0;
+  EventOrganizer? _pendingOrganizer;
+
+  List<OrganizerMemberDetail> _invites = [];
+
+  int? _tabIndex;
+
+  int _memberSection = 0;
   final _eventSearch = TextEditingController();
-  final _memberSearch = TextEditingController();
   int? _statusFilter;
   bool? _visibleFilter;
 
@@ -72,21 +66,6 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     }).toList();
   }
 
-  List<_TeamMemberView> get _filteredTeam {
-    final query = _memberSearch.text.trim().toLowerCase();
-    if (query.isEmpty) return _team;
-    return _team.where((t) {
-      final d = t.detail;
-      return d.fullName.toLowerCase().contains(query) ||
-          d.email.toLowerCase().contains(query) ||
-          d.roleName.toLowerCase().contains(query) ||
-          d.statusName.toLowerCase().contains(query);
-    }).toList();
-  }
-
-  /// Cover image per event id, and which events already have ticket types.
-  /// Both are best-effort extras: if they fail to load the dashboard still
-  /// works, it just skips the thumbnail / "no tickets" hint.
   Map<int, EventImageModel> _coverByEvent = {};
   Set<int> _eventsWithTickets = {};
   bool _ticketInfoKnown = false;
@@ -104,7 +83,6 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   @override
   void dispose() {
     _eventSearch.dispose();
-    _memberSearch.dispose();
     super.dispose();
   }
 
@@ -114,27 +92,31 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
       _error = null;
     });
     try {
-      final organizers = await EventApiService.getAllOrganizers();
-      final myOrganizers = organizers
+      final organizers =
+          await EventApiService.getAllOrganizers(includeUnapproved: true);
+      final mine = organizers
           .where((o) => o.createdByAccountId == _accountId)
           .toList();
+      final myOrganizers = mine.where((o) => o.isApproved).toList();
+      final unapproved = mine.where((o) => !o.isApproved).toList()
+        ..sort((a, b) => (a.isPending ? 0 : 1).compareTo(b.isPending ? 0 : 1));
       final myIds = myOrganizers.map((o) => o.id).toSet();
 
       List<EventModel> events = [];
-      List<OrganizerMemberDetail> teamDetails = [];
-      List<TeamRoleModel> roles = [];
       if (myIds.isNotEmpty) {
-        final results = await Future.wait<Object>([
-          EventApiService.getAllEventsWithStatus(),
-          OrganizerMemberApiService.getMembersWithAccounts(),
-          OrganizerMemberApiService.getAllTeamRoles(),
-        ]);
-        events = (results[0] as List<EventModel>)
-            .where((e) => myIds.contains(e.organizerId))
-            .toList();
-        teamDetails = results[1] as List<OrganizerMemberDetail>;
-        roles = results[2] as List<TeamRoleModel>;
+        final all = await EventApiService.getAllEventsWithStatus();
+        events = all.where((e) => myIds.contains(e.organizerId)).toList();
       }
+
+      var memberships = <TeamMembership>[];
+      try {
+        memberships = await OrganizerMemberApiService.getMyMemberships();
+      } catch (_) {}
+
+      var invites = <OrganizerMemberDetail>[];
+      try {
+        invites = await OrganizerMemberApiService.getMyInvites();
+      } catch (_) {}
 
       final coverByEvent = <int, EventImageModel>{};
       final eventsWithTickets = <int>{};
@@ -150,36 +132,26 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
             }
           }
         } catch (_) {
-          // thumbnails are optional
         }
         try {
           final tickets = await TicketTypeApiService.getAllTicketTypes();
           eventsWithTickets.addAll(tickets.map((t) => t.eventId));
           ticketInfoKnown = true;
         } catch (_) {
-          // the "no ticket types" hint is optional
         }
       }
 
       if (!mounted) return;
       setState(() {
         _myOrganizers = myOrganizers;
+        _pendingOrganizer = unapproved.isEmpty ? null : unapproved.first;
         _allOrganizers = organizers;
         _myEvents = events;
         _coverByEvent = coverByEvent;
         _eventsWithTickets = eventsWithTickets;
         _ticketInfoKnown = ticketInfoKnown;
-        _teamRoles = roles;
-        _team = teamDetails
-            .map((d) => _TeamMemberView(d))
-            .toList()
-          ..sort((a, b) {
-            final byStatus = a.detail.memberStatusId
-                .compareTo(b.detail.memberStatusId);
-            return byStatus != 0
-                ? byStatus
-                : a.detail.fullName.compareTo(b.detail.fullName);
-          });
+        _memberships = memberships;
+        _invites = invites;
         _loading = false;
       });
     } catch (e) {
@@ -191,7 +163,6 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     }
   }
 
-  // ---------------- events ----------------
 
   void _openCreateEvent() {
     final organizerId = _primaryOrganizer?.id;
@@ -209,9 +180,6 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   }
 
   void _openEditEvent(EventModel event) {
-    // Editing keeps the event's current approval status (Approved stays
-    // Approved, Pending stays Pending); only a previously-Denied event goes
-    // back to Pending, since editing it is effectively a resubmission.
     final wasDenied = event.eventStatusId == EventStatus.denied;
     Navigator.push<bool>(
       context,
@@ -231,7 +199,6 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     try {
       tickets = await TicketTypeApiService.getTicketTypesByEvent(event.id);
     } catch (_) {
-      // analytics works without ticket config; charts just stay empty
     }
     if (!mounted) return;
     await Navigator.push<bool>(
@@ -292,100 +259,35 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     }
   }
 
-  // ---------------- team members ----------------
-
-  Future<void> _openInviteMember() async {
-    final organizer = _primaryOrganizer;
-    if (organizer == null) return;
-    if (_teamRoles.isEmpty) {
-      _snack('No team roles configured yet.');
-      return;
-    }
-
-    final result = await showModalBottomSheet<_TeamInviteCreate>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => _InviteMemberSheet(
-        roles: _teamRoles,
-        organizerName: organizer.name,
-      ),
-    );
-    if (result == null) return;
-    try {
-      await OrganizerMemberApiService.inviteMember(
-        email: result.email,
-        eventOrganizerId: organizer.id,
-        teamRoleId: result.role.id,
-      );
-      if (!mounted) return;
-      _snack('Invitation sent to ${result.email} as ${result.role.name}.');
-      _load();
-    } catch (e) {
-      _snack('Could not send invitation: $e');
-    }
-  }
-
-  Future<void> _confirmRemoveMember(_TeamMemberView view) async {
-    final detail = view.detail;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text('Remove from team?',
-            style: TextStyle(color: _kTextDark)),
-        content: Text(
-          'Remove ${detail.fullName} (${detail.roleName}) from your '
-          'organizer team?'
-          '${detail.memberStatusId == _kMemberPending ? ' This will revoke their pending invitation.' : ''}',
-          style: const TextStyle(color: _kTextGrey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove', style: TextStyle(color: _kRed)),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      await OrganizerMemberApiService.deleteMember(detail.id);
-      if (!mounted) return;
-      _snack('${detail.fullName} removed from your team.');
-      _load();
-    } catch (e) {
-      _snack('Remove failed: $e');
-    }
-  }
-
   void _snack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // ---------------- build ----------------
 
   @override
   Widget build(BuildContext context) {
     final organizer = _primaryOrganizer;
-    final showNav = _myOrganizers.isNotEmpty && _error == null;
+    final hasEvents = organizer != null;
+    final ownIds = _myOrganizers.map((o) => o.id).toSet();
+    final joined =
+        _memberships.where((m) => !ownIds.contains(m.eventOrganizerId)).toList();
+    final session = AuthService.currentSession;
+    final isOrganizerAccount = hasEvents ||
+        (session?.isOrganizer ?? false) ||
+        (session?.isSuperAdmin ?? false);
+    final ready = !_loading && _error == null;
+    final tab = _tabIndex ??
+        (hasEvents || _pendingOrganizer != null ? 0 : 2);
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
         backgroundColor: Colors.white,
         foregroundColor: _kTextDark,
         elevation: 0,
-        title: const Text(
-          'Organizers Dashboard',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Text(
+          isOrganizerAccount ? 'Organization' : 'Org Team Member',
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
       body: _loading
@@ -394,35 +296,49 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
             )
           : _error != null
               ? _errorBox()
-              : _myOrganizers.isEmpty
-                  ? _noOrganizerBox()
-                  : AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: _tabIndex == 0
-                          ? _eventsTab(organizer!)
-                          : _teamTab(organizer!),
-                    ),
-      bottomNavigationBar: showNav
+              : AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: _tabBody(
+                    tab: tab,
+                    organizer: organizer,
+                    ownIds: ownIds,
+                    joined: joined,
+                  ),
+                ),
+      bottomNavigationBar: ready
           ? NavigationBar(
-              selectedIndex: _tabIndex,
+              selectedIndex: tab,
               backgroundColor: Colors.white,
               indicatorColor: kAccent.withValues(alpha: 0.14),
               onDestinationSelected: (i) => setState(() => _tabIndex = i),
-              destinations: const [
-                NavigationDestination(
+              destinations: [
+                const NavigationDestination(
                   icon: Icon(Icons.event_outlined),
                   selectedIcon: Icon(Icons.event),
-                  label: 'Events',
+                  label: 'My Events',
+                ),
+                const NavigationDestination(
+                  icon: Icon(Icons.groups_2_outlined),
+                  selectedIcon: Icon(Icons.groups_2),
+                  label: 'My Team',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.groups_outlined),
-                  selectedIcon: Icon(Icons.groups),
-                  label: 'My Team',
+                  icon: Badge(
+                    isLabelVisible: _invites.isNotEmpty,
+                    label: Text('${_invites.length}'),
+                    child: const Icon(Icons.badge_outlined),
+                  ),
+                  selectedIcon: Badge(
+                    isLabelVisible: _invites.isNotEmpty,
+                    label: Text('${_invites.length}'),
+                    child: const Icon(Icons.badge),
+                  ),
+                  label: 'Team Member',
                 ),
               ],
             )
           : null,
-      floatingActionButton: showNav && _tabIndex == 0
+      floatingActionButton: ready && hasEvents && tab == 0
           ? FloatingActionButton.extended(
               backgroundColor: kAccent,
               foregroundColor: Colors.white,
@@ -447,18 +363,6 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         _searchAndFilters(),
         const SizedBox(height: 16),
         _eventsSection(),
-      ],
-    );
-  }
-
-  Widget _teamTab(EventOrganizer organizer) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
-      children: [
-        _organizerHeader(organizer),
-        const SizedBox(height: 20),
-        _teamSection(),
       ],
     );
   }
@@ -526,8 +430,6 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
           Row(
             children: [
               _headerStat('${_myEvents.length}', 'Events'),
-              const SizedBox(width: 24),
-              _headerStat('${_team.length}', 'Team members'),
               const Spacer(),
               if (_myOrganizers.length > 1)
                 Text(
@@ -948,239 +850,6 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     );
   }
 
-  Widget _teamSection() {
-    final visibleTeam = _filteredTeam;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Text(
-              'My Team',
-              style: TextStyle(
-                color: _kTextDark,
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: _openInviteMember,
-              style: TextButton.styleFrom(foregroundColor: kAccent),
-              icon: const Icon(Icons.person_add_alt_1, size: 18),
-              label: const Text(
-                'Invite',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Invite people to join your team as your employees or volunteers. '
-          'They get a notification they can accept.',
-          style: TextStyle(color: _kTextGrey, fontSize: 12.5),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _memberSearch,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            hintText: 'Search team by name, email or role...',
-            hintStyle: const TextStyle(color: _kTextGrey, fontSize: 13.5),
-            prefixIcon: const Icon(Icons.search, color: _kTextGrey),
-            suffixIcon: _memberSearch.text.isEmpty
-                ? null
-                : IconButton(
-                    icon: const Icon(Icons.clear, color: _kTextGrey, size: 20),
-                    onPressed: () {
-                      _memberSearch.clear();
-                      setState(() {});
-                    },
-                  ),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(vertical: 4),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: kAccent, width: 1.6),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (_team.isEmpty)
-          _emptyCard(
-            icon: Icons.groups_outlined,
-            title: 'No team members yet',
-            message: 'Invite someone to help you run your events. They will get '
-                'a notification they can accept.',
-          )
-        else if (visibleTeam.isEmpty)
-          _emptyCard(
-            icon: Icons.search_off,
-            title: 'No matching members',
-            message: 'No team members match your search.',
-          )
-        else
-          ...visibleTeam.map((t) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _memberCard(t),
-              )),
-      ],
-    );
-  }
-
-  Widget _memberCard(_TeamMemberView view) {
-    final detail = view.detail;
-    final initial = detail.fullName.isEmpty
-        ? '?'
-        : detail.fullName.characters.first.toUpperCase();
-    final canRemove = detail.memberStatusId == _kMemberPending ||
-        detail.memberStatusId == _kMemberActive;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x18000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [kAccent, Color(0xFF8E2DE2)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-            child: Text(
-              initial,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  detail.fullName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _kTextDark,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                if (detail.email.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    detail.email,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _kTextGrey, fontSize: 12.5),
-                  ),
-                ],
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    _roleChip(detail.roleName),
-                    _memberStatusChip(detail.memberStatusId),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          if (canRemove)
-            IconButton(
-              icon: const Icon(Icons.person_remove_outlined,
-                  color: _kRed, size: 21),
-              tooltip: 'Remove from team',
-              onPressed: () => _confirmRemoveMember(view),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _roleChip(String roleName) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: kAccent.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        roleName.isEmpty ? 'Member' : roleName,
-        style: const TextStyle(
-          color: kAccent,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-
-  Widget _memberStatusChip(int statusId) {
-    final (bg, fg, label) = switch (statusId) {
-      _kMemberPending => (
-          const Color(0xFFFFF3E0),
-          _kAmber,
-          'Invited'
-        ),
-      _kMemberActive => (_kGreen, Colors.white, 'Active'),
-      _kMemberDeclined => (
-          const Color(0xFFEEEEEE),
-          const Color(0xFF616161),
-          'Declined'
-        ),
-      _kMemberRemoved => (const Color(0xFFFFEBEE), _kRed, 'Removed'),
-      _ => (const Color(0xFFF5F5F5), _kTextGrey, 'Unknown'),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: fg,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-
   Widget _emptyCard({
     required IconData icon,
     required String title,
@@ -1216,38 +885,459 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     );
   }
 
-  Widget _noOrganizerBox() {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+
+  Widget _tabBody({
+    required int tab,
+    required EventOrganizer? organizer,
+    required Set<int> ownIds,
+    required List<TeamMembership> joined,
+  }) {
+    switch (tab) {
+      case 0:
+        return organizer != null
+            ? _eventsTab(organizer)
+            : _becomeOrganizerPrompt(
+                key: const ValueKey('no-org-events'),
+                icon: Icons.event_outlined,
+                title: 'Create your own events',
+                message: 'Want to create your own events and sell tickets? '
+                    'Become your own Organizer.',
+              );
+      case 1:
+        return organizer != null
+            ? TeamMemberDashboardPage(
+                key: const ValueKey('own-team-tab'),
+                embedded: true,
+                orgIds: ownIds,
+              )
+            : _becomeOrganizerPrompt(
+                key: const ValueKey('no-org-team'),
+                icon: Icons.groups_2_outlined,
+                title: 'Build your own team',
+                message: 'Want your own organization and team? Become your '
+                    'own Organizer, then invite people and assign roles.',
+              );
+      default:
+        return _teamMemberTab(joined);
+    }
+  }
+
+  Widget _teamMemberTab(List<TeamMembership> joined) {
+    return Column(
+      key: const ValueKey('team-member-tab'),
       children: [
-        const Icon(Icons.storefront_outlined, color: _kTextGrey, size: 48),
-        const SizedBox(height: 12),
-        const Text(
-          'No organizer profile yet',
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: PillToggle(
+            labels: const ['Joined Org', 'Pending Org'],
+            selected: _memberSection,
+            badges: {1: _invites.length},
+            onChanged: (i) => setState(() => _memberSection = i),
+          ),
+        ),
+        Expanded(
+          child: _memberSection == 0
+              ? _joinedOrganizations(joined)
+              : _pendingOrganizations(),
+        ),
+      ],
+    );
+  }
+
+  Widget _becomeOrganizerPrompt({
+    required Key key,
+    required IconData icon,
+    required String title,
+    required String message,
+  }) {
+    final pending = _pendingOrganizer;
+    if (pending != null) {
+      return _orgReviewStatus(key: key, organizer: pending);
+    }
+    return ListView(
+      key: key,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 64),
+      children: [
+        Center(
+          child: Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              color: kAccent.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: kAccent, size: 40),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          title,
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: const TextStyle(
             color: _kTextDark,
-            fontSize: 18,
+            fontSize: 19,
             fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Your organizer account has organizer access, but no organizer '
-          'profile is linked to your account yet. Ask an admin to create one '
-          'for you.',
+        Text(
+          message,
           textAlign: TextAlign.center,
-          style: TextStyle(color: _kTextGrey, fontSize: 13, height: 1.5),
+          style: const TextStyle(color: _kTextGrey, fontSize: 13.5, height: 1.5),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 22),
         FilledButton.icon(
-          onPressed: _load,
-          style: FilledButton.styleFrom(backgroundColor: kAccent),
-          icon: const Icon(Icons.refresh),
-          label: const Text('Retry', style: TextStyle(fontWeight: FontWeight.w800)),
+          onPressed: _openBecomeOrganizer,
+          style: FilledButton.styleFrom(
+            backgroundColor: kAccent,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+          icon: const Icon(Icons.storefront_outlined),
+          label: const Text(
+            'Click here to become an Organizer',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
         ),
       ],
+    );
+  }
+
+  Future<void> _openBecomeOrganizer() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const BecomeOrganizerPage()),
+    );
+    if (mounted) _load();
+  }
+
+  Widget _orgReviewStatus({Key? key, required EventOrganizer organizer}) {
+    final denied = organizer.isDenied;
+    final color = denied ? _kRed : kAccent;
+    return ListView(
+      key: key,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 64),
+      children: [
+        Center(
+          child: Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              denied ? Icons.gpp_bad_outlined : Icons.hourglass_top,
+              color: color,
+              size: 40,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          denied ? 'Organization not approved' : 'Organization pending approval',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: _kTextDark,
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          denied
+              ? '“${organizer.name}” was not approved. Please contact '
+                  'support if you think this is a mistake.'
+              : '“${organizer.name}” has been submitted. An admin or employee '
+                  'needs to approve your organization before you can create '
+                  'events or build a team.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: _kTextGrey, fontSize: 13.5, height: 1.5),
+        ),
+        const SizedBox(height: 20),
+        OutlinedButton.icon(
+          onPressed: _load,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Refresh status'),
+        ),
+      ],
+    );
+  }
+
+  Widget _joinedOrganizations(List<TeamMembership> joined) {
+    return RefreshIndicator(
+      key: const ValueKey('member-orgs'),
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Organizations you joined',
+                style: TextStyle(
+                  color: _kTextDark,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${joined.length}',
+                style: const TextStyle(color: _kTextGrey, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Tap an organization to see your role and its events.',
+            style: TextStyle(color: _kTextGrey, fontSize: 12.5),
+          ),
+          const SizedBox(height: 12),
+          if (joined.isEmpty)
+            _infoCard(
+              icon: Icons.groups_2_outlined,
+              text: 'You have not joined another organization yet. When an '
+                  'organization invites you, it shows up under Pending Org.',
+            ),
+          for (final m in joined) ...[
+            _joinedOrgCard(m),
+            const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _infoCard({required IconData icon, required String text}) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: Colors.black26, size: 40),
+          const SizedBox(height: 10),
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _kTextGrey, fontSize: 13, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pendingOrganizations() {
+    return RefreshIndicator(
+      key: const ValueKey('member-invites'),
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Invitations',
+                style: TextStyle(
+                  color: _kTextDark,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${_invites.length}',
+                style: const TextStyle(color: _kTextGrey, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Organizations that invited you to join their team. Tap one to '
+            'review it and join or decline.',
+            style: TextStyle(color: _kTextGrey, fontSize: 12.5),
+          ),
+          const SizedBox(height: 12),
+          if (_invites.isEmpty)
+            _infoCard(
+              icon: Icons.mark_email_unread_outlined,
+              text: 'No pending invitations right now.',
+            ),
+          for (final invite in _invites) ...[
+            _inviteCard(invite),
+            const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _inviteCard(OrganizerMemberDetail invite) {
+    final name =
+        invite.organizerName.isEmpty ? 'Organization' : invite.organizerName;
+    final desc = invite.organizerDescription ?? '';
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OrganizerInvitePage(memberId: invite.id),
+            ),
+          );
+          if (mounted) _load();
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3E0),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.mark_email_unread_outlined,
+                      color: Color(0xFFFF8F00),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _kTextDark,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          invite.roleName.isEmpty
+                              ? 'Invited to join their team'
+                              : 'Invited as ${invite.roleName}',
+                          style: const TextStyle(
+                            color: _kTextGrey,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3E0),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Pending',
+                      style: TextStyle(
+                        color: _kAmber,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (desc.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  desc,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _kTextGrey, fontSize: 12.5),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _joinedOrgCard(TeamMembership m) {
+    final name = m.organizerName.isEmpty ? 'Organization' : m.organizerName;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TeamMemberDashboardPage(
+              membership: m,
+              showOrgPicker: false,
+              title: name,
+            ),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: kAccent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.apartment, color: kAccent, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _kTextDark,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      m.teamRoleName,
+                      style: const TextStyle(color: _kTextGrey, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.black26),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1287,154 +1377,4 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
       '${dt.day.toString().padLeft(2, '0')}  '
       '${dt.hour.toString().padLeft(2, '0')}:'
       '${dt.minute.toString().padLeft(2, '0')}';
-}
-
-class _TeamInviteCreate {
-  final String email;
-  final TeamRoleModel role;
-
-  _TeamInviteCreate({required this.email, required this.role});
-}
-
-class _InviteMemberSheet extends StatefulWidget {
-  final List<TeamRoleModel> roles;
-  final String organizerName;
-
-  const _InviteMemberSheet({
-    required this.roles,
-    required this.organizerName,
-  });
-
-  @override
-  State<_InviteMemberSheet> createState() => _InviteMemberSheetState();
-}
-
-class _InviteMemberSheetState extends State<_InviteMemberSheet> {
-  final _emailController = TextEditingController();
-  TeamRoleModel? _selectedRole;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.roles.isNotEmpty) _selectedRole = widget.roles.first;
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) return;
-    if (_selectedRole == null) return;
-    Navigator.pop(
-      context,
-      _TeamInviteCreate(email: email, role: _selectedRole!),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.paddingOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, bottomPad + 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.person_add_alt_1, color: kAccent),
-              const SizedBox(width: 8),
-              const Text(
-                'Invite a team member',
-                style: TextStyle(
-                  color: _kTextDark,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'The invited person will get a notification to review and accept '
-            'joining "${widget.organizerName}".',
-            style: const TextStyle(color: _kTextGrey, fontSize: 13),
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            'Email of an existing account',
-            style: TextStyle(
-              color: _kTextDark,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            decoration: _decoration('e.g. member@example.com'),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Team role',
-            style: TextStyle(
-              color: _kTextDark,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          DropdownButtonFormField<TeamRoleModel>(
-            initialValue: _selectedRole,
-            decoration: _decoration('Select role'),
-            items: widget.roles
-                .map((r) => DropdownMenuItem<TeamRoleModel>(
-                      value: r,
-                      child: Text(r.name),
-                    ))
-                .toList(),
-            onChanged: (v) => setState(() => _selectedRole = v),
-          ),
-          const SizedBox(height: 22),
-          FilledButton(
-            onPressed: _submit,
-            style: FilledButton.styleFrom(
-              backgroundColor: kAccent,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text(
-              'Send Invitation',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  InputDecoration _decoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: _kTextGrey, fontSize: 13.5),
-      filled: true,
-      fillColor: const Color(0xFFFAFAFA),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0x33000000)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: kAccent, width: 1.6),
-      ),
-    );
-  }
 }

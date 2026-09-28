@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_com/HomePage/ticket_scanner_page.dart';
 import 'package:ticket_com/services/attendee_response_api_service.dart';
 import 'package:ticket_com/services/event_question_api_service.dart';
 import 'package:ticket_com/services/organizer_member_api_service.dart';
@@ -9,11 +10,6 @@ const Color _kTextGrey = Color(0xFF757575);
 const Color _kGreen = Color(0xFF43A047);
 const Color _kRed = Color(0xFFE53935);
 
-/// Check-in screen used by team members.
-///
-/// One attendee list powers both volunteers (scan or type the QR payload to
-/// check someone in, see their details for verification) and staff / admin /
-/// owner (the same list plus revoke/re-validate ticket actions).
 class TeamCheckInPage extends StatefulWidget {
   const TeamCheckInPage({
     super.key,
@@ -21,12 +17,15 @@ class TeamCheckInPage extends StatefulWidget {
     required this.eventId,
     required this.eventName,
     this.canRevoke = false,
+    this.canBrowseAttendees = false,
   });
 
   final TeamMembership membership;
   final int eventId;
   final String eventName;
   final bool canRevoke;
+
+  final bool canBrowseAttendees;
 
   @override
   State<TeamCheckInPage> createState() => _TeamCheckInPageState();
@@ -37,8 +36,12 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
   bool _loading = true;
   String? _error;
   List<EventAttendee> _attendees = [];
+  ResolvedAttendee? _scanned;
   String _query = '';
   bool _working = false;
+  List<EventQuestionAnswerModel> _scannedQa = [];
+  bool _qaLoading = false;
+  String? _qaError;
 
   @override
   void initState() {
@@ -53,6 +56,10 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
   }
 
   Future<void> _load() async {
+    if (!widget.canBrowseAttendees) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -155,19 +162,24 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
     }
   }
 
-  /// Accepts the QR payload (TICKET:EV..:O..:A..:T..) or a bare attendee id.
   Future<void> _submitQr(String raw) async {
     final text = raw.trim();
     if (text.isEmpty) return;
     if (_working) return;
 
-    int? attendeeId = _parseTicketQr(text);
-    if (attendeeId == null) {
-      final digits = int.tryParse(text);
-      if (digits != null) attendeeId = digits;
+    final parsed = _parseTicketQr(text);
+    if (parsed.eventId != null && parsed.eventId != widget.eventId) {
+      _snack('This ticket is for a different event.');
+      return;
     }
+    final attendeeId = parsed.attendeeId ?? int.tryParse(text);
     if (attendeeId == null) {
-      _snack('Could not read the ticket. Paste the ticket QR code text.');
+      _snack('Could not read the ticket. Scan the QR code or paste its text.');
+      return;
+    }
+
+    if (!widget.canBrowseAttendees) {
+      await _resolveAndCheckIn(attendeeId);
       return;
     }
 
@@ -192,23 +204,114 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
     await _checkIn(attendee);
   }
 
-  int? _parseTicketQr(String raw) {
-    final data = raw.trim().toUpperCase();
-    final attendeeIdx = data.indexOf('A');
-    if (attendeeIdx < 0) return null;
-    // Take the number between "A" and the next letter (or end).
-    var j = attendeeIdx + 1;
-    final sb = StringBuffer();
-    while (j < data.length && _isDigitOrNotLetter(data.codeUnitAt(j))) {
-      sb.write(data[j]);
-      j++;
+  Future<void> _resolveAndCheckIn(int attendeeId) async {
+    if (_working) return;
+    setState(() => _working = true);
+    try {
+      final resolved =
+          await OrganizerMemberApiService.resolveAttendeeForCheckIn(
+        eventId: widget.eventId,
+        attendeeId: attendeeId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _scanned = resolved;
+        _scannedQa = [];
+        _qaError = null;
+        _working = false;
+      });
+      _loadScannedQa(resolved);
+
+      if (resolved.checkedIn) {
+        _snack('Already checked in (${resolved.fullName}).');
+        return;
+      }
+      if (!resolved.isValid) {
+        _snack('${resolved.fullName}\'s ticket has been revoked.');
+        return;
+      }
+      await _checkInScanned(resolved);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _scanned = null;
+        _scannedQa = [];
+        _qaError = null;
+        _working = false;
+      });
+      _snack('$e');
     }
-    return sb.isEmpty ? null : int.tryParse(sb.toString());
   }
 
-  bool _isDigitOrNotLetter(int codeUnit) {
-    return (codeUnit >= 0x30 && codeUnit <= 0x39) ||
-        (codeUnit < 0x41 || codeUnit > 0x5A);
+  Future<void> _checkInScanned(ResolvedAttendee attendee) async {
+    if (_working) return;
+    setState(() => _working = true);
+    try {
+      await OrganizerMemberApiService.checkInAttendee(
+        eventId: widget.eventId,
+        attendeeId: attendee.attendeeId,
+      );
+      if (!mounted) return;
+      _snack('${attendee.fullName} checked in');
+      final refreshed =
+          await OrganizerMemberApiService.resolveAttendeeForCheckIn(
+        eventId: widget.eventId,
+        attendeeId: attendee.attendeeId,
+      );
+      if (!mounted) return;
+      setState(() => _scanned = refreshed);
+      _loadScannedQa(refreshed);
+    } catch (e) {
+      if (!mounted) return;
+      _snack('$e');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _loadScannedQa(ResolvedAttendee attendee) async {
+    setState(() {
+      _qaLoading = true;
+      _qaError = null;
+    });
+    try {
+      final qa = await AttendeeResponseApiService.getQuestionResponsesForCheckIn(
+        eventId: widget.eventId,
+        attendeeId: attendee.attendeeId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _scannedQa = qa;
+        _qaLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _scannedQa = [];
+        _qaLoading = false;
+        _qaError = '$e';
+      });
+    }
+  }
+
+  ({int? eventId, int? attendeeId}) _parseTicketQr(String raw) {
+    final data = raw.trim().toUpperCase();
+    final attendee = RegExp(r'(?:^|:)A(\d+)').firstMatch(data);
+    final event = RegExp(r'(?:^|:)EV(\d+)').firstMatch(data);
+    return (
+      eventId: event == null ? null : int.tryParse(event.group(1)!),
+      attendeeId: attendee == null ? null : int.tryParse(attendee.group(1)!),
+    );
+  }
+
+  Future<void> _scanWithCamera() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const TicketScannerPage()),
+    );
+    if (code == null || !mounted) return;
+    _qrController.text = code;
+    await _submitQr(code);
   }
 
   Future<void> _openDetail(EventAttendee attendee) async {
@@ -256,28 +359,212 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
       body: Column(
         children: [
           _qrEntry(context),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: TextField(
-              onChanged: (v) => setState(() => _query = v),
-              decoration: InputDecoration(
-                hintText: 'Search by name, email, phone or national ID…',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                isDense: true,
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+          if (widget.canBrowseAttendees)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: TextField(
+                onChanged: (v) => setState(() => _query = v),
+                decoration: InputDecoration(
+                  hintText: 'Search by name, email, phone or national ID…',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
             ),
+          Expanded(
+            child:
+                widget.canBrowseAttendees ? _buildList() : _buildScanResult(),
           ),
-          Expanded(child: _buildList()),
         ],
       ),
     );
+  }
+
+  Widget _buildScanResult() {
+    final scanned = _scanned;
+    if (scanned == null) {
+      if (_working) {
+        return const Center(child: CircularProgressIndicator(color: kAccent));
+      }
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
+        children: const [
+          Icon(Icons.qr_code_scanner, size: 44, color: _kTextGrey),
+          SizedBox(height: 14),
+          Text(
+            'Scan a ticket to verify it',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _kTextDark,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Check each guest in as they arrive. Attendee contact details are '
+            'not shown to volunteers.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _kTextGrey, fontSize: 12.5),
+          ),
+        ],
+      );
+    }
+
+    final statusColor = !scanned.isValid
+        ? _kRed
+        : (scanned.checkedIn ? _kGreen : const Color(0xFFFF8F00));
+    final statusLabel = !scanned.isValid
+        ? 'REVOKED'
+        : (scanned.checkedIn ? 'CHECKED IN' : 'STILL VALID');
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                scanned.fullName,
+                style: const TextStyle(
+                  color: _kTextDark,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '#${scanned.attendeeId} · ${scanned.ticketTypeName}',
+                style: const TextStyle(color: _kTextGrey, fontSize: 12.5),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (scanned.checkedIn && scanned.checkedInAt != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Checked in at ${scanned.checkedInAt}',
+                  style: const TextStyle(color: _kTextGrey, fontSize: 12),
+                ),
+              ],
+              if (!scanned.checkedIn && scanned.isValid) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 42,
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _working
+                        ? null
+                        : () => _checkInScanned(scanned),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kAccent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text('Check in'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        ..._qaChildren(),
+      ],
+    );
+  }
+
+  List<Widget> _qaChildren() {
+    if (_qaLoading) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Center(child: CircularProgressIndicator(color: kAccent)),
+        ),
+      ];
+    }
+    final error = _qaError;
+    if (error != null) {
+      return [
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Text(
+            'Registration answers unavailable: $error',
+            style: const TextStyle(color: _kRed, fontSize: 12.5),
+          ),
+        ),
+      ];
+    }
+    if (_scannedQa.isEmpty) return const [];
+
+    return [
+      const Padding(
+        padding: EdgeInsets.only(top: 16, bottom: 6),
+        child: Text(
+          'Registration answers',
+          style: TextStyle(
+            color: _kTextDark,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      for (var i = 0; i < _scannedQa.length; i++) ...[
+        Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Q${i + 1}. ${_scannedQa[i].question}',
+                style: const TextStyle(
+                  color: _kTextDark,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'A. ${_scannedQa[i].answer ?? 'not answered'}',
+                style: const TextStyle(color: _kTextDark, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ];
   }
 
   Widget _qrEntry(BuildContext context) {
@@ -304,6 +591,23 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: _working ? null : _scanWithCamera,
+              icon: const Icon(Icons.photo_camera_outlined, size: 20),
+              label: const Text('Scan with camera'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           Row(
@@ -662,8 +966,6 @@ class _AttendeeDetailSheet extends StatelessWidget {
   }
 }
 
-/// Loads the event questions + this attendee's answers so the staff can verify
-/// the person at the door.
 class _QaSection extends StatefulWidget {
   const _QaSection({required this.attendee, required this.scrollController});
 
@@ -678,7 +980,6 @@ class _QaSectionState extends State<_QaSection> {
   bool _loading = true;
   List<EventQuestionModel> _questions = [];
   Map<int, String> _answers = {};
-  int _eventId = 0;
 
   @override
   void initState() {
@@ -687,22 +988,28 @@ class _QaSectionState extends State<_QaSection> {
   }
 
   Future<void> _load() async {
-    _eventId = widget.attendee.eventId;
     try {
-      final results = await Future.wait<Object>([
-        EventQuestionApiService.getEventQuestionsByEvent(_eventId),
-        AttendeeResponseApiService.getResponsesByAttendee(
-          widget.attendee.attendeeId,
-        ),
-      ]);
+      final qa = await AttendeeResponseApiService.getQuestionResponsesForCheckIn(
+        eventId: widget.attendee.eventId,
+        attendeeId: widget.attendee.attendeeId,
+      );
       if (!mounted) return;
       setState(() {
-        _questions = (results[0] as List<EventQuestionModel>).toList()
-          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-        final responses = results[1] as List<AttendeeResponseModel>;
-        for (final r in responses) {
-          _answers[r.eventQuestionId] = r.attendeeAnswer;
-        }
+        _questions = [
+          for (final q in qa)
+            EventQuestionModel(
+              id: q.questionId,
+              eventId: widget.attendee.eventId,
+              question: q.question,
+              questionTypeId: 0,
+              isRequire: false,
+              sortOrder: q.sortOrder,
+            ),
+        ]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+        _answers = {
+          for (final q in qa)
+            if (q.answer != null) q.questionId: q.answer!,
+        };
         _loading = false;
       });
     } catch (e) {

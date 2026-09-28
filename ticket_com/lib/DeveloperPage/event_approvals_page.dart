@@ -26,7 +26,7 @@ class _EventApprovalsTabState extends State<EventApprovalsTab> {
   bool _loading = true;
   String? _error;
 
-  int _filterStatusId = 0; // 0 = all, else an EventStatus id
+  int _filterStatusId = 0;
 
   @override
   void initState() {

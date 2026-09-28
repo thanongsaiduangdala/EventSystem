@@ -33,6 +33,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   
+  mobile_scanner: ^7.4.2
   shared_preferences: ^2.5.5
   image_picker: ^1.0.0
   image: ^4.3.0

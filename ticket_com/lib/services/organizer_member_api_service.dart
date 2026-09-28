@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import '../config/api_config.dart';
+import 'attendee_response_api_service.dart';
+import 'event_question_api_service.dart';
+import 'ticket_type_api_service.dart';
 
 class OrganizerMemberModel {
   final int id;
@@ -225,8 +228,10 @@ class MemberEvent {
     return MemberEvent(
       eventId: json['EventID'] as int,
       eventName: (json['EventName'] ?? '').toString(),
-      start: DateTime.parse(json['EventStartingYMDT'].toString()),
-      end: DateTime.parse(json['EventEndingYMDT'].toString()),
+      start: DateTime.tryParse(json['EventStartingYMDT'].toString()) ??
+          DateTime.now(),
+      end: DateTime.tryParse(json['EventEndingYMDT'].toString()) ??
+          DateTime.now(),
       address: (json['EventAddress'] ?? '').toString(),
       description: (json['EventDescription'] ?? '').toString(),
       organizerId: json['EventOrganizerID'] as int,
@@ -238,8 +243,8 @@ class MemberEvent {
       assigned: isManager || assigned,
       eventRoleName: json['EventRoleName']?.toString(),
       teamRoleId: teamRoleId,
-      latitude: double.parse(json['Latitude'].toString()),
-      longitude: double.parse(json['Longitude'].toString()),
+      latitude: double.tryParse(json['Latitude'].toString()) ?? 0,
+      longitude: double.tryParse(json['Longitude'].toString()) ?? 0,
     );
   }
 
@@ -383,6 +388,47 @@ class EventAttendee {
   bool get checkedIn => checkInId != null;
 }
 
+/// A single attendee resolved from a scanned ticket, for door verification.
+///
+/// Deliberately carries no PhoneNum / Email / NationalID: this is what a
+/// Volunteer gets, since the role may verify a ticket but may not browse the
+/// event's attendee list.
+class ResolvedAttendee {
+  final int attendeeId;
+  final String firstName;
+  final String lastName;
+  final bool isValid;
+  final String ticketTypeName;
+  final int? checkInId;
+  final String? checkedInAt;
+
+  ResolvedAttendee({
+    required this.attendeeId,
+    required this.firstName,
+    required this.lastName,
+    required this.isValid,
+    required this.ticketTypeName,
+    this.checkInId,
+    this.checkedInAt,
+  });
+
+  factory ResolvedAttendee.fromJson(Map<String, dynamic> json) {
+    final validity = json['IsValid'] ?? 1;
+    return ResolvedAttendee(
+      attendeeId: json['attendeeID'] as int,
+      firstName: (json['FirstName'] ?? '').toString(),
+      lastName: (json['LastName'] ?? '').toString(),
+      isValid: validity == 1 || validity == true,
+      ticketTypeName: (json['TicketTypeName'] ?? '').toString(),
+      checkInId: json['CheckInID'] as int?,
+      checkedInAt: json['CheckedInAtYMDT']?.toString(),
+    );
+  }
+
+  String get fullName => '$firstName $lastName'.trim();
+  bool get checkedIn => checkInId != null;
+}
+
 class OrganizerMemberApiService {
   static String get baseUrl => ApiConfig.baseUrl;
 
@@ -398,7 +444,14 @@ class OrganizerMemberApiService {
     if (response.statusCode == 401) {
       return Exception('Session expired. Please log in again.');
     }
-    if (response.statusCode == 403) {
+    try {
+      if (response.statusCode == 403) {
+        final detail = jsonDecode(response.body)['detail']?.toString();
+        return Exception(detail == null || detail.isEmpty
+            ? 'You do not have permission for this action.'
+            : detail);
+      }
+    } catch (_) {
       return Exception('You do not have permission for this action.');
     }
     try {
@@ -496,6 +549,21 @@ class OrganizerMemberApiService {
     }
   }
 
+  /// Pending invitations addressed to the signed-in account (organizations
+  /// that invited them and are waiting for an answer).
+  static Future<List<OrganizerMemberDetail>> getMyInvites() async {
+    final url = Uri.parse('$baseUrl/eventorganizer/member/my-invites');
+    final response = await http.get(url, headers: _authHeaders());
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data
+          .map((e) => OrganizerMemberDetail.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } else {
+      throw _handleError(response, 'Failed to load your invitations');
+    }
+  }
+
   static Future<void> acceptInvite(int memberId) async {
     final url = Uri.parse('$baseUrl/eventorganizer/member/$memberId/accept');
     final response = await http.post(url, headers: _authHeaders());
@@ -573,17 +641,23 @@ class OrganizerMemberApiService {
     }
   }
 
-  /// Events of the caller's organization, each with its `assigned` flag so
-  /// role-appropriate actions can be shown.
-  static Future<MyEventsResult> getMyMemberEvents() async {
-    final url = Uri.parse('$baseUrl/eventorganizer/member/member-events');
+  /// Events of one organization, each with its `assigned` flag so
+  /// role-appropriate actions can be shown. Always pass [orgId] when you know
+  /// it: an account can belong to several organizations. Managers get every
+  /// event, everyone else only the events they are assigned to.
+  static Future<MyEventsResult> getMyMemberEvents({int? orgId}) async {
+    final url = Uri.parse('$baseUrl/eventorganizer/member/member-events')
+        .replace(queryParameters: {if (orgId != null) 'org_id': '$orgId'});
     final response = await http.get(url, headers: _authHeaders());
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
-      final orgJson = data['org'] as Map<String, dynamic>;
+      final orgJson = data['org'];
+      if (orgJson == null) {
+        throw Exception('You are not part of an organization team yet.');
+      }
       final List<dynamic> events = data['events'] as List<dynamic>? ?? [];
       return MyEventsResult(
-        org: TeamMembership.fromJson(orgJson),
+        org: TeamMembership.fromJson(orgJson as Map<String, dynamic>),
         events: events
             .map((e) => MemberEvent.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -683,6 +757,9 @@ class OrganizerMemberApiService {
   }
 
   /// Full attendee list for an event, with ticket + check-in state.
+  ///
+  /// Staff+ only -- the server rejects a Volunteer with 403. Volunteers use
+  /// [resolveAttendeeForCheckIn] to look up the one ticket they just scanned.
   static Future<List<EventAttendee>> getEventAttendees(int eventId) async {
     final url = Uri.parse('$baseUrl/ticketattendence/attendee/event/$eventId');
     final response = await http.get(url, headers: _authHeaders());
@@ -694,6 +771,28 @@ class OrganizerMemberApiService {
     } else {
       throw _handleError(response, 'Failed to load attendee list');
     }
+  }
+
+  /// Resolve a single attendee from a scanned ticket, without contact details.
+  ///
+  /// Available to any role that may work the door (Volunteer, Staff, Admin,
+  /// Owner). Returns 404 when the attendee does not hold a ticket for this
+  /// event, which is indistinguishable from "no such attendee" on purpose.
+  static Future<ResolvedAttendee> resolveAttendeeForCheckIn({
+    required int eventId,
+    required int attendeeId,
+  }) async {
+    final url = Uri.parse(
+        '$baseUrl/ticketattendence/attendee/event/$eventId/resolve/$attendeeId');
+    final response = await http.get(url, headers: _authHeaders());
+    if (response.statusCode == 200) {
+      return ResolvedAttendee.fromJson(
+          jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    if (response.statusCode == 404) {
+      throw Exception('This ticket is not valid for this event.');
+    }
+    throw _handleError(response, 'Failed to read the ticket');
   }
 
   static Future<void> checkInAttendee({
@@ -733,4 +832,40 @@ class OrganizerMemberApiService {
       throw _handleError(response, 'Failed to update the ticket');
     }
   }
+
+  /// Attendees, ticket types, questions and answers for the analytics screen,
+  /// authorised by team role (Admin / Owner, or Staff assigned to the event).
+  static Future<EventAnalyticsData> getEventAnalytics(int eventId) async {
+    final url = Uri.parse(
+        '$baseUrl/ticketattendence/attendee/event/$eventId/analytics');
+    final response = await http.get(url, headers: _authHeaders());
+    if (response.statusCode != 200) {
+      throw _handleError(response, 'Failed to load event analytics');
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    List<T> parse<T>(String key, T Function(Map<String, dynamic>) f) =>
+        (data[key] as List<dynamic>? ?? [])
+            .map((e) => f(e as Map<String, dynamic>))
+            .toList();
+    return EventAnalyticsData(
+      attendees: parse('attendees', EventAttendee.fromJson),
+      ticketTypes: parse('tickettypes', TicketTypeModel.fromJson),
+      questions: parse('questions', EventQuestionModel.fromJson),
+      responses: parse('responses', AttendeeResponseModel.fromJson),
+    );
+  }
+}
+
+class EventAnalyticsData {
+  EventAnalyticsData({
+    required this.attendees,
+    required this.ticketTypes,
+    required this.questions,
+    required this.responses,
+  });
+
+  final List<EventAttendee> attendees;
+  final List<TicketTypeModel> ticketTypes;
+  final List<EventQuestionModel> questions;
+  final List<AttendeeResponseModel> responses;
 }
