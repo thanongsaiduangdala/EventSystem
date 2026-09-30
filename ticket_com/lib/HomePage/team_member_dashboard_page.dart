@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_com/services/event_image_api_service.dart';
 import 'package:ticket_com/services/organizer_member_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
 
 import 'pill_toggle.dart';
 import 'team_manage_page.dart';
 import 'team_event_page.dart';
+import 'team_images.dart';
 
 const Color _kTextDark = Color(0xFF212121);
 const Color _kTextGrey = Color(0xFF757575);
@@ -41,6 +43,7 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
   List<TeamMembership> _memberships = [];
   TeamMembership? _selected;
   MyEventsResult? _result;
+  Map<int, EventImageModel> _covers = {};
   _TeamSection _section = _TeamSection.events;
 
   TeamMembership? get _membership =>
@@ -83,11 +86,13 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
       final result = await OrganizerMemberApiService.getMyMemberEvents(
         orgId: selected.eventOrganizerId,
       );
+      final covers = await loadCoversFor(result.events.map((e) => e.eventId));
       if (!mounted) return;
       setState(() {
         _memberships = memberships;
         _selected = selected;
         _result = result;
+        _covers = covers;
         _loading = false;
       });
     } catch (e) {
@@ -317,14 +322,10 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
         children: [
           Row(
             children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(Icons.apartment, color: Colors.white, size: 28),
+              OrgLogo(
+                path: membership.organizerLogoPath,
+                size: 52,
+                onDark: true,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -410,6 +411,8 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              EventThumb(image: _covers[event.eventId], size: 72),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -481,6 +484,7 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
         builder: (context) => TeamEventPage(
           membership: membership,
           event: event,
+          cover: _covers[event.eventId],
         ),
       ),
     );

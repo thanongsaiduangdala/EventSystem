@@ -32,8 +32,6 @@ class OrganizerMemberModel {
   }
 }
 
-/// Membership row enriched by the backend with account, team role, status and
-/// (for the invite page) organization details.
 class OrganizerMemberDetail {
   final int id;
   final int accountId;
@@ -388,11 +386,6 @@ class EventAttendee {
   bool get checkedIn => checkInId != null;
 }
 
-/// A single attendee resolved from a scanned ticket, for door verification.
-///
-/// Deliberately carries no PhoneNum / Email / NationalID: this is what a
-/// Volunteer gets, since the role may verify a ticket but may not browse the
-/// event's attendee list.
 class ResolvedAttendee {
   final int attendeeId;
   final String firstName;
@@ -462,7 +455,6 @@ class OrganizerMemberApiService {
     }
   }
 
-  // ---------------- organizer members ----------------
 
   static Future<List<OrganizerMemberModel>> getAllMembers() async {
     final url = Uri.parse('$baseUrl/eventorganizer/member/all');
@@ -521,8 +513,6 @@ class OrganizerMemberApiService {
     }
   }
 
-  /// Members of the organizers owned by the caller, enriched with account,
-  /// role, status and organization names (drives the dashboard team list).
   static Future<List<OrganizerMemberDetail>> getMembersWithAccounts() async {
     final url = Uri.parse('$baseUrl/eventorganizer/member/all-with-accounts');
     final response = await http.get(url, headers: _authHeaders());
@@ -536,7 +526,6 @@ class OrganizerMemberApiService {
     }
   }
 
-  /// Enriched membership row for one member (invite/join page).
   static Future<OrganizerMemberDetail> getMemberDetail(int memberId) async {
     final url = Uri.parse('$baseUrl/eventorganizer/member/$memberId');
     final response = await http.get(url, headers: _authHeaders());
@@ -549,8 +538,6 @@ class OrganizerMemberApiService {
     }
   }
 
-  /// Pending invitations addressed to the signed-in account (organizations
-  /// that invited them and are waiting for an answer).
   static Future<List<OrganizerMemberDetail>> getMyInvites() async {
     final url = Uri.parse('$baseUrl/eventorganizer/member/my-invites');
     final response = await http.get(url, headers: _authHeaders());
@@ -610,7 +597,6 @@ class OrganizerMemberApiService {
     }
   }
 
-  // ---------------- team roles ----------------
 
   static Future<List<TeamRoleModel>> getAllTeamRoles() async {
     final url = Uri.parse('$baseUrl/teamrole/role/all');
@@ -625,9 +611,7 @@ class OrganizerMemberApiService {
     }
   }
 
-  // ---------------- team member dashboard ----------------
 
-  /// The caller's own active organization membership (org + team role).
   static Future<List<TeamMembership>> getMyMemberships() async {
     final url = Uri.parse('$baseUrl/eventorganizer/member/my-memberships');
     final response = await http.get(url, headers: _authHeaders());
@@ -641,10 +625,6 @@ class OrganizerMemberApiService {
     }
   }
 
-  /// Events of one organization, each with its `assigned` flag so
-  /// role-appropriate actions can be shown. Always pass [orgId] when you know
-  /// it: an account can belong to several organizations. Managers get every
-  /// event, everyone else only the events they are assigned to.
   static Future<MyEventsResult> getMyMemberEvents({int? orgId}) async {
     final url = Uri.parse('$baseUrl/eventorganizer/member/member-events')
         .replace(queryParameters: {if (orgId != null) 'org_id': '$orgId'});
@@ -667,7 +647,6 @@ class OrganizerMemberApiService {
     }
   }
 
-  /// Full team roster for an organization (Admin / Owner only).
   static Future<List<OrgTeamMember>> getOrgTeam(int orgId) async {
     final url = Uri.parse('$baseUrl/eventorganizer/member/team/$orgId');
     final response = await http.get(url, headers: _authHeaders());
@@ -756,10 +735,6 @@ class OrganizerMemberApiService {
     }
   }
 
-  /// Full attendee list for an event, with ticket + check-in state.
-  ///
-  /// Staff+ only -- the server rejects a Volunteer with 403. Volunteers use
-  /// [resolveAttendeeForCheckIn] to look up the one ticket they just scanned.
   static Future<List<EventAttendee>> getEventAttendees(int eventId) async {
     final url = Uri.parse('$baseUrl/ticketattendence/attendee/event/$eventId');
     final response = await http.get(url, headers: _authHeaders());
@@ -773,11 +748,6 @@ class OrganizerMemberApiService {
     }
   }
 
-  /// Resolve a single attendee from a scanned ticket, without contact details.
-  ///
-  /// Available to any role that may work the door (Volunteer, Staff, Admin,
-  /// Owner). Returns 404 when the attendee does not hold a ticket for this
-  /// event, which is indistinguishable from "no such attendee" on purpose.
   static Future<ResolvedAttendee> resolveAttendeeForCheckIn({
     required int eventId,
     required int attendeeId,
@@ -813,6 +783,24 @@ class OrganizerMemberApiService {
     }
   }
 
+  static Future<void> cancelCheckIn({
+    required int eventId,
+    required int attendeeId,
+  }) async {
+    final url = Uri.parse('$baseUrl/ticketattendence/attendee/cancel-checkin');
+    final response = await http.post(
+      url,
+      headers: _authHeaders(),
+      body: jsonEncode({
+        'EventID': eventId,
+        'AttendeeID': attendeeId,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw _handleError(response, 'Failed to cancel the check-in');
+    }
+  }
+
   static Future<void> revokeTicket({
     required int eventId,
     required int attendeeId,
@@ -833,8 +821,6 @@ class OrganizerMemberApiService {
     }
   }
 
-  /// Attendees, ticket types, questions and answers for the analytics screen,
-  /// authorised by team role (Admin / Owner, or Staff assigned to the event).
   static Future<EventAnalyticsData> getEventAnalytics(int eventId) async {
     final url = Uri.parse(
         '$baseUrl/ticketattendence/attendee/event/$eventId/analytics');

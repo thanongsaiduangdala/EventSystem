@@ -178,30 +178,7 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
       return;
     }
 
-    if (!widget.canBrowseAttendees) {
-      await _resolveScanned(attendeeId);
-      return;
-    }
-
-    final match = _attendees
-        .where((a) => a.attendeeId == attendeeId)
-        .toList();
-    if (match.isEmpty) {
-      _snack('Attendee #$attendeeId was not found for this event.');
-      return;
-    }
-    final attendee = match.first;
-    if (attendee.checkedIn) {
-      _openDetail(attendee);
-      _snack('Already checked in (${attendee.fullName}).');
-      return;
-    }
-    if (!attendee.isValid) {
-      _snack('${attendee.fullName}\'s ticket has been revoked.');
-      _openDetail(attendee);
-      return;
-    }
-    _openDetail(attendee);
+    await _resolveScanned(attendeeId);
   }
 
   Future<void> _resolveScanned(int attendeeId) async {
@@ -221,14 +198,6 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
         _working = false;
       });
       _loadScannedQa(resolved);
-
-      if (resolved.checkedIn) {
-        _snack('Already checked in (${resolved.fullName}).');
-        return;
-      }
-      if (!resolved.isValid) {
-        _snack('${resolved.fullName}\'s ticket has been revoked.');
-      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -265,6 +234,87 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
     } finally {
       if (mounted) setState(() => _working = false);
     }
+  }
+
+  Future<void> _cancelScannedCheckIn(ResolvedAttendee attendee) async {
+    if (_working) return;
+    final ok = await _confirmCancel(attendee.fullName);
+    if (ok != true || !mounted) return;
+    setState(() => _working = true);
+    try {
+      await OrganizerMemberApiService.cancelCheckIn(
+        eventId: widget.eventId,
+        attendeeId: attendee.attendeeId,
+      );
+      if (!mounted) return;
+      _snack('Check-in cancelled for ${attendee.fullName}');
+      final refreshed =
+          await OrganizerMemberApiService.resolveAttendeeForCheckIn(
+        eventId: widget.eventId,
+        attendeeId: attendee.attendeeId,
+      );
+      if (!mounted) return;
+      setState(() => _scanned = refreshed);
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      _snack('$e');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _cancelAttendeeCheckIn(EventAttendee attendee) async {
+    if (_working) return;
+    final ok = await _confirmCancel(attendee.fullName);
+    if (ok != true || !mounted) return;
+    setState(() => _working = true);
+    try {
+      await OrganizerMemberApiService.cancelCheckIn(
+        eventId: widget.eventId,
+        attendeeId: attendee.attendeeId,
+      );
+      if (!mounted) return;
+      _snack('Check-in cancelled for ${attendee.fullName}');
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      _snack('$e');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<bool?> _confirmCancel(String name) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel check-in?'),
+        content: Text('$name will be marked as not checked in.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Cancel check-in',
+              style: TextStyle(color: _kRed),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _clearScan() {
+    setState(() {
+      _scanned = null;
+      _scannedQa = [];
+      _qaError = null;
+      _qrController.clear();
+    });
   }
 
   Future<void> _loadScannedQa(ResolvedAttendee attendee) async {
@@ -308,7 +358,12 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
       MaterialPageRoute(builder: (context) => const TicketScannerPage()),
     );
     if (code == null || !mounted) return;
-    _qrController.text = code;
+    setState(() {
+      _scanned = null;
+      _scannedQa = [];
+      _qaError = null;
+      _qrController.text = code;
+    });
     await _submitQr(code);
   }
 
@@ -323,6 +378,7 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
       builder: (context) => _AttendeeDetailSheet(
         attendee: attendee,
         onCheckIn: () => _checkIn(attendee),
+        onCancel: () => _cancelAttendeeCheckIn(attendee),
       ),
     );
   }
@@ -357,10 +413,11 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
           ],
         ),
       ),
+      bottomNavigationBar: _bottomBar(),
       body: Column(
         children: [
           _qrEntry(context),
-          if (widget.canBrowseAttendees)
+          if (widget.canBrowseAttendees && _scanned == null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: TextField(
@@ -380,10 +437,55 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
               ),
             ),
           Expanded(
-            child:
-                widget.canBrowseAttendees ? _buildList() : _buildScanResult(),
+            child: (widget.canBrowseAttendees && _scanned == null)
+                ? _buildList()
+                : _buildScanResult(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget? _bottomBar() {
+    final scanned = _scanned;
+    if (scanned == null || !scanned.isValid) return null;
+    final checkedIn = scanned.checkedIn;
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x18000000),
+              blurRadius: 12,
+              offset: Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SizedBox(
+          height: 48,
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _working
+                ? null
+                : () => checkedIn
+                    ? _cancelScannedCheckIn(scanned)
+                    : _checkInScanned(scanned),
+            icon: Icon(
+              checkedIn ? Icons.undo : Icons.event_available,
+              size: 20,
+            ),
+            label: Text(checkedIn ? 'Cancel check-in' : 'Check in'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: checkedIn ? _kRed : kAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -438,13 +540,25 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                scanned.fullName,
-                style: const TextStyle(
-                  color: _kTextDark,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      scanned.fullName,
+                      style: const TextStyle(
+                        color: _kTextDark,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _working ? null : _clearScan,
+                    icon: const Icon(Icons.close, size: 20),
+                    tooltip: 'Clear',
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
               Text(
@@ -473,30 +587,6 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
                 Text(
                   'Checked in at ${scanned.checkedInAt}',
                   style: const TextStyle(color: _kTextGrey, fontSize: 12),
-                ),
-              ],
-              if (!scanned.checkedIn && scanned.isValid) ...[
-                const SizedBox(height: 12),
-                const Text(
-                  'Compare the guest\'s ID with the name above, then confirm.',
-                  style: TextStyle(color: _kTextGrey, fontSize: 12),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 42,
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _working
-                        ? null
-                        : () => _checkInScanned(scanned),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kAccent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text('Confirm check-in'),
-                  ),
                 ),
               ],
             ],
@@ -646,11 +736,12 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
                       : () => _submitQr(_qrController.text),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kAccent,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  child: const Text('Look up'),
+                  child: const Icon(Icons.search, size: 22),
                 ),
               ),
             ],
@@ -782,6 +873,14 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
                   busy: _working,
                   onTap: () => _checkIn(attendee),
                 ),
+              if (attendee.isValid && attendee.checkedIn)
+                _tileAction(
+                  icon: Icons.undo,
+                  label: 'Cancel check-in',
+                  color: _kRed,
+                  busy: _working,
+                  onTap: () => _cancelAttendeeCheckIn(attendee),
+                ),
               if (widget.canRevoke)
                 _tileAction(
                   icon: attendee.isValid
@@ -872,10 +971,15 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
 }
 
 class _AttendeeDetailSheet extends StatelessWidget {
-  const _AttendeeDetailSheet({required this.attendee, this.onCheckIn});
+  const _AttendeeDetailSheet({
+    required this.attendee,
+    this.onCheckIn,
+    this.onCancel,
+  });
 
   final EventAttendee attendee;
   final VoidCallback? onCheckIn;
+  final VoidCallback? onCancel;
 
   Widget _confirmArea(BuildContext context) {
     if (!attendee.isValid) {
@@ -886,9 +990,37 @@ class _AttendeeDetailSheet extends StatelessWidget {
     }
     if (attendee.checkedIn) {
       final at = attendee.checkedInAt;
-      return Text(
-        at == null ? 'Already checked in.' : 'Already checked in at $at.',
-        style: const TextStyle(color: _kGreen, fontWeight: FontWeight.w700),
+      final cancel = onCancel;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            at == null ? 'Already checked in.' : 'Already checked in at $at.',
+            style: const TextStyle(color: _kGreen, fontWeight: FontWeight.w700),
+          ),
+          if (cancel != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 44,
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  cancel();
+                },
+                icon: const Icon(Icons.undo, size: 20),
+                label: const Text('Cancel check-in'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kRed,
+                  side: const BorderSide(color: _kRed),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       );
     }
     final callback = onCheckIn;

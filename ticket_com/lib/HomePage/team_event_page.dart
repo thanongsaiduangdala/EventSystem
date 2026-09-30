@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:ticket_com/HomePage/event_analytics_page.dart';
 import 'package:ticket_com/HomePage/event_form_page.dart';
 import 'package:ticket_com/HomePage/team_checkin_page.dart';
+import 'package:ticket_com/HomePage/team_images.dart';
+import 'package:ticket_com/services/event_image_api_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/organizer_member_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
@@ -14,10 +16,12 @@ class TeamEventPage extends StatelessWidget {
     super.key,
     required this.membership,
     required this.event,
+    this.cover,
   });
 
   final TeamMembership membership;
   final MemberEvent event;
+  final EventImageModel? cover;
 
   bool get _isManager => membership.isManager;
   bool get _onDuty => _isManager || event.canCheckIn;
@@ -25,8 +29,7 @@ class TeamEventPage extends StatelessWidget {
   bool get _canSeeDetails =>
       _isManager || (membership.isStaff && event.assigned);
   bool get _canWorkDoor =>
-      _onDuty &&
-      (membership.isVolunteer || membership.isStaff || _isManager);
+      _onDuty && (membership.isVolunteer || membership.isStaff || _isManager);
   bool get _canBrowseAttendees => membership.isStaff || _isManager;
 
   @override
@@ -70,14 +73,12 @@ class TeamEventPage extends StatelessWidget {
           const SizedBox(height: 10),
           if (actions.isEmpty)
             const _InfoCard(
-              text: 'You are not assigned to this event, so there is nothing '
+              text:
+                  'You are not assigned to this event, so there is nothing '
                   'to do here yet. Ask an Admin to assign you.',
             )
           else
-            for (final a in actions) ...[
-              a,
-              const SizedBox(height: 10),
-            ],
+            for (final a in actions) ...[a, const SizedBox(height: 10)],
         ],
       ),
     );
@@ -98,15 +99,37 @@ class TeamEventPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            event.eventName,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            children: [
+              EventThumb(image: cover, size: 64),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        event.eventName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OrgLogo(
+                      path: membership.organizerLogoPath,
+                      size: 36,
+                      onDark: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
           Text(
             _fmtDate(event.start),
             style: TextStyle(
@@ -179,8 +202,7 @@ class TeamEventPage extends StatelessWidget {
             children: [
               _roleChip(membership.teamRoleName, kAccent),
               if (duty.isNotEmpty) _roleChip(duty, const Color(0xFF00897B)),
-              if (!_onDuty)
-                _roleChip('Not assigned', const Color(0xFF8A6D00)),
+              if (!_onDuty) _roleChip('Not assigned', const Color(0xFF8A6D00)),
             ],
           ),
           if (caps.isNotEmpty) ...[
@@ -195,8 +217,10 @@ class TeamEventPage extends StatelessWidget {
                     Expanded(
                       child: Text(
                         c.text,
-                        style:
-                            const TextStyle(color: _kTextDark, fontSize: 13.5),
+                        style: const TextStyle(
+                          color: _kTextDark,
+                          fontSize: 13.5,
+                        ),
                       ),
                     ),
                   ],
@@ -260,7 +284,7 @@ class TeamEventPage extends StatelessWidget {
   Widget _permissionNote() {
     final note = membership.isDesigner
         ? 'Page Designer access is scoped to this organization’s events only. '
-            'You cannot see attendee data or check people in.'
+              'You cannot see attendee data or check people in.'
         : 'Admin / Owner access covers every event of this organization.';
     return Container(
       padding: const EdgeInsets.all(12),

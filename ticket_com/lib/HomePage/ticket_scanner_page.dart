@@ -14,6 +14,7 @@ class _TicketScannerPageState extends State<TicketScannerPage> {
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
   bool _handled = false;
+  bool _torchOn = false;
 
   @override
   void dispose() {
@@ -21,12 +22,20 @@ class _TicketScannerPageState extends State<TicketScannerPage> {
     super.dispose();
   }
 
-  void _onDetect(BarcodeCapture capture) {
+  Future<void> _onDetect(BarcodeCapture capture) async {
     if (_handled) return;
     for (final barcode in capture.barcodes) {
       final value = barcode.rawValue;
       if (value != null && value.trim().isNotEmpty) {
         _handled = true;
+        try {
+          if (_torchOn) {
+            _torchOn = false;
+            await _controller.toggleTorch();
+          }
+          await _controller.stop();
+        } catch (_) {}
+        if (!mounted) return;
         Navigator.of(context).pop(value);
         return;
       }
@@ -43,8 +52,11 @@ class _TicketScannerPageState extends State<TicketScannerPage> {
         title: const Text('Scan ticket'),
         actions: [
           IconButton(
-            onPressed: () => _controller.toggleTorch(),
-            icon: const Icon(Icons.flash_on),
+            onPressed: () {
+              setState(() => _torchOn = !_torchOn);
+              _controller.toggleTorch();
+            },
+            icon: Icon(_torchOn ? Icons.flash_on : Icons.flash_off),
           ),
           IconButton(
             onPressed: () => _controller.switchCamera(),

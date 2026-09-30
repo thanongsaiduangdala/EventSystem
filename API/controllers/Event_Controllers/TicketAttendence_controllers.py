@@ -17,9 +17,6 @@ from auth.team_access import (
 )
 from controllers.Event_Controllers.EventQuestion_Controllers import _deserialize_row
 
-# An ID we can successfully match against at the door: Gov ID / National ID /
-# Passport. When the event enforces OnePerPerson this value must be unique for
-# the event so the same person can't buy a second ticket and resell it.
 def _national_id_uniqueness_error(event_id: int, national_id: str):
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
@@ -28,12 +25,6 @@ def _national_id_uniqueness_error(event_id: int, national_id: str):
 
 
 async def _national_id_in_use(cur, event_id: int, national_id: str, exclude_attendee_id=None):
-    """True when another attendee on the given event already uses this ID.
-
-    Only enforced for events with OnePerPerson = 1. Case- and space-insensitive
-    so small formatting differences (e.g. '123-456' vs '123456') don't bypass
-    the rule -- the exact match strategy is on the normalized value.
-    """
     if national_id is None:
         return False
 
@@ -60,7 +51,6 @@ async def create_ticketattendee(req_data: AddTicketAttendenceRequest):
     try:
         con = getConnect()
         with con.cursor() as cur:
-            # Resolve the event this attendee belongs to (via their ticket type).
             cur.execute("SELECT EventID FROM tickettype WHERE TicketTypeID = %s", (req_data.TicketTypeID,))
             ticket_row = cur.fetchone()
             event_id = (ticket_row or {}).get("EventID")
@@ -128,7 +118,6 @@ async def get_ticketattendee_by_id(attendee_id: int):
 
 
 async def get_ticketattendees_by_order_id(order_id: int):
-    """Convenience lookup: all attendees tied to a given OrderID."""
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -146,7 +135,6 @@ async def update_ticketattendee(req_data: UpdateTicketAttendenceRequest):
     try:
         con = getConnect()
         with con.cursor() as cur:
-            # Resolve the event this attendee belongs to (via their ticket type).
             cur.execute("SELECT EventID FROM tickettype WHERE TicketTypeID = %s", (req_data.TicketTypeID,))
             ticket_row = cur.fetchone()
             event_id = (ticket_row or {}).get("EventID")
@@ -212,24 +200,7 @@ async def delete_ticketattendee(attendee_id: int):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-# ---------------------------------------------------------------------------
-# Team check-in endpoints.
-#
-# Attendee data and check-in are guarded by the caller's *team* role (see
-# auth.team_access): a manager of the event's organization always qualifies,
-# while volunteers/staff must be assigned to that specific event.
-# ---------------------------------------------------------------------------
-
 async def get_event_attendees(event_id: int, current=Depends(get_current_account)):
-    """
-    Every attendee of an event with ticket, order, ticket-validity and
-    check-in state, so the check-in screen can render one list for staff
-    (scan/verify plus manage/revoke).
-
-    Staff+ only: the payload carries PhoneNum, Email and NationalID for every
-    attendee, so a Volunteer uses resolve_attendee_for_checkin instead, which
-    returns a single attendee without those fields.
-    """
     try:
         con = getConnect()
         await ensure_attendee_list_access(con, current, event_id)
@@ -265,15 +236,6 @@ async def get_event_attendees(event_id: int, current=Depends(get_current_account
 
 
 async def resolve_attendee_for_checkin(event_id: int, attendee_id: int, current=Depends(get_current_account)):
-    """
-    Resolves one attendee of an event from a scanned ticket, for door
-    verification. Available to any role that may work the door (Volunteer,
-    Staff, and managers).
-
-    Deliberately narrow: it returns only what is needed to confirm the person
-    in front of you holds a valid ticket for this event -- no PhoneNum, Email
-    or NationalID, and no way to enumerate the other attendees.
-    """
     try:
         con = getConnect()
         await ensure_team_access(con, current, event_id)
@@ -308,11 +270,6 @@ async def resolve_attendee_for_checkin(event_id: int, attendee_id: int, current=
 
 
 async def check_in_attendee(req_data: CheckInAttendeeRequest, current=Depends(get_current_account)):
-    """
-    Marks an attendee as checked in for an event. Only allowed when the caller
-    may work the event (assigned volunteer/staff or a manager), the ticket is
-    still marked valid, and the attendee has not already been checked in.
-    """
     try:
         con = getConnect()
         member = await ensure_team_access(con, current, req_data.EventID)
@@ -371,12 +328,44 @@ async def check_in_attendee(req_data: CheckInAttendeeRequest, current=Depends(ge
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
+async def cancel_check_in_attendee(req_data: CheckInAttendeeRequest, current=Depends(get_current_account)):
+    try:
+        con = getConnect()
+        await ensure_team_access(con, current, req_data.EventID)
+
+        with con.cursor() as cur:
+            cur.execute(
+                """
+                SELECT ta.attendeeID
+                FROM ticketattendence ta
+                JOIN tickettype tt ON ta.TicketTypeID = tt.TicketTypeID
+                WHERE ta.attendeeID = %s AND tt.EventID = %s
+                """,
+                (req_data.AttendeeID, req_data.EventID),
+            )
+            if cur.fetchone() is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attendee not found for this event")
+
+            cur.execute(
+                "DELETE FROM ticketcheckin WHERE attendeeID = %s AND EventID = %s",
+                (req_data.AttendeeID, req_data.EventID),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="This attendee is not checked in",
+                )
+            con.commit()
+
+        return {"msg": "Check-in cancelled", "attendeeID": req_data.AttendeeID}
+
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
 async def revoke_ticket(req_data: RevokeTicketRequest, current=Depends(get_current_account)):
-    """
-    Revokes (or re-validates) an attendee's ticket for an event. Staff+ only;
-    volunteers may not revoke. Revoking also clears any prior check-in so the
-    attendee cannot sneak in through a stale check-in record.
-    """
     try:
         con = getConnect()
         await ensure_staff_or_manager(con, current, req_data.EventID)
@@ -414,20 +403,7 @@ async def revoke_ticket(req_data: RevokeTicketRequest, current=Depends(get_curre
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-
 async def get_event_analytics(event_id: int, current=Depends(get_current_account)):
-    """
-    Everything the event analytics screen needs in one call: attendees (with
-    check-in + payment date), ticket types, registration questions and the
-    attendees' answers.
-
-    The screen used to assemble this from global endpoints (/response/all is
-    SUPERADMIN-only, /tickettype/event and /eventquestion/event need the
-    global view_events permission), so an organizer -- and any invited team
-    member -- got a 403. Access here follows the team rules instead: Admin /
-    Owner of the event's organization, or Staff / Employee assigned to it.
-    Volunteers and Page Designers have no attendee-list access.
-    """
     try:
         con = getConnect()
         await ensure_attendee_list_access(con, current, event_id)
