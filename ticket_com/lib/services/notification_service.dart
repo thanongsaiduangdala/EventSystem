@@ -49,6 +49,17 @@ class AppNotification {
   /// screen and taps fall back to the detail dialog.
   final String link;
 
+  /// Deep-link prefix for notifications about an event: `event:<EventID>`.
+  static const String eventLinkPrefix = 'event:';
+
+  /// The event this notification is about, or null when it isn't an
+  /// `event:<EventID>` notification. Tapping such a notification opens that
+  /// event's detail page.
+  int? get eventId {
+    if (!link.startsWith(eventLinkPrefix)) return null;
+    return int.tryParse(link.substring(eventLinkPrefix.length));
+  }
+
   AppNotification copyWith({bool? read}) => AppNotification(
     id: id,
     type: type,
@@ -163,15 +174,15 @@ class NotificationService extends ChangeNotifier {
       if (response.statusCode != 200) {
         throw http.ClientException('SSE rejected: ${response.statusCode}');
       }
+      // Connected. Reload once so anything that arrived while the stream was
+      // down (app in background, network drop) is picked up.
+      unawaited(refresh(force: true));
       await for (final line
           in response.stream
               .transform(utf8.decoder)
               .transform(const LineSplitter())) {
         if (!_realtimeEnabled) return;
-        final unread = _parseUnreadCount(line);
-        if (unread != null && unread != unreadCount) {
-          await refresh(force: true);
-        }
+        await _handleSseLine(line);
       }
     } catch (_) {
       // Stream dropped (network error or disconnect) -- schedule a reconnect.
@@ -193,16 +204,51 @@ class NotificationService extends ChangeNotifier {
     });
   }
 
-  int? _parseUnreadCount(String sseLine) {
+  /// One `data:` line from `/notification/stream`:
+  /// `{"UnreadCount": 3, "New": [ {notification row}, ... ]}`.
+  /// New notifications are added to the list straight from the pushed payload
+  /// (no extra request), which updates every badge at once.
+  Future<void> _handleSseLine(String line) async {
     const prefix = 'data:';
-    if (!sseLine.startsWith(prefix)) return null;
-    final payload = sseLine.substring(prefix.length).trim();
-    if (payload.isEmpty) return null;
+    if (!line.startsWith(prefix)) return;
+    final payload = line.substring(prefix.length).trim();
+    if (payload.isEmpty) return;
+
+    Map<String, dynamic> map;
     try {
-      final map = jsonDecode(payload) as Map<String, dynamic>;
-      return (map['UnreadCount'] as num?)?.toInt();
+      map = jsonDecode(payload) as Map<String, dynamic>;
     } catch (_) {
-      return null;
+      return;
+    }
+
+    final session = AuthService.currentSession;
+    if (session == null) return;
+    if (_loadedForAccount != session.accountId) {
+      // Nothing loaded for this account yet; load everything first.
+      await refresh(force: true);
+      return;
+    }
+
+    var changed = false;
+    final pushed = map['New'];
+    if (pushed is List) {
+      for (final raw in pushed) {
+        if (raw is! Map<String, dynamic>) continue;
+        try {
+          final n = AppNotification.fromJson(raw);
+          if (_items.any((e) => e.id == n.id)) continue;
+          _items = [n, ..._items];
+          changed = true;
+        } catch (_) {}
+      }
+    }
+    if (changed) notifyListeners();
+
+    // The server's total is the source of truth: if it still disagrees
+    // (e.g. something was read on another device) reload the list.
+    final unread = (map['UnreadCount'] as num?)?.toInt();
+    if (unread != null && unread != unreadCount) {
+      await refresh(force: true);
     }
   }
 

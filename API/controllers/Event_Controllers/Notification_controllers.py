@@ -1,4 +1,8 @@
 import asyncio
+import json
+from collections import defaultdict
+from typing import Dict, Set
+
 import pymysql
 from fastapi import HTTPException, status, Depends
 from fastapi.responses import StreamingResponse
@@ -41,19 +45,59 @@ def staff_account_ids() -> list:
     return _account_ids_by_status([3, 4])
 
 
+# ---------------------------------------------------------------------------
+# Live push
+#
+# Every open /notification/stream connection registers an asyncio.Event under
+# its account id. Whenever a notification row is inserted for that account we
+# set the event, so the stream wakes up and pushes it to the phone within a few
+# milliseconds instead of waiting for the next database check.
+#
+# The events live in this process's memory. If you run several uvicorn
+# workers, a worker that did not insert the row still delivers it, just via the
+# stream's fallback database check (STREAM_FALLBACK_SECONDS) instead of instantly.
+# ---------------------------------------------------------------------------
+STREAM_FALLBACK_SECONDS = 2
+
+_wakeups: Dict[int, Set[asyncio.Event]] = defaultdict(set)
+_stream_loop = None  # event loop the streams run on (set by the first stream)
+
+
+def _wake_streams(account_ids) -> None:
+    """Wake every open stream that belongs to one of these accounts.
+    Safe to call from any thread and when no stream is open."""
+    loop = _stream_loop
+    if loop is None or loop.is_closed():
+        return
+    ids = set(account_ids)
+
+    def _set() -> None:
+        for account_id in ids:
+            for event in list(_wakeups.get(account_id, ())):
+                event.set()
+
+    try:
+        loop.call_soon_threadsafe(_set)
+    except RuntimeError:
+        pass
+
+
 def notify_accounts(recipient_ids, notification_type: str, title: str, body: str, link: str = None) -> None:
     """
-    Inserts one notification row per recipient. `link` is an optional
-    app deep-link payload (e.g. "org_invite:<MemberID>"). Best-effort:
-    failures are swallowed so a notification problem never breaks the
-    caller's flow.
+    Inserts one notification row per recipient and pushes it live to any
+    device that account has open. `link` is an optional app deep-link payload:
+        "event:<EventID>"      -> opens that event's detail page
+        "org_invite:<MemberID>" -> opens the organizer invite page
+    Best-effort: failures are swallowed so a notification problem never breaks
+    the caller's flow.
     """
     if not recipient_ids:
         return
+    recipients = set(recipient_ids)
     con = getConnect()
     try:
         with con.cursor() as cur:
-            for account_id in set(recipient_ids):
+            for account_id in recipients:
                 cur.execute(
                     """
                     INSERT INTO notificationinfo (AccountID, NotificationType, Title, Body, Link)
@@ -62,52 +106,139 @@ def notify_accounts(recipient_ids, notification_type: str, title: str, body: str
                     (account_id, notification_type, title, body, link),
                 )
         con.commit()
+        _wake_streams(recipients)
     except pymysql.MySQLError:
         pass
     finally:
         con.close()
 
 
+def _json_default(value):
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+def _read_stream_state(con, account_id: int, last_id: int):
+    """One cheap check: (unread count, highest NotificationID, rows newer than last_id)."""
+    with con.cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) AS c FROM notificationinfo WHERE AccountID = %s AND IsRead = 0",
+            (account_id,),
+        )
+        unread = cur.fetchone()["c"]
+        cur.execute(
+            "SELECT COALESCE(MAX(NotificationID), 0) AS m FROM notificationinfo WHERE AccountID = %s",
+            (account_id,),
+        )
+        newest = cur.fetchone()["m"]
+        fresh = []
+        if newest > last_id:
+            cur.execute(
+                """
+                SELECT * FROM notificationinfo
+                WHERE AccountID = %s AND NotificationID > %s
+                ORDER BY NotificationID ASC
+                LIMIT 50
+                """,
+                (account_id, last_id),
+            )
+            fresh = cur.fetchall()
+    return unread, newest, fresh
+
+
 async def stream_notifications(current=Depends(get_current_account)):
     """
-    Server-Sent Events endpoint. Pushes a `data: {"UnreadCount": N}` event
-    every time the account's unread notification count changes, so the Flutter
-    app can refresh instantly instead of reloading or waiting for a poll.
-    Sends a keep-alive comment so the connection stays open on idle proxies.
+    Server-Sent Events endpoint -- the live channel behind the home bell badge
+    and the bottom-nav badge.
+
+    Every event is one JSON line:
+        data: {"UnreadCount": 3, "New": [ {..notification row..}, ... ]}
+
+    * "New" holds notifications created since the last event, so the app can
+      show them instantly without another HTTP request.
+    * "UnreadCount" is always the current total, so the app can also notice
+      notifications that were read on another device.
+    The first event after connecting has an empty "New" list (it only tells the
+    app the current unread count). A keep-alive comment is sent when idle so
+    proxies don't close the connection.
     """
+    global _stream_loop
+    account_id = current["account_id"]
+    loop = asyncio.get_running_loop()
+    _stream_loop = loop
+
     async def event_stream():
+        wakeup = asyncio.Event()
+        _wakeups[account_id].add(wakeup)
         con = None
-        last_count = -1
+        last_id = None
+        last_unread = -1
         try:
             while True:
                 try:
                     if con is None:
                         con = getConnect()
-                    with con.cursor() as cur:
-                        cur.execute(
-                            "SELECT COUNT(*) AS c FROM notificationinfo "
-                            "WHERE AccountID = %s AND IsRead = 0",
-                            (current["account_id"],),
-                        )
-                        row = cur.fetchone()
-                        count = row["c"] if row else 0
+                        # IMPORTANT: this connection stays open for the whole
+                        # stream. Without autocommit MySQL keeps one snapshot
+                        # (REPEATABLE READ) for the connection's lifetime, so
+                        # rows inserted later would never be seen.
+                        con.autocommit(True)
+                    unread, newest, fresh = await asyncio.to_thread(
+                        _read_stream_state,
+                        con,
+                        account_id,
+                        last_id if last_id is not None else 2**62,
+                    )
                 except pymysql.MySQLError:
-                    break
+                    if con is not None:
+                        try:
+                            con.close()
+                        except Exception:
+                            pass
+                    con = None
+                    await asyncio.sleep(STREAM_FALLBACK_SECONDS)
+                    continue
 
-                if count != last_count:
-                    last_count = count
-                    yield f"data: {{\"UnreadCount\": {count}}}\n\n"
+                if last_id is None:
+                    # First check after connecting: report the count only;
+                    # anything already in the table is "old", not "new".
+                    last_id = newest
+                    last_unread = unread
+                    payload = {"UnreadCount": unread, "New": []}
+                    yield f"data: {json.dumps(payload)}\n\n"
+                elif fresh or unread != last_unread:
+                    last_id = max(last_id, newest)
+                    last_unread = unread
+                    payload = {"UnreadCount": unread, "New": fresh}
+                    yield f"data: {json.dumps(payload, default=_json_default)}\n\n"
                 else:
                     yield ": keep-alive\n\n"
 
-                await asyncio.sleep(2)
+                # Sleep until a notification is inserted (instant wake-up) or
+                # the fallback interval passes (covers other workers).
+                try:
+                    await asyncio.wait_for(wakeup.wait(), STREAM_FALLBACK_SECONDS)
+                except asyncio.TimeoutError:
+                    pass
+                wakeup.clear()
         except asyncio.CancelledError:
             pass
         finally:
+            sockets = _wakeups.get(account_id)
+            if sockets is not None:
+                sockets.discard(wakeup)
+                if not sockets:
+                    _wakeups.pop(account_id, None)
             if con is not None:
-                con.close()
+                try:
+                    con.close()
+                except Exception:
+                    pass
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 async def create_notification(req_data: AddNotificationRequest):
@@ -129,6 +260,7 @@ async def create_notification(req_data: AddNotificationRequest):
             con.commit()
             notification_id = cur.lastrowid
 
+        _wake_streams([req_data.AccountID])
         return {"msg": "Notification created successfully", "NotificationID": notification_id}
 
     except HTTPException:
@@ -225,17 +357,28 @@ async def generate_for_account(account_id: int):
         con = getConnect()
         created = 0
         with con.cursor() as cur:
-            def insert_notification(ntype, title, body):
+            def insert_notification(ntype, title, body, link=None):
                 nonlocal created
                 cur.execute(
                     "SELECT COUNT(*) AS c FROM notificationinfo WHERE AccountID = %s AND Title = %s",
                     (account_id, title),
                 )
                 if cur.fetchone()["c"] > 0:
+                    # Already sent. Older rows were created before links existed,
+                    # so give them their event link now (never overwrite one).
+                    if link:
+                        cur.execute(
+                            """
+                            UPDATE notificationinfo SET Link = %s
+                            WHERE AccountID = %s AND Title = %s
+                              AND (Link IS NULL OR Link = '')
+                            """,
+                            (link, account_id, title),
+                        )
                     return
                 cur.execute(
-                    "INSERT INTO notificationinfo (AccountID, NotificationType, Title, Body) VALUES (%s, %s, %s, %s)",
-                    (account_id, ntype, title, body),
+                    "INSERT INTO notificationinfo (AccountID, NotificationType, Title, Body, Link) VALUES (%s, %s, %s, %s, %s)",
+                    (account_id, ntype, title, body, link),
                 )
                 created += 1
 
@@ -260,6 +403,7 @@ async def generate_for_account(account_id: int):
                     "order",
                     f"Ticket confirmed for {row['EventName']}",
                     f"Your order for {row['EventName']} has been confirmed. The event starts on {start} at {row['EventAddress']}. Show the QR code at the entrance to check in.",
+                    f"event:{row['EventID']}",
                 )
 
             # Events with a ticket start tomorrow -> "it's tomorrow" reminder.
@@ -279,6 +423,7 @@ async def generate_for_account(account_id: int):
                     "event",
                     f"{row['EventName']} is tomorrow",
                     f"Don't forget, {row['EventName']} starts tomorrow at {time} at {row['EventAddress']}.",
+                    f"event:{row['EventID']}",
                 )
 
             # Wish-listed events starting tomorrow -> same reminder.
@@ -296,6 +441,7 @@ async def generate_for_account(account_id: int):
                     "event",
                     f"{row['EventName']} is tomorrow",
                     f"{row['EventName']} starts tomorrow at {time} at {row['EventAddress']}. Don't miss it!",
+                    f"event:{row['EventID']}",
                 )
 
             # Wish-listed events starting within the next 7 days.
@@ -312,6 +458,7 @@ async def generate_for_account(account_id: int):
                     "event",
                     f"{row['EventName']} starts soon",
                     f"{row['EventName']} starts on {start} at {row['EventAddress']}. Don't miss it!",
+                    f"event:{row['EventID']}",
                 )
 
             # Upcoming events from organizers the account follows.
@@ -330,6 +477,7 @@ async def generate_for_account(account_id: int):
                     "event",
                     f"New event: {row['EventName']}",
                     f"An organizer you follow added {row['EventName']} on {start} at {row['EventAddress']}.",
+                    f"event:{row['EventID']}",
                 )
 
             # Welcome message the first time the account gets notifications.
@@ -346,6 +494,8 @@ async def generate_for_account(account_id: int):
 
             con.commit()
 
+        if created:
+            _wake_streams([account_id])
         return {"AccountID": account_id, "CreatedCount": created}
 
     except pymysql.MySQLError as err:

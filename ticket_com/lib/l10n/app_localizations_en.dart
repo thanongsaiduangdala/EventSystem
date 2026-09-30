@@ -419,6 +419,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scanQrToEnter => 'Scan this QR code at the entrance to check in';
 
   @override
+  String get ticketCheckedIn => 'Checked in';
+
+  @override
+  String get ticketCode => 'Ticket code';
+
+  @override
+  String get codeCopied => 'Code copied';
+
+  @override
+  String get checkedInAtLabel => 'Checked in at';
+
+  @override
+  String get ticketScannedMessage => 'Your ticket has been scanned';
+
+  @override
   String get following => 'Following';
 
   @override

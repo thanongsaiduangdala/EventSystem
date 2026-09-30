@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
+import 'package:ticket_com/HomePage/event_detail_page.dart';
+import 'package:ticket_com/models/category_models.dart';
+import 'package:ticket_com/services/auth_service.dart';
+import 'package:ticket_com/services/category_api_service.dart';
+import 'package:ticket_com/services/event_api_service.dart';
+import 'package:ticket_com/services/event_image_api_service.dart';
+import 'package:ticket_com/services/event_view_api_service.dart';
+import 'package:ticket_com/services/follow_api_service.dart';
 import 'package:ticket_com/services/notification_service.dart';
+import 'package:ticket_com/services/ticket_type_api_service.dart';
+import 'package:ticket_com/services/wishlist_api_service.dart';
 
 import 'organizer_invite_page.dart';
 
@@ -109,24 +119,180 @@ class _NotificationPageState extends State<NotificationPage> {
   }
 }
 
-/// Opens the notification's deep-link target screen when it has one
-/// (`org_invite:<MemberID>` opens the invite/join page), otherwise shows the
-/// detail dialog below.
+/// Opens the notification's deep-link target screen when it has one:
+///   * `event:<EventID>`      -> that event's detail page
+///   * `org_invite:<MemberID>` -> the invite/join page
+/// Otherwise shows the detail dialog below.
 void openNotification(BuildContext context, AppNotification notification) {
-    const prefix = 'org_invite:';
-    if (notification.link.startsWith(prefix)) {
-      final memberId = int.tryParse(notification.link.substring(prefix.length));
-      if (memberId != null) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => OrganizerInvitePage(memberId: memberId),
-          ),
-        );
-        return;
+  final eventId = notification.eventId;
+  if (eventId != null) {
+    _openEventFromNotification(context, eventId);
+    return;
+  }
+
+  const prefix = 'org_invite:';
+  if (notification.link.startsWith(prefix)) {
+    final memberId = int.tryParse(notification.link.substring(prefix.length));
+    if (memberId != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => OrganizerInvitePage(memberId: memberId),
+        ),
+      );
+      return;
+    }
+  }
+  _showNotificationDetail(context, notification);
+}
+
+/// Loads everything [EventDetailPage] needs for one event (the same data the
+/// home page passes it), shows a small spinner meanwhile, then opens the page.
+/// If the event can't be loaded the notification's detail dialog is not lost:
+/// the user just gets a snackbar explaining what happened.
+Future<void> _openEventFromNotification(
+  BuildContext context,
+  int eventId,
+) async {
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final messenger = ScaffoldMessenger.of(context);
+
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    useRootNavigator: true,
+    builder: (_) => const PopScope(
+      canPop: false,
+      child: Center(child: CircularProgressIndicator(color: _kAccent)),
+    ),
+  );
+
+  try {
+    final event = await EventApiService.getEventById(eventId);
+
+    Future<T> optional<T>(Future<T> Function() load, T fallback) async {
+      try {
+        return await load();
+      } catch (_) {
+        return fallback;
       }
     }
-    _showNotificationDetail(context, notification);
+
+    final session = AuthService.currentSession;
+    final results = await Future.wait<Object?>([
+      optional(EventImageApiService.getAllEventImages, <EventImageModel>[]),
+      optional(EventApiService.getAllOrganizers, <EventOrganizer>[]),
+      optional(WishlistApiService.getAllWishes, <WishlistModel>[]),
+      optional(FollowApiService.getAllFollows, <FollowModel>[]),
+      optional(
+        () => TicketTypeApiService.getTicketTypesByEvent(eventId),
+        <TicketTypeModel>[],
+      ),
+      optional(CategoryApiService.getAllCategories, <CategoryModel>[]),
+      optional(
+        () => CategoryApiService.getCategoriesByEventId(eventId),
+        <EventCategoryModel>[],
+      ),
+    ]);
+
+    final images = (results[0] as List<EventImageModel>)
+        .where((i) => i.eventId == eventId)
+        .toList();
+    EventImageModel? image;
+    for (final img in images) {
+      if (img.isThumbnail || image == null) image = img;
+    }
+
+    EventOrganizer? organizer;
+    for (final o in results[1] as List<EventOrganizer>) {
+      if (o.id == event.organizerId) organizer = o;
+    }
+
+    final wishes = (results[2] as List<WishlistModel>)
+        .where((w) => w.eventId == eventId)
+        .toList();
+    WishlistModel? myWish;
+    if (session != null) {
+      for (final w in wishes) {
+        if (w.accountId == session.accountId) myWish = w;
+      }
+    }
+
+    final followed =
+        session != null &&
+        (results[3] as List<FollowModel>).any(
+          (f) =>
+              f.accountId == session.accountId &&
+              f.organizerId == event.organizerId,
+        );
+
+    int? minPrice;
+    for (final t in results[4] as List<TicketTypeModel>) {
+      if (minPrice == null || t.priceInKip < minPrice) minPrice = t.priceInKip;
+    }
+
+    final allCategories = results[5] as List<CategoryModel>;
+    final categories = [
+      for (final link in results[6] as List<EventCategoryModel>)
+        ...allCategories.where((c) => c.id == link.categoryId),
+    ];
+
+    // Same as tapping the event on the home page: counts as a view.
+    if (session != null) {
+      EventViewApiService.createEventView(
+        accountId: session.accountId,
+        eventId: eventId,
+      ).then((_) {}, onError: (_) {});
+    }
+
+    // Wish toggling, mirroring the home page (the detail page reverts its own
+    // heart icon if this throws).
+    Future<void> toggleWish(EventModel e) async {
+      final current = AuthService.currentSession;
+      if (current == null) return;
+      final existing = myWish;
+      if (existing != null) {
+        await WishlistApiService.deleteWishById(existing.id);
+        myWish = null;
+      } else {
+        final result = await WishlistApiService.createWish(
+          accountId: current.accountId,
+          eventId: e.id,
+        );
+        myWish = WishlistModel(
+          id: result['WishID'] is int
+              ? result['WishID'] as int
+              : int.tryParse(result['WishID'].toString()) ?? -1,
+          accountId: current.accountId,
+          eventId: e.id,
+        );
+      }
+    }
+
+    navigator.pop(); // close the spinner
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => EventDetailPage(
+          event: event,
+          image: image,
+          organizer: organizer,
+          attend: wishes.length,
+          saved: myWish != null,
+          onToggleWish: toggleWish,
+          followed: followed,
+          minPrice: minPrice,
+          categories: categories,
+        ),
+      ),
+    );
+  } catch (e) {
+    navigator.pop(); // close the spinner
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', '')),
+      ),
+    );
   }
+}
 
   /// Floating rectangle card in the middle of the screen showing the full
   /// content of one notification.

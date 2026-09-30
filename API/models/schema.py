@@ -140,7 +140,6 @@ class UpdateSponserInfoRequest(BaseModel):
     SponserName: str
     SponserLogoPath: str
 
-# ---------- categoryinfo ----------
 class AddCategoryInfoRequest(BaseModel):
     CategoryName: str
     CategoryIconPath: str
@@ -152,7 +151,6 @@ class UpdateCategoryInfoRequest(BaseModel):
     CategoryIconPath: str
  
  
-# ---------- eventcategoryinfo ----------
 class AddEventCategoryInfoRequest(BaseModel):
     EventID: int
     CategoryID: int
@@ -164,7 +162,6 @@ class UpdateEventCategoryInfoRequest(BaseModel):
     CategoryID: int
  
  
-# ---------- eventorganizerInfo ----------
 class AddEventOrganizerInfoRequest(BaseModel):
     EventOrganizerName: str
     EventOrganizerLogoPath: str
@@ -180,7 +177,6 @@ class UpdateEventOrganizerInfoRequest(BaseModel):
     EventOrganizerDiscription: Optional[str] = None
  
  
-# ---------- organizermember ----------
 class AddOrganizerMemberRequest(BaseModel):
     AccountID: int
     EventOrganizerID: int
@@ -211,7 +207,6 @@ class UpdateMemberStatusInfoRequest(BaseModel):
     StatusName: str
 
 
-# ---------- team member dashboard ----------
 class CheckInAttendeeRequest(BaseModel):
     EventID: int
     AttendeeID: int
@@ -244,7 +239,17 @@ class UnassignMemberEventRequest(BaseModel):
     EventID: int
 
 
-# ---------- eventRole ----------
+class SetEventScanRequest(BaseModel):
+    EventID: int
+    Enabled: bool
+
+
+class SetMemberScanRequest(BaseModel):
+    EventID: int
+    MemberID: int
+    CanScan: bool
+
+
 class AddEventRoleRequest(BaseModel):
     RoleName: str
 
@@ -254,7 +259,6 @@ class UpdateEventRoleRequest(BaseModel):
     RoleName: str
 
 
-# ---------- eventstaff ----------
 class AddEventStaffRequest(BaseModel):
     EventID: int
     MemberID: int
@@ -269,7 +273,6 @@ class UpdateEventStaffRequest(BaseModel):
     EventRoleID: int
     AssignedAtYMDT: Optional[datetime] = None
 
-# ---------- categoryinfo ----------
 class AddCategoryInfoRequest(BaseModel):
     CategoryName: str
     CategoryIconPath: str
@@ -281,7 +284,6 @@ class UpdateCategoryInfoRequest(BaseModel):
     CategoryIconPath: str
  
  
-# ---------- eventcategoryinfo ----------
 class AddEventCategoryInfoRequest(BaseModel):
     EventID: int
     CategoryID: int
@@ -293,7 +295,6 @@ class UpdateEventCategoryInfoRequest(BaseModel):
     CategoryID: int
  
  
-# ---------- eventorganizerInfo ----------
 class AddEventOrganizerInfoRequest(BaseModel):
     EventOrganizerName: str
     EventOrganizerLogoPath: str
@@ -309,7 +310,6 @@ class UpdateEventOrganizerInfoRequest(BaseModel):
     EventOrganizerDiscription: Optional[str] = None
  
  
-# ---------- organizermember ----------
 class AddOrganizerMemberRequest(BaseModel):
     AccountID: int
     EventOrganizerID: int
@@ -325,7 +325,6 @@ class UpdateOrganizerMemberRequest(BaseModel):
     MemberStatusID: Optional[int] = None
 
 
-# ---------- eventRole ----------
 class AddEventRoleRequest(BaseModel):
     RoleName: str
 
@@ -335,7 +334,6 @@ class UpdateEventRoleRequest(BaseModel):
     RoleName: str
  
  
-# ---------- eventstaff ----------
 class AddEventStaffRequest(BaseModel):
     EventID: int
     MemberID: int
@@ -351,7 +349,6 @@ class UpdateEventStaffRequest(BaseModel):
     AssignedAtYMDT: Optional[datetime] = None
  
  
-# ---------- paymenttypeinfo ----------
 class AddPaymentTypeInfoRequest(BaseModel):
     PaymentTypeName: str
  
@@ -361,7 +358,6 @@ class UpdatePaymentTypeInfoRequest(BaseModel):
     PaymentTypeName: str
  
  
-# ---------- ordersinfo ----------
 class AddOrdersInfoRequest(BaseModel):
     AccountID: int
     PaymentTypeID: Optional[int] = None
@@ -377,7 +373,6 @@ class UpdateOrdersInfoRequest(BaseModel):
     ProveOfPayment: Optional[str] = None
  
  
-# ---------- ticketattendence ----------
 class AddTicketAttendenceRequest(BaseModel):
     TicketTypeID: int
     OrderID: int
@@ -398,7 +393,6 @@ class UpdateTicketAttendenceRequest(BaseModel):
     Email: str
     NationalID: Optional[str] = None
 
- # ---------- teamrole ----------
 class AddTeamRoleRequest(BaseModel):
     TeamRoleName: str
  
@@ -408,7 +402,6 @@ class UpdateTeamRoleRequest(BaseModel):
     TeamRoleName: str
  
  
-# ---------- verifactiontypeinfo ----------
 class AddVerificationTypeInfoRequest(BaseModel):
     IDType: str
  
@@ -418,7 +411,6 @@ class UpdateVerificationTypeInfoRequest(BaseModel):
     IDType: str
  
  
-# ---------- Verificationstatusinfo ----------
 class AddVerificationStatusInfoRequest(BaseModel):
     StatusName: str
  
@@ -428,7 +420,6 @@ class UpdateVerificationStatusInfoRequest(BaseModel):
     StatusName: str
  
  
-# ---------- identityverifcation ----------
 class AddIdentityVerificationRequest(BaseModel):
     AccountID: int
     VerificationTypeID: int
@@ -456,7 +447,6 @@ class UpdateIdentityVerificationRequest(BaseModel):
     ReviewedAtYMDT: Optional[datetime] = None
  
  
-# ---------- attendeeresponse ----------
 class AddAttendeeResponseRequest(BaseModel):
     EventQuestionID: int
     attendeeID: int
@@ -469,12 +459,10 @@ class UpdateAttendeeResponseRequest(BaseModel):
     attendeeID: int
     attendeeAnswer: str
 
-# ---------- RBAC ----------
 class AssignRolePermissionRequest(BaseModel):
     status_id: int
     permission_id: int
 
-# ---------- accountstatusinfo ----------
 class AddAccountStatusInfoRequest(BaseModel):
     StatusType: str
  
@@ -483,7 +471,6 @@ class UpdateAccountStatusInfoRequest(BaseModel):
     StatusID: int
     StatusType: str
 
-# ---------- AccountInfo ----------
 class AddAccountInfoRequest(BaseModel):
     FirstName: str
     LastName: str
@@ -501,19 +488,16 @@ class UpdateAccountNoPasswordInfoRequest(BaseModel):
     Email: str
     StatusID: int
 
- # ---------- wishlistinfo ----------
 class AddWishlistRequest(BaseModel):
     AccountID: int
     EventID: int
 
 
-# ---------- followinfo ----------
 class AddFollowRequest(BaseModel):
     AccountID: int
     EventOrganizerID: int
 
 
-# ---------- accountcategoryinfo ----------
 class SetAccountCategoriesRequest(BaseModel):
     AccountID: int
     CategoryIDs: List[int]
@@ -522,13 +506,11 @@ class AddAccountCategoryRequest(BaseModel):
     AccountID: int
     CategoryID: int
 
-# ---------- eventviewinfo ----------
 class AddEventViewRequest(BaseModel):
     AccountID: int
     EventID: int
 
 
-# ---------- notificationinfo ----------
 class AddNotificationRequest(BaseModel):
     AccountID: int
     NotificationType: str = "system"

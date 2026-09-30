@@ -174,6 +174,21 @@ class EventApiService {
     }
   }
 
+  /// One event by id, whatever its approval state. Used when a notification
+  /// deep-links to an event (`event:<EventID>`).
+  static Future<EventModel> getEventById(int eventId) async {
+    final url = Uri.parse('$baseUrl/event/$eventId');
+    final response = await http.get(url, headers: _authHeaders());
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return EventModel.fromJson(data['event'] as Map<String, dynamic>);
+    } else if (response.statusCode == 404) {
+      throw Exception('This event is no longer available.');
+    } else {
+      throw _handleError(response, 'Failed to load event');
+    }
+  }
+
   /// Management view: every event including Pending/Denied ones, so
   /// organizers can track approval and admins can review submissions.
   static Future<List<EventModel>> getAllEventsWithStatus() async {

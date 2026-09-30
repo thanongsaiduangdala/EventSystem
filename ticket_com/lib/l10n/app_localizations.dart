@@ -890,6 +890,36 @@ abstract class AppLocalizations {
   /// **'Scan this QR code at the entrance to check in'**
   String get scanQrToEnter;
 
+  /// No description provided for @ticketCheckedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked in'**
+  String get ticketCheckedIn;
+
+  /// No description provided for @ticketCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket code'**
+  String get ticketCode;
+
+  /// No description provided for @codeCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Code copied'**
+  String get codeCopied;
+
+  /// No description provided for @checkedInAtLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked in at'**
+  String get checkedInAtLabel;
+
+  /// No description provided for @ticketScannedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your ticket has been scanned'**
+  String get ticketScannedMessage;
+
   /// No description provided for @following.
   ///
   /// In en, this message translates to:

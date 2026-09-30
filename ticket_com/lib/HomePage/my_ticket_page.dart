@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'package:ticket_com/services/attendee_response_api_service.dart';
@@ -6,12 +9,15 @@ import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_question_api_service.dart';
 import 'package:ticket_com/services/orders_api_service.dart';
 import 'package:ticket_com/services/ticket_attendence_api_service.dart';
+import 'package:ticket_com/services/ticket_status_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 
 const Color _kIndigo = Color(0xFF5B4DFF);
 const Color _kPurpleLight = Color(0xFF8E2DE2);
 const Color _kTextDark = Color(0xFF212121);
 const Color _kTextGrey = Color(0xFF757575);
+const Color _kGreen = Color(0xFF2E9E5B);
+const Color _kGreenLight = Color(0xFFE8F7EE);
 
 // EventQuestionTypeID conventions (mirrors checkout_page.dart):
 //   1 = Text, 2 = Checkbox, 3 = Radio box, 4 = Encrypted text, 5 = Yes or No.
@@ -61,10 +67,86 @@ class _MyTicketPageState extends State<MyTicketPage> {
   List<EventQuestionModel> _questions = [];
   Map<int, List<AttendeeResponseModel>> _responsesByAttendee = {};
 
+  // Live check-in state, pushed by the server the moment staff scan a ticket.
+  // attendee id -> when it was scanned in. Absent = not scanned yet.
+  final Map<int, DateTime> _checkedInAt = {};
+  TicketStatusService? _statusService;
+  StreamSubscription<TicketStatusUpdate>? _statusSub;
+  bool _hadSnapshot = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _listenForCheckIns();
+  }
+
+  @override
+  void dispose() {
+    _statusSub?.cancel();
+    _statusService?.dispose();
+    super.dispose();
+  }
+
+  void _listenForCheckIns() {
+    if (widget.purchases.isEmpty) return;
+    final service = TicketStatusService(eventId: widget.event.id);
+    _statusService = service;
+    _statusSub = service.updates.listen(_onStatusUpdate);
+    service.connect();
+  }
+
+  void _onStatusUpdate(TicketStatusUpdate update) {
+    if (!mounted) return;
+
+    final mine = {for (final p in widget.purchases) p.attendee.id};
+    final before = _checkedInAt.keys.toSet();
+    final next = update.isSnapshot ? <int, DateTime>{} : {..._checkedInAt};
+
+    for (final t in update.tickets) {
+      if (!mine.contains(t.attendeeId)) continue;
+      final at = t.checkedInAt;
+      if (at != null) {
+        next[t.attendeeId] = at;
+      } else {
+        next.remove(t.attendeeId);
+      }
+    }
+
+    // Announce scans that happened while this page was open. The very first
+    // snapshot is just the starting state (e.g. opening an already-used
+    // ticket), so it stays quiet; a snapshot after a reconnect can still
+    // reveal a scan we missed while offline.
+    final announce = _hadSnapshot || !update.isSnapshot;
+    final newlyScanned = next.keys.any((id) => !before.contains(id));
+    if (update.isSnapshot) _hadSnapshot = true;
+
+    setState(() {
+      _checkedInAt
+        ..clear()
+        ..addAll(next);
+    });
+
+    if (announce && newlyScanned) _announceScan();
+  }
+
+  void _announceScan() {
+    HapticFeedback.mediumImpact();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          backgroundColor: _kGreen,
+          behavior: SnackBarBehavior.floating,
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(child: Text(l10nOf(context).ticketScannedMessage)),
+            ],
+          ),
+        ),
+      );
   }
 
   Future<void> _load() async {
@@ -194,7 +276,20 @@ class _MyTicketPageState extends State<MyTicketPage> {
           labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
           tabs: [
             for (var i = 0; i < widget.purchases.length; i++)
-              Tab(text: _tabLabel(widget.purchases[i], i + 1)),
+              Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_tabLabel(widget.purchases[i], i + 1)),
+                    if (_checkedInAt.containsKey(
+                      widget.purchases[i].attendee.id,
+                    )) ...[
+                      const SizedBox(width: 6),
+                      const Icon(Icons.check_circle, size: 15, color: _kGreen),
+                    ],
+                  ],
+                ),
+              ),
           ],
         ),
       ),
@@ -402,30 +497,154 @@ class _MyTicketPageState extends State<MyTicketPage> {
   }
 
   Widget _qrSection(BuildContext context, TicketPurchase p) {
-    final l10n = l10nOf(context);
+    final checkedInAt = _checkedInAt[p.attendee.id];
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
-      child: Column(
-        children: [
-          Text(
-            l10n.scanQrToEnter,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: _kTextGrey, fontSize: 13),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 350),
+        child: checkedInAt != null
+            ? _checkedInPanel(context, checkedInAt)
+            : _qrPanel(context, p),
+      ),
+    );
+  }
+
+  Widget _qrPanel(BuildContext context, TicketPurchase p) {
+    final l10n = l10nOf(context);
+    return Column(
+      key: const ValueKey('qr'),
+      children: [
+        Text(
+          l10n.scanQrToEnter,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: _kTextGrey, fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE0DCFD), width: 1.4),
           ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(14),
+          child: QrImageView(
+            data: _qrPayload(p),
+            version: QrVersions.auto,
+            size: 208,
+            gapless: true,
+          ),
+        ),
+        const SizedBox(height: 14),
+        _manualCode(context, _qrPayload(p)),
+      ],
+    );
+  }
+
+  /// The QR's text, shown so staff can type it in when scanning fails.
+  Widget _manualCode(BuildContext context, String code) {
+    final l10n = l10nOf(context);
+    return Column(
+      children: [
+        Text(
+          l10n.ticketCode,
+          style: const TextStyle(color: _kTextGrey, fontSize: 12),
+        ),
+        const SizedBox(height: 6),
+        InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () async {
+            await Clipboard.setData(ClipboardData(text: code));
+            if (!mounted) return;
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(
+                SnackBar(
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 2),
+                  content: Text(l10n.codeCopied),
+                ),
+              );
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE0DCFD), width: 1.4),
+              color: const Color(0xFFF1EEFF),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: QrImageView(
-              data: _qrPayload(p),
-              version: QrVersions.auto,
-              size: 208,
-              gapless: true,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: SelectableText(
+                    code,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: _kTextDark,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'monospace',
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.copy_rounded, size: 16, color: _kIndigo),
+              ],
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Shown instead of the QR once staff have scanned this ticket.
+  Widget _checkedInPanel(BuildContext context, DateTime at) {
+    final l10n = l10nOf(context);
+    return Container(
+      key: const ValueKey('checked-in'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+      decoration: BoxDecoration(
+        color: _kGreenLight,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kGreen, width: 1.4),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.elasticOut,
+            builder: (context, scale, child) =>
+                Transform.scale(scale: scale, child: child),
+            child: Container(
+              width: 84,
+              height: 84,
+              decoration: const BoxDecoration(
+                color: _kGreen,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_rounded,
+                color: Colors.white,
+                size: 54,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            l10n.ticketCheckedIn,
+            style: const TextStyle(
+              color: _kGreen,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${l10n.checkedInAtLabel} ${_two(at.hour)}:${_two(at.minute)}',
+            style: const TextStyle(color: _kTextGrey, fontSize: 13),
           ),
         ],
       ),

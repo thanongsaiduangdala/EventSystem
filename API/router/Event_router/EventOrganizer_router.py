@@ -12,12 +12,12 @@ from controllers.Event_Controllers.OrganizerMember_controllers import (
     get_organizermembers_with_accounts,
     get_my_memberships, get_my_invites, get_my_team_member_events, get_org_team,
     change_member_role, transfer_org_ownership,
-    assign_member_to_event, unassign_member_from_event
+    assign_member_to_event, unassign_member_from_event,
+    get_event_scan_access, set_event_scan_enabled, set_member_scan_access
 )
 
 router = APIRouter(prefix="/eventorganizer", tags=["EventOrganizer"])
 
-# eventorganizerInfo
 router.post("/organizer/create")(create_eventorganizer)
 router.post("/organizer/upload")(upload_eventorganizer)
 router.post("/organizer/apply")(apply_eventorganizer)
@@ -29,12 +29,10 @@ router.get("/organizer/{event_organizer_id}")(get_eventorganizer_by_id)
 router.put("/organizer/update")(update_eventorganizer)
 router.delete("/organizer/{event_organizer_id}")(delete_eventorganizer)
 
-# organizermember
 router.post("/member/create")(create_organizermember)
 router.post("/member/invite")(invite_organizermember)
 router.get("/member/all")(get_all_OrganizerMembers)
 router.get("/member/all-with-accounts")(get_organizermembers_with_accounts)
-# team member dashboard (static paths MUST precede /member/{member_id})
 router.get("/member/my-memberships")(get_my_memberships)
 router.get("/member/my-invites")(get_my_invites)
 router.get("/member/member-events")(get_my_team_member_events)
@@ -43,6 +41,9 @@ router.put("/member/change-role")(change_member_role)
 router.post("/member/transfer-ownership")(transfer_org_ownership)
 router.post("/member/assign-event")(assign_member_to_event)
 router.post("/member/unassign-event")(unassign_member_from_event)
+router.get("/member/event-scan/{event_id}")(get_event_scan_access)
+router.post("/member/event-scan/enabled")(set_event_scan_enabled)
+router.post("/member/event-scan/member")(set_member_scan_access)
 router.post("/member/{member_id}/accept")(accept_organizermember)
 router.post("/member/{member_id}/decline")(decline_organizermember)
 router.get("/member/{member_id}")(get_organizermember_by_id)

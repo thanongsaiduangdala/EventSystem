@@ -420,6 +420,21 @@ class AppLocalizationsLo extends AppLocalizations {
       'ສະແກນລະຫັດ QR ນີ້ທີ່ທາງເຂົ້າເພື່ອຢືນຢັນການເຂົ້າຮ່ວມ';
 
   @override
+  String get ticketCheckedIn => 'ຢືນຢັນການເຂົ້າຮ່ວມແລ້ວ';
+
+  @override
+  String get ticketCode => 'ລະຫັດປີ້';
+
+  @override
+  String get codeCopied => 'ຄັດລອກລະຫັດແລ້ວ';
+
+  @override
+  String get checkedInAtLabel => 'ຢືນຢັນເມື່ອ';
+
+  @override
+  String get ticketScannedMessage => 'ປີ້ຂອງທ່ານຖືກສະແກນແລ້ວ';
+
+  @override
   String get following => 'ກຳລັງຕິດຕາມ';
 
   @override

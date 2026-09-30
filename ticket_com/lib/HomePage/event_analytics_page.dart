@@ -54,12 +54,25 @@ class _AttendeeRow {
     required this.ticketType,
     required this.order,
     this.answers = const {},
+    this.came = false,
+    this.checkedInAt,
+    this.checkedInBy,
   });
 
   final TicketAttendeeModel attendee;
   final TicketTypeModel ticketType;
   final OrderModel? order;
   final Map<int, List<String>> answers; // questionId -> formatted answer(s)
+
+  /// True once staff have scanned this ticket in at the entrance.
+  final bool came;
+  final DateTime? checkedInAt;
+
+  /// Name of the staff member who scanned the ticket.
+  final String? checkedInBy;
+
+  String get scannerLabel =>
+      (checkedInBy == null || checkedInBy!.isEmpty) ? 'Unknown staff' : checkedInBy!;
 
   String get fullName => '${attendee.firstName} ${attendee.lastName}'.trim();
 }
@@ -98,6 +111,31 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
   int _revenue = 0;
   bool _exporting = false;
 
+  /// Attendees who were scanned in, most recent first.
+  List<_AttendeeRow> get _cameRows {
+    final list = _rows.where((r) => r.came).toList();
+    list.sort((a, b) {
+      final at = a.checkedInAt, bt = b.checkedInAt;
+      if (at == null && bt == null) return 0;
+      if (at == null) return 1;
+      if (bt == null) return -1;
+      return bt.compareTo(at);
+    });
+    return list;
+  }
+
+  /// How many tickets each staff member scanned, biggest first.
+  List<MapEntry<String, int>> get _scanCounts {
+    final counts = <String, int>{};
+    for (final r in _rows) {
+      if (!r.came) continue;
+      counts[r.scannerLabel] = (counts[r.scannerLabel] ?? 0) + 1;
+    }
+    final entries = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return entries;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -125,8 +163,10 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
       // Revoked tickets are not real sales; keep them out of the numbers.
       final eventAttendees = <TicketAttendeeModel>[];
       final orderById = <int, OrderModel>{};
+      final checkInById = <int, EventAttendee>{};
       for (final a in data.attendees) {
         if (!a.isValid) continue;
+        checkInById[a.attendeeId] = a;
         eventAttendees.add(TicketAttendeeModel(
           id: a.attendeeId,
           ticketTypeId: a.ticketTypeId,
@@ -165,11 +205,17 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
           if (q == null) continue;
           answers.putIfAbsent(q.id, () => []).add(_formatAnswer(q, r.attendeeAnswer));
         }
+        final checkIn = checkInById[at.id];
         rows.add(_AttendeeRow(
           attendee: at,
           ticketType: ticket,
           order: orderById[at.orderId],
           answers: answers,
+          came: checkIn?.checkedIn ?? false,
+          checkedInAt: checkIn?.checkedInAt == null
+              ? null
+              : DateTime.tryParse(checkIn!.checkedInAt!),
+          checkedInBy: checkIn?.checkedInByName,
         ));
       }
       rows.sort((a, b) => a.attendee.id.compareTo(b.attendee.id));
@@ -310,6 +356,7 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
     buf.writeln('Start,${_dateFmt(widget.event.start)}');
     buf.writeln('End,${_dateFmt(widget.event.end)}');
     buf.writeln('Total attendees,$_soldCount');
+    buf.writeln('Checked in (came),${_cameRows.length}');
     buf.writeln('Revenue,$_revenue');
     buf.writeln();
 
@@ -341,6 +388,13 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
     }
     buf.writeln();
 
+    buf.writeln('=== SCANNED BY STAFF ===');
+    buf.writeln('Staff member,Tickets scanned');
+    for (final e in _scanCounts) {
+      buf.writeln('${_csvSanitize(e.key)},${e.value}');
+    }
+    buf.writeln();
+
     buf.writeln('=== ATTENDEES ===');
     final headers = [
       'First name',
@@ -351,6 +405,9 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
       'Ticket type',
       'Price (KIP)',
       'Purchased at',
+      'Came',
+      'Checked in at',
+      'Scanned by',
       for (final stat in _questionStats) stat.question.question,
     ];
     buf.writeln(headers.map(_csvSanitize).join(','));
@@ -364,6 +421,9 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
         r.ticketType.typeName,
         '${r.ticketType.priceInKip}',
         r.order?.paymentDate == null ? '' : _dateFmt(r.order!.paymentDate!),
+        r.came ? 'Yes' : 'No',
+        r.checkedInAt == null ? '' : _dateFmt(r.checkedInAt!),
+        r.came ? r.scannerLabel : '',
         for (final stat in _questionStats)
           (r.answers[stat.question.id] ?? const []).join(' / '),
       ];
@@ -470,6 +530,8 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
       'Email',
       'Ticket',
       'Purchased',
+      'Came',
+      'Scanned by',
       for (final stat in _questionStats) stat.question.question,
     ];
     final attendeeRows = <List<String>>[
@@ -480,6 +542,10 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
           r.attendee.email,
           r.ticketType.typeName,
           r.order?.paymentDate == null ? '' : _dateFmt(r.order!.paymentDate!),
+          r.came
+              ? (r.checkedInAt == null ? 'Yes' : _dateFmt(r.checkedInAt!))
+              : 'No',
+          r.came ? r.scannerLabel : '',
           for (final stat in _questionStats)
             (r.answers[stat.question.id] ?? const []).join(' / '),
         ],
@@ -507,9 +573,9 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
             ),
             pw.SizedBox(height: 14),
             pw.TableHelper.fromTextArray(
-              headers: const ['Total attendees', 'Revenue (KIP)'],
+              headers: const ['Total attendees', 'Checked in', 'Revenue (KIP)'],
               data: [
-                ['$_soldCount', '$_revenue'],
+                ['$_soldCount', '${_cameRows.length}', '$_revenue'],
               ],
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
@@ -630,8 +696,14 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                   children: [
                     _summaryCards(),
+                    const SizedBox(height: 12),
+                    _attendanceCards(),
                     const SizedBox(height: 20),
                     _ticketsChart(),
+                    const SizedBox(height: 20),
+                    _scannersChart(),
+                    const SizedBox(height: 20),
+                    _cameSection(),
                     const SizedBox(height: 20),
                     _questionsSection(),
                     const SizedBox(height: 20),
@@ -707,6 +779,138 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _attendanceCards() {
+    final came = _cameRows.length;
+    final total = _rows.length;
+    final percent = total == 0 ? 0 : (came * 100 / total).round();
+    return Row(
+      children: [
+        Expanded(
+          child: _summaryCard(
+            icon: Icons.how_to_reg_outlined,
+            value: '$came / $total',
+            label: 'Came (checked in)',
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _summaryCard(
+            icon: Icons.percent,
+            value: '$percent%',
+            label: 'Attendance',
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _summaryCard(
+            icon: Icons.qr_code_scanner,
+            value: '${_scanCounts.length}',
+            label: 'Staff who scanned',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _scannersChart() {
+    final counts = _scanCounts;
+    final maxCount = counts.isEmpty ? 0 : counts.first.value;
+    return _card(
+      title: 'Scanned by staff',
+      child: counts.isEmpty
+          ? const Text(
+              'No tickets have been scanned yet.',
+              style: TextStyle(color: _kTextGrey),
+            )
+          : Column(
+              children: [
+                for (var i = 0; i < counts.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 12),
+                  _hbarRow(
+                    label: counts[i].key,
+                    value: '${counts[i].value} scanned',
+                    count: counts[i].value,
+                    max: maxCount,
+                    color: _kGreen,
+                  ),
+                ],
+              ],
+            ),
+    );
+  }
+
+  Widget _cameSection() {
+    final came = _cameRows;
+    return _card(
+      title: 'People who came (${came.length})',
+      child: came.isEmpty
+          ? const Text(
+              'No one has been checked in yet.',
+              style: TextStyle(color: _kTextGrey),
+            )
+          : Column(
+              children: [
+                for (var i = 0; i < came.length; i++) ...[
+                  if (i > 0) const Divider(color: Color(0xFFEFEEFC), height: 18),
+                  _cameTile(came[i]),
+                ],
+              ],
+            ),
+    );
+  }
+
+  Widget _cameTile(_AttendeeRow row) {
+    return Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: _kGreen.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.check_rounded, color: _kGreen, size: 20),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                row.fullName.isEmpty ? '-' : row.fullName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _kTextDark,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${row.ticketType.typeName}  •  Scanned by ${row.scannerLabel}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _kTextGrey, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        if (row.checkedInAt != null) ...[
+          const SizedBox(width: 8),
+          Text(
+            _dateFmt(row.checkedInAt!),
+            style: const TextStyle(
+              color: _kGreen,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -971,6 +1175,18 @@ class _EventAnalyticsPageState extends State<EventAnalyticsPage> {
             'Phone: ${row.attendee.phoneNum}   •   '
             '${row.order?.paymentDate == null ? 'purchase date unknown' : 'Purchased: ${_dateFmt(row.order!.paymentDate!)}'}',
             style: const TextStyle(color: _kTextGrey, fontSize: 12),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            row.came
+                ? 'Came${row.checkedInAt == null ? '' : ' at ${_dateFmt(row.checkedInAt!)}'}'
+                    '  •  scanned by ${row.scannerLabel}'
+                : 'Not arrived yet',
+            style: TextStyle(
+              color: row.came ? _kGreen : _kTextGrey,
+              fontSize: 12,
+              fontWeight: row.came ? FontWeight.w700 : FontWeight.w400,
+            ),
           ),
           if ((row.attendee.nationalId ?? '').isNotEmpty) ...[
             const SizedBox(height: 3),

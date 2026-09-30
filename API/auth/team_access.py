@@ -1,29 +1,3 @@
-"""
-Shared team-access helpers used by the organizer "team member dashboard".
-
-Organizer teams are *not* the same as the global account RBAC (accountstatusinfo
-based). A person's team role lives on their organizermember row:
-
-    TeamRoleID  1 = Staff / Employee
-    TeamRoleID  2 = Volunteer
-    TeamRoleID  3 = Page Designer
-    TeamRoleID  4 = Org Admin
-    TeamRoleID  5 = Org Owner
-
-An account may hold memberships in several organizations, but at most one
-live membership per organization (enforced by uq_organizer_active_member). The
-account that created an organization is its Owner even before any membership
-row exists (the migration backfills those rows, but the owner check does not
-depend on it).
-
-Event scoping is separate from org membership and lives in `eventstaff`: the
-non-manager roles (Volunteer, Staff, Page Designer) are limited to the events
-they are assigned to, while Admin and Owner are not event-scoped.
-
-The helpers below are plain async functions a controller can await right after
-it has validated its request, so a team member is allowed only for content in
-their own organization.
-"""
 from fastapi import HTTPException, status
 
 from DB.DBConnect import getConnect
@@ -40,11 +14,8 @@ MEMBER_STATUS_ACTIVE = 2
 EDITOR_ROLES = (TEAM_ROLE_PAGE_DESIGNER, TEAM_ROLE_ORG_ADMIN, TEAM_ROLE_ORG_OWNER)
 MANAGER_ROLES = (TEAM_ROLE_ORG_ADMIN, TEAM_ROLE_ORG_OWNER)
 
-# Roles allowed to work an event door: see attendees and run check-in.
-# A Page Designer edits event content and has no attendee/check-in access.
 DOOR_ROLES = (TEAM_ROLE_VOLUNTEER, TEAM_ROLE_EMPLOYEE)
 
-# Roles allowed to go beyond check-in and decline/revoke a ticket.
 TICKET_MANAGER_ROLES = (TEAM_ROLE_EMPLOYEE,)
 
 
@@ -63,11 +34,6 @@ def _status_has_permission(cur, status_id, permission_name: str) -> bool:
 
 
 def effective_role_for(con, account_id: int, org_id: int) -> list:
-    """
-    Team-roles the account effectively has inside an organization. Always
-    includes Org Owner when the account created the organization; also adds
-    the TeamRoleID of an active membership row if one exists.
-    """
     roles = []
     with con.cursor() as cur:
         cur.execute(
@@ -100,14 +66,6 @@ def is_editor(roles) -> bool:
 
 
 def active_membership(con, account_id: int, org_id: int = None):
-    """
-    Enriched active membership row (role + org) for an account, or None.
-
-    Pass org_id whenever the caller cares which organization the row belongs
-    to. An account may hold memberships in several organizations, so without
-    that filter this can return a row for a different org and make a
-    legitimate member look like a stranger.
-    """
     sql = """
         SELECT om.MemberID, om.AccountID, om.EventOrganizerID, om.TeamRoleID,
                om.MemberStatusID,
@@ -132,11 +90,6 @@ def active_membership(con, account_id: int, org_id: int = None):
 
 
 def active_memberships(con, account_id: int) -> list:
-    """
-    Every active membership the account holds (one per organization), owners
-    first. Unlike active_membership() this does not silently drop the other
-    organizations of an account that belongs to several.
-    """
     with con.cursor() as cur:
         cur.execute(
             """
@@ -158,12 +111,6 @@ def active_memberships(con, account_id: int) -> list:
 
 
 def sync_owner_memberships(con, account_id: int) -> None:
-    """
-    Guarantees that every organization the account created has an active
-    Org Owner membership row for it. Organizations created after the
-    team-dashboard migration ran never got the backfilled row, which left
-    their owners with an empty team dashboard.
-    """
     with con.cursor() as cur:
         cur.execute(
             "SELECT eo.EventOrganizerID FROM eventorganizerinfo eo "
@@ -176,8 +123,6 @@ def sync_owner_memberships(con, account_id: int) -> None:
         )
         missing = [r["EventOrganizerID"] for r in cur.fetchall()]
         for org_id in missing:
-            # A Pending/Declined row still occupies the unique slot, so
-            # promote it instead of inserting a duplicate.
             cur.execute(
                 "SELECT MemberID FROM organizermember "
                 "WHERE AccountID = %s AND EventOrganizerID = %s AND MemberStatusID != 4",
@@ -202,11 +147,6 @@ def sync_owner_memberships(con, account_id: int) -> None:
 
 
 def ensure_member_row(con, account_id: int, org_id: int, team_role_id: int = TEAM_ROLE_ORG_OWNER) -> int:
-    """
-    Returns the MemberID of the account's active row for org_id, creating one
-    if it is missing (used so the org owner can always be recorded as the
-    person who performed a check-in, even before the backfill ran).
-    """
     with con.cursor() as cur:
         cur.execute(
             "SELECT MemberID FROM organizermember "
@@ -239,13 +179,6 @@ def _forbidden(detail: str):
 
 
 async def ensure_team_access(con, current: dict, event_id: int) -> dict:
-    """
-    The caller may see attendee data / run check-in for an event when they are:
-      - a manager of the event's organization (Admin / Owner / the creator), or
-      - assigned to that event as a team member (volunteer / staff / designer).
-    Returns the caller's active membership row (or None when they reached the
-    event through ownership).
-    """
     account_id = current["account_id"]
     org_id = event_org_id(con, event_id)
     if org_id is None:
@@ -273,13 +206,26 @@ async def ensure_team_access(con, current: dict, event_id: int) -> dict:
     return member
 
 
+async def ensure_scan_access(con, current: dict, event_id: int) -> dict:
+    member = await ensure_team_access(con, current, event_id)
+    org_id = event_org_id(con, event_id)
+    roles = effective_role_for(con, current["account_id"], org_id)
+    if is_manager(roles):
+        return member
+    with con.cursor() as cur:
+        cur.execute(
+            "SELECT e.ScanEnabled, es.CanScan FROM eventinfo e "
+            "LEFT JOIN eventstaff es ON es.EventID = e.EventID AND es.MemberID = %s "
+            "WHERE e.EventID = %s",
+            (member["MemberID"], event_id),
+        )
+        row = cur.fetchone()
+    if not row or not (row["ScanEnabled"] or row["CanScan"]):
+        raise _forbidden("QR scanning is turned off for you on this event. Ask an Org Admin to turn it on.")
+    return member
+
+
 async def ensure_attendee_list_access(con, current: dict, event_id: int) -> dict:
-    """
-    Browsing the event's attendee list is a Staff+ capability. A Volunteer is
-    limited to resolving a single attendee from a scanned ticket (see
-    ensure_team_access), because the list exposes contact details and national
-    ID for every attendee.
-    """
     account_id = current["account_id"]
     org_id = event_org_id(con, event_id)
     if org_id is None:
@@ -308,7 +254,6 @@ async def ensure_attendee_list_access(con, current: dict, event_id: int) -> dict
 
 
 async def ensure_staff_or_manager(con, current: dict, event_id: int) -> None:
-    """Revoking/declining tickets is a Staff+ capability (never a Volunteer)."""
     account_id = current["account_id"]
     org_id = event_org_id(con, event_id)
     if org_id is None:
@@ -337,7 +282,6 @@ async def ensure_staff_or_manager(con, current: dict, event_id: int) -> None:
 
 
 async def ensure_org_manager(con, current: dict, org_id: int) -> dict:
-    """Only Admin / Owner / creator may manage the team and org settings."""
     account_id = current["account_id"]
     roles = effective_role_for(con, account_id, org_id)
     if not is_manager(roles):
@@ -362,15 +306,6 @@ async def ensure_org_owner(con, current: dict, org_id: int) -> None:
 
 
 async def ensure_event_editor(con, current: dict, event_id: int, permission: str, delete: bool = False) -> None:
-    """
-    Someone may modify event content when they are:
-      - a SUPERADMIN (global role), or
-      - an Admin / Owner of the event's organization (never event-scoped), or
-      - a Page Designer assigned to this event (`eventstaff`).
-    A global permission is never a cross-org backdoor: a non-editor account
-    may only use it to maintain content of organizations it actually belongs
-    to. Deletion always requires Admin / Owner.
-    """
     account_id = current["account_id"]
     org_id = event_org_id(con, event_id)
     if org_id is None:
@@ -424,11 +359,6 @@ async def ensure_event_editor(con, current: dict, event_id: int, permission: str
 
 
 async def ensure_org_editor(con, current: dict, org_id: int, permission: str) -> None:
-    """
-    Same as ensure_event_editor but for actions that target an organization
-    before an event exists (e.g. creating an event). Page Designer can not
-    create events -- only Managers can, plus anyone with the global permission.
-    """
     account_id = current["account_id"]
     roles = effective_role_for(con, account_id, org_id)
     with con.cursor() as cur:

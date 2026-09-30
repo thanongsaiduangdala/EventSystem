@@ -3,6 +3,7 @@ import 'package:ticket_com/HomePage/event_analytics_page.dart';
 import 'package:ticket_com/HomePage/event_form_page.dart';
 import 'package:ticket_com/HomePage/team_checkin_page.dart';
 import 'package:ticket_com/HomePage/team_images.dart';
+import 'package:ticket_com/HomePage/team_scan_access_page.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/organizer_member_api_service.dart';
@@ -28,8 +29,11 @@ class TeamEventPage extends StatelessWidget {
   bool get _canDesign => _isManager || membership.isDesigner;
   bool get _canSeeDetails =>
       _isManager || (membership.isStaff && event.assigned);
-  bool get _canWorkDoor =>
-      _onDuty && (membership.isVolunteer || membership.isStaff || _isManager);
+  bool get _isDoorRole =>
+      _onDuty &&
+      (membership.isVolunteer || membership.isStaff || _isManager);
+  bool get _canWorkDoor => _isDoorRole && (_isManager || event.scanAllowed);
+  bool get _scanLocked => _isDoorRole && !_isManager && !event.scanAllowed;
   bool get _canBrowseAttendees => membership.isStaff || _isManager;
 
   @override
@@ -73,12 +77,14 @@ class TeamEventPage extends StatelessWidget {
           const SizedBox(height: 10),
           if (actions.isEmpty)
             const _InfoCard(
-              text:
-                  'You are not assigned to this event, so there is nothing '
+              text: 'You are not assigned to this event, so there is nothing '
                   'to do here yet. Ask an Admin to assign you.',
             )
           else
-            for (final a in actions) ...[a, const SizedBox(height: 10)],
+            for (final a in actions) ...[
+              a,
+              const SizedBox(height: 10),
+            ],
         ],
       ),
     );
@@ -202,7 +208,8 @@ class TeamEventPage extends StatelessWidget {
             children: [
               _roleChip(membership.teamRoleName, kAccent),
               if (duty.isNotEmpty) _roleChip(duty, const Color(0xFF00897B)),
-              if (!_onDuty) _roleChip('Not assigned', const Color(0xFF8A6D00)),
+              if (!_onDuty)
+                _roleChip('Not assigned', const Color(0xFF8A6D00)),
             ],
           ),
           if (caps.isNotEmpty) ...[
@@ -217,10 +224,8 @@ class TeamEventPage extends StatelessWidget {
                     Expanded(
                       child: Text(
                         c.text,
-                        style: const TextStyle(
-                          color: _kTextDark,
-                          fontSize: 13.5,
-                        ),
+                        style:
+                            const TextStyle(color: _kTextDark, fontSize: 13.5),
                       ),
                     ),
                   ],
@@ -284,7 +289,7 @@ class TeamEventPage extends StatelessWidget {
   Widget _permissionNote() {
     final note = membership.isDesigner
         ? 'Page Designer access is scoped to this organization’s events only. '
-              'You cannot see attendee data or check people in.'
+            'You cannot see attendee data or check people in.'
         : 'Admin / Owner access covers every event of this organization.';
     return Container(
       padding: const EdgeInsets.all(12),
@@ -310,6 +315,20 @@ class TeamEventPage extends StatelessWidget {
 
   List<Widget> _actions(BuildContext context) {
     return [
+      if (_scanLocked)
+        _ActionTile(
+          icon: Icons.lock_outline,
+          title: 'Check-in is off',
+          subtitle: 'An Org Admin has not turned on scanning for you yet',
+          onTap: null,
+        ),
+      if (_isManager)
+        _ActionTile(
+          icon: Icons.tune,
+          title: 'Scan access',
+          subtitle: 'Choose who can scan tickets at this event',
+          onTap: () => _openScanAccess(context),
+        ),
       if (_canWorkDoor)
         _ActionTile(
           icon: Icons.qr_code_scanner,
@@ -341,6 +360,18 @@ class TeamEventPage extends StatelessWidget {
           onTap: () => _openEditor(context),
         ),
     ];
+  }
+
+  Future<void> _openScanAccess(BuildContext context) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TeamScanAccessPage(
+          eventId: event.eventId,
+          eventName: event.eventName,
+        ),
+      ),
+    );
   }
 
   Future<void> _openCheckIn(BuildContext context) async {
@@ -416,7 +447,7 @@ class _ActionTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -460,7 +491,8 @@ class _ActionTile extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: Colors.black26),
+              if (onTap != null)
+                const Icon(Icons.chevron_right, color: Colors.black26),
             ],
           ),
         ),

@@ -11,6 +11,8 @@ from models.schema import (
     TransferOwnershipRequest,
     AssignMemberEventRequest,
     UnassignMemberEventRequest,
+    SetEventScanRequest,
+    SetMemberScanRequest,
 )
 from auth.dependencies import require_permission, get_current_account
 from auth.team_access import (
@@ -20,10 +22,10 @@ from auth.team_access import (
     sync_owner_memberships,
     ensure_org_manager,
     ensure_org_owner,
+    event_org_id,
 )
 from controllers.Event_Controllers.Notification_controllers import notify_accounts
 
-# MemberStatusID constants (mirror memberstatusinfo rows).
 MEMBER_STATUS_PENDING = 1
 MEMBER_STATUS_ACTIVE = 2
 MEMBER_STATUS_DECLINED = 3
@@ -31,11 +33,6 @@ MEMBER_STATUS_REMOVED = 4
 
 
 def _current_orgs(cur, account_id) -> list:
-    """
-    EventOrganizerIDs created by an account. Team members are scoped to the
-    organizers the dashboard account actually owns, so one organizer cannot
-    see another's member list through this endpoint.
-    """
     cur.execute(
         "SELECT EventOrganizerID FROM eventorganizerinfo WHERE CreatedByAccountID = %s",
         (account_id,),
@@ -72,9 +69,6 @@ async def create_organizermember(req_data: AddOrganizerMemberRequest, current=De
     try:
         con = getConnect()
         with con.cursor() as cur:
-            # An account may hold memberships in several organizations, but
-            # only one per organization at a time. Removed (MemberStatusID = 4)
-            # rows do not count, so a former member can be re-added.
             cur.execute(
                 "SELECT MemberID FROM organizermember "
                 "WHERE AccountID = %s AND EventOrganizerID = %s AND MemberStatusID != %s",
@@ -123,10 +117,6 @@ async def get_all_OrganizerMembers(current=Depends(require_permission("view_even
 
 
 async def get_organizermember_by_id(member_id: int, current=Depends(require_permission("view_events"))):
-    """
-    Single member, enriched with the linked account, role, membership status
-    and the organization being joined -- powers the invite/join page.
-    """
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -159,11 +149,6 @@ async def get_organizermember_by_id(member_id: int, current=Depends(require_perm
 
 
 async def get_organizermembers_with_accounts(current=Depends(require_permission("manage_event_members"))):
-    """
-    Every membership row enriched with account name/email, role name, status
-    name and organization name, scoped to the organizers the caller owns.
-    Used by the organizer dashboard to render the team with invite states.
-    """
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -196,11 +181,6 @@ async def get_organizermembers_with_accounts(current=Depends(require_permission(
 
 
 async def invite_organizermember(req_data: InviteOrganizerMemberRequest, current=Depends(get_current_account)):
-    """
-    Invites an existing account (by email) to an organization. Creates a
-    Pending membership row and notifies the invitee, whose notification
-    deep-links to the join page. Admin / Owner of the organization only.
-    """
     try:
         con = getConnect()
         await ensure_org_manager(con, current, req_data.EventOrganizerID)
@@ -281,7 +261,6 @@ async def invite_organizermember(req_data: InviteOrganizerMemberRequest, current
 
 
 async def accept_organizermember(member_id: int, current=Depends(get_current_account)):
-    """Accept a pending invitation. Only the invited account may accept."""
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -322,7 +301,6 @@ async def accept_organizermember(member_id: int, current=Depends(get_current_acc
 
 
 async def decline_organizermember(member_id: int, current=Depends(get_current_account)):
-    """Decline a pending invitation. Only the invited account may decline."""
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -366,9 +344,6 @@ async def update_organizermember(req_data: UpdateOrganizerMemberRequest, current
     try:
         con = getConnect()
         with con.cursor() as cur:
-            # Confirm the row exists via SELECT rather than relying on
-            # UPDATE rowcount, which is 0 for "matched but unchanged" rows
-            # too and would otherwise falsely report "not found".
             cur.execute(
                 "SELECT MemberID FROM organizermember WHERE MemberID = %s",
                 (req_data.MemberID,),
@@ -376,7 +351,6 @@ async def update_organizermember(req_data: UpdateOrganizerMemberRequest, current
             if cur.fetchone() is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organizer member not found")
 
-            # One organization per account, excluding this record itself.
             cur.execute(
                 "SELECT MemberID FROM organizermember WHERE AccountID = %s AND MemberID != %s AND MemberStatusID != %s",
                 (req_data.AccountID, req_data.MemberID, MEMBER_STATUS_REMOVED),
@@ -428,12 +402,6 @@ async def update_organizermember(req_data: UpdateOrganizerMemberRequest, current
 
 
 async def delete_organizermember(member_id: int, current=Depends(get_current_account)):
-    """
-    Soft-delete: marks the membership row Removed instead of deleting it, so
-    pending invitations can be revoked and active members can be kicked while
-    preserving the row for audit and event staff assignments. Admin / Owner of
-    the member's organization only; the organization creator is never removable.
-    """
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -473,21 +441,7 @@ async def delete_organizermember(member_id: int, current=Depends(get_current_acc
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-# ---------------------------------------------------------------------------
-# Team member dashboard endpoints.
-#
-# These power the role-based "Team Member Dashboard" in the mobile app. Access
-# is checked against the caller's active membership row via auth.team_access
-# rather than the global RBAC permissions, so a CUSTOMER account invited as a
-# volunteer/designer/admin can use the dashboard without any global role.
-# ---------------------------------------------------------------------------
-
 async def get_my_memberships(current=Depends(get_current_account)):
-    """
-    The caller's active organization memberships: the org they belong to, the
-    team role they hold, and the org owner's account id (to avoid an extra
-    round-trip when rendering the dashboard header). One row per organization.
-    """
     try:
         con = getConnect()
         sync_owner_memberships(con, current["account_id"])
@@ -498,12 +452,6 @@ async def get_my_memberships(current=Depends(get_current_account)):
 
 
 async def get_my_invites(current=Depends(get_current_account)):
-    """
-    Pending invitations addressed to the caller: organizations that invited
-    them to join their team and are waiting for an answer. Only approved
-    organizations are listed. Same row shape as the single-member detail so the
-    join page can open any of them by MemberID.
-    """
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -533,14 +481,6 @@ async def get_my_invites(current=Depends(get_current_account)):
 
 
 async def get_my_team_member_events(org_id: Optional[int] = None, current=Depends(get_current_account)):
-    """
-    Events of one organization the caller may work on. Pass `org_id` when the
-    caller belongs to several organizations (the team screens do); without it
-    the caller's first membership is used.
-
-    Managers (Admin / Owner) see every event of the org. Everyone else sees
-    ONLY the events they are assigned to (no visibility into other events).
-    """
     try:
         con = getConnect()
         sync_owner_memberships(con, current["account_id"])
@@ -559,7 +499,7 @@ async def get_my_team_member_events(org_id: Optional[int] = None, current=Depend
                 SELECT e.EventID, e.EventName, e.EventStartingYMDT, e.EventEndingYMDT,
                        e.EventAddress, e.Latitude, e.Longitude, e.EventDescription,
                        e.EventOrganizerID, e.OnePerPerson, e.EventStatusID, e.EventVisible,
-                       es.MemberID AS AssignedMemberID,
+                       es.MemberID AS AssignedMemberID, es.CanScan, e.ScanEnabled,
                        ev.RoleName AS EventRoleName
                 FROM eventinfo e
                 LEFT JOIN eventstaff es ON es.EventID = e.EventID AND es.MemberID = %s
@@ -590,6 +530,7 @@ async def get_my_team_member_events(org_id: Optional[int] = None, current=Depend
                 "EventVisible": row["EventVisible"],
                 "EventRoleName": row["EventRoleName"],
                 "assigned": bool(assigned),
+                "ScanAllowed": bool(is_manager or (assigned and (row["ScanEnabled"] or row["CanScan"]))),
                 "TeamRoleID": role_id,
             })
         return {"org": {
@@ -610,11 +551,6 @@ async def get_my_team_member_events(org_id: Optional[int] = None, current=Depend
 
 
 async def get_org_team(org_id: int, current=Depends(get_current_account)):
-    """
-    Full team roster for an organization: every membership row (including
-    pending invites) enriched with the account, role, status, and the events
-    each active member is assigned to. Admin / Owner only.
-    """
     try:
         con = getConnect()
         await ensure_org_manager(con, current, org_id)
@@ -683,10 +619,6 @@ async def get_org_team(org_id: int, current=Depends(get_current_account)):
 
 
 async def change_member_role(req_data: ChangeMemberRoleRequest, current=Depends(get_current_account)):
-    """
-    Changes a member's team role. The Org Owner role cannot be granted here
-    (use transfer ownership); the org creator cannot be demoted.
-    """
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -732,12 +664,6 @@ async def change_member_role(req_data: ChangeMemberRoleRequest, current=Depends(
 
 
 async def transfer_org_ownership(req_data: TransferOwnershipRequest, current=Depends(get_current_account)):
-    """
-    Hands the organization to an active member: they become Org Owner, the
-    current creator/admin keeps Admin (if they have a membership row), and
-    eventorganizerinfo.CreatedByAccountID is updated so future access checks
-    recognise the new owner.
-    """
     try:
         con = getConnect()
         await ensure_org_owner(con, current, req_data.EventOrganizerID)
@@ -798,18 +724,12 @@ async def transfer_org_ownership(req_data: TransferOwnershipRequest, current=Dep
 
 
 async def assign_member_to_event(req_data: AssignMemberEventRequest, current=Depends(get_current_account)):
-    """
-    Assigns an active member to an event so they can check in attendees there.
-    Admin / Owner only.
-    """
     try:
         con = getConnect()
         with con.cursor() as cur:
             target = _member_row(cur, req_data.MemberID)
             if not target:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organizer member not found")
-            # Pending invitees can be pre-assigned so their access is ready the
-            # moment they accept; access itself still requires an Active row.
             if target["MemberStatusID"] not in (MEMBER_STATUS_PENDING, MEMBER_STATUS_ACTIVE):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only active or pending members can be assigned")
 
@@ -847,10 +767,6 @@ async def assign_member_to_event(req_data: AssignMemberEventRequest, current=Dep
 
 
 async def unassign_member_from_event(req_data: UnassignMemberEventRequest, current=Depends(get_current_account)):
-    """
-    Removes a member from an event. Admin / Owner only. Missing assignment is
-    not an error so a UI that toggles "assigned" off can call this safely.
-    """
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -867,6 +783,106 @@ async def unassign_member_from_event(req_data: UnassignMemberEventRequest, curre
             con.commit()
 
         return {"msg": "Member unassigned from event", "MemberID": req_data.MemberID, "EventID": req_data.EventID}
+
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def get_event_scan_access(event_id: int, current=Depends(get_current_account)):
+    try:
+        con = getConnect()
+        org_id = event_org_id(con, event_id)
+        if org_id is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+        await ensure_org_manager(con, current, org_id)
+
+        with con.cursor() as cur:
+            cur.execute("SELECT ScanEnabled FROM eventinfo WHERE EventID = %s", (event_id,))
+            event_row = cur.fetchone()
+            cur.execute(
+                """
+                SELECT om.MemberID, om.TeamRoleID, tr.TeamRoleName, es.CanScan,
+                       a.FirstName, a.LastName
+                FROM eventstaff es
+                JOIN organizermember om ON om.MemberID = es.MemberID
+                LEFT JOIN accountinfo a ON a.AccountID = om.AccountID
+                LEFT JOIN teamrole tr ON tr.TeamRoleID = om.TeamRoleID
+                WHERE es.EventID = %s AND om.MemberStatusID = %s AND om.TeamRoleID IN (1, 2)
+                ORDER BY om.TeamRoleID, a.FirstName
+                """,
+                (event_id, MEMBER_STATUS_ACTIVE),
+            )
+            rows = cur.fetchall()
+
+        return {
+            "EventID": event_id,
+            "ScanEnabled": bool(event_row["ScanEnabled"]),
+            "Members": [
+                {
+                    "MemberID": r["MemberID"],
+                    "FirstName": r["FirstName"],
+                    "LastName": r["LastName"],
+                    "TeamRoleID": r["TeamRoleID"],
+                    "TeamRoleName": r["TeamRoleName"],
+                    "CanScan": bool(r["CanScan"]),
+                }
+                for r in rows
+            ],
+        }
+
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def set_event_scan_enabled(req_data: SetEventScanRequest, current=Depends(get_current_account)):
+    try:
+        con = getConnect()
+        org_id = event_org_id(con, req_data.EventID)
+        if org_id is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+        await ensure_org_manager(con, current, org_id)
+
+        with con.cursor() as cur:
+            cur.execute(
+                "UPDATE eventinfo SET ScanEnabled = %s WHERE EventID = %s",
+                (1 if req_data.Enabled else 0, req_data.EventID),
+            )
+            con.commit()
+
+        return {"msg": "Scanning updated", "EventID": req_data.EventID, "ScanEnabled": req_data.Enabled}
+
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def set_member_scan_access(req_data: SetMemberScanRequest, current=Depends(get_current_account)):
+    try:
+        con = getConnect()
+        org_id = event_org_id(con, req_data.EventID)
+        if org_id is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+        await ensure_org_manager(con, current, org_id)
+
+        with con.cursor() as cur:
+            cur.execute(
+                "SELECT AssigmentID FROM eventstaff WHERE EventID = %s AND MemberID = %s",
+                (req_data.EventID, req_data.MemberID),
+            )
+            if cur.fetchone() is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This member is not assigned to the event")
+            cur.execute(
+                "UPDATE eventstaff SET CanScan = %s WHERE EventID = %s AND MemberID = %s",
+                (1 if req_data.CanScan else 0, req_data.EventID, req_data.MemberID),
+            )
+            con.commit()
+
+        return {"msg": "Member scan access updated", "MemberID": req_data.MemberID, "CanScan": req_data.CanScan}
 
     except HTTPException:
         raise

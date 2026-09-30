@@ -195,6 +195,7 @@ class MemberEvent {
   final int eventStatusId;
   final bool eventVisible;
   final bool assigned;
+  final bool scanAllowed;
   final String? eventRoleName;
   final int teamRoleId;
   final double latitude;
@@ -212,6 +213,7 @@ class MemberEvent {
     required this.eventStatusId,
     required this.eventVisible,
     required this.assigned,
+    this.scanAllowed = false,
     required this.teamRoleId,
     required this.latitude,
     required this.longitude,
@@ -239,6 +241,9 @@ class MemberEvent {
           json['EventVisible'] == 1 ||
           json['EventVisible'] == true,
       assigned: isManager || assigned,
+      scanAllowed: isManager ||
+          json['ScanAllowed'] == true ||
+          json['ScanAllowed'] == 1,
       eventRoleName: json['EventRoleName']?.toString(),
       teamRoleId: teamRoleId,
       latitude: double.tryParse(json['Latitude'].toString()) ?? 0,
@@ -247,6 +252,51 @@ class MemberEvent {
   }
 
   bool get canCheckIn => assigned;
+}
+
+class ScanAccessMember {
+  final int memberId;
+  final String firstName;
+  final String lastName;
+  final String teamRoleName;
+  bool canScan;
+
+  ScanAccessMember({
+    required this.memberId,
+    required this.firstName,
+    required this.lastName,
+    required this.teamRoleName,
+    required this.canScan,
+  });
+
+  factory ScanAccessMember.fromJson(Map<String, dynamic> json) {
+    return ScanAccessMember(
+      memberId: json['MemberID'] as int,
+      firstName: (json['FirstName'] ?? '').toString(),
+      lastName: (json['LastName'] ?? '').toString(),
+      teamRoleName: (json['TeamRoleName'] ?? '').toString(),
+      canScan: json['CanScan'] == true || json['CanScan'] == 1,
+    );
+  }
+
+  String get fullName => '$firstName $lastName'.trim();
+}
+
+class EventScanAccess {
+  bool scanEnabled;
+  final List<ScanAccessMember> members;
+
+  EventScanAccess({required this.scanEnabled, required this.members});
+
+  factory EventScanAccess.fromJson(Map<String, dynamic> json) {
+    final list = json['Members'] as List<dynamic>? ?? [];
+    return EventScanAccess(
+      scanEnabled: json['ScanEnabled'] == true || json['ScanEnabled'] == 1,
+      members: list
+          .map((e) => ScanAccessMember.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 }
 
 class MyEventsResult {
@@ -342,6 +392,9 @@ class EventAttendee {
   final int? checkedInByMemberId;
   final String? checkedInAt;
 
+  /// Name of the staff member who scanned this ticket in (null if not scanned).
+  final String? checkedInByName;
+
   EventAttendee({
     required this.attendeeId,
     required this.ticketTypeId,
@@ -359,6 +412,7 @@ class EventAttendee {
     this.checkInId,
     this.checkedInByMemberId,
     this.checkedInAt,
+    this.checkedInByName,
   });
 
   factory EventAttendee.fromJson(Map<String, dynamic> json) {
@@ -379,6 +433,7 @@ class EventAttendee {
       checkInId: json['CheckInID'] as int?,
       checkedInByMemberId: json['CheckedInByMemberID'] as int?,
       checkedInAt: json['CheckedInAtYMDT']?.toString(),
+      checkedInByName: json['CheckedInByName']?.toString().trim(),
     );
   }
 
@@ -732,6 +787,54 @@ class OrganizerMemberApiService {
     );
     if (response.statusCode != 200) {
       throw _handleError(response, 'Failed to unassign member from the event');
+    }
+  }
+
+  static Future<EventScanAccess> getEventScanAccess(int eventId) async {
+    final url =
+        Uri.parse('$baseUrl/eventorganizer/member/event-scan/$eventId');
+    final response = await http.get(url, headers: _authHeaders());
+    if (response.statusCode == 200) {
+      return EventScanAccess.fromJson(
+          jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw _handleError(response, 'Failed to load scan access');
+  }
+
+  static Future<void> setEventScanEnabled({
+    required int eventId,
+    required bool enabled,
+  }) async {
+    final url =
+        Uri.parse('$baseUrl/eventorganizer/member/event-scan/enabled');
+    final response = await http.post(
+      url,
+      headers: _authHeaders(),
+      body: jsonEncode({'EventID': eventId, 'Enabled': enabled}),
+    );
+    if (response.statusCode != 200) {
+      throw _handleError(response, 'Failed to update scanning');
+    }
+  }
+
+  static Future<void> setMemberScanAccess({
+    required int eventId,
+    required int memberId,
+    required bool canScan,
+  }) async {
+    final url =
+        Uri.parse('$baseUrl/eventorganizer/member/event-scan/member');
+    final response = await http.post(
+      url,
+      headers: _authHeaders(),
+      body: jsonEncode({
+        'EventID': eventId,
+        'MemberID': memberId,
+        'CanScan': canScan,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw _handleError(response, 'Failed to update scan access');
     }
   }
 

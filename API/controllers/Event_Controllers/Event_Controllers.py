@@ -60,6 +60,7 @@ async def create_event(req_data: AddEventInfoRequest, current=Depends(get_curren
             "event",
             "New event awaiting approval",
             f"'{req_data.EventName}' has been submitted for approval.",
+            link=f"event:{event_id}",
         )
 
         return {"msg": "Event created successfully", "event_id": event_id}
@@ -196,6 +197,7 @@ async def update_event(req_data: UpdateEventInfoRequest, current=Depends(get_cur
                 "Edited event resubmitted for approval",
                 f"'{req_data.EventName}' was previously denied. It has been "
                 "edited and is now pending approval again.",
+                link=f"event:{req_data.EventID}",
             )
 
         return {
@@ -303,6 +305,7 @@ async def update_event_status(req_data: UpdateEventStatusRequest, current=Depend
                     "event",
                     title,
                     body,
+                    link=f"event:{req_data.EventID}",
                 )
 
         return {"msg": "Event status updated successfully", "event_id": req_data.EventID, "EventStatusID": req_data.EventStatusID}
