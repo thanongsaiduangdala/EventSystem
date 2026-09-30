@@ -92,8 +92,9 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
       _error = null;
     });
     try {
-      final organizers =
-          await EventApiService.getAllOrganizers(includeUnapproved: true);
+      final organizers = await EventApiService.getAllOrganizers(
+        includeUnapproved: true,
+      );
       final mine = organizers
           .where((o) => o.createdByAccountId == _accountId)
           .toList();
@@ -131,14 +132,12 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
               coverByEvent[image.eventId] = image;
             }
           }
-        } catch (_) {
-        }
+        } catch (_) {}
         try {
           final tickets = await TicketTypeApiService.getAllTicketTypes();
           eventsWithTickets.addAll(tickets.map((t) => t.eventId));
           ticketInfoKnown = true;
-        } catch (_) {
-        }
+        } catch (_) {}
       }
 
       if (!mounted) return;
@@ -163,7 +162,6 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     }
   }
 
-
   void _openCreateEvent() {
     final organizerId = _primaryOrganizer?.id;
     Navigator.push<bool>(
@@ -186,9 +184,11 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
       MaterialPageRoute(builder: (context) => EventFormPage(event: event)),
     ).then((saved) {
       if (saved == true) {
-        _snack(wasDenied
-            ? 'Event updated and resubmitted for approval.'
-            : 'Event updated.');
+        _snack(
+          wasDenied
+              ? 'Event updated and resubmitted for approval.'
+              : 'Event updated.',
+        );
         _load();
       }
     });
@@ -198,8 +198,7 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     List<TicketTypeModel> tickets = const [];
     try {
       tickets = await TicketTypeApiService.getTicketTypesByEvent(event.id);
-    } catch (_) {
-    }
+    } catch (_) {}
     if (!mounted) return;
     await Navigator.push<bool>(
       context,
@@ -264,21 +263,21 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-
   @override
   Widget build(BuildContext context) {
     final organizer = _primaryOrganizer;
     final hasEvents = organizer != null;
     final ownIds = _myOrganizers.map((o) => o.id).toSet();
-    final joined =
-        _memberships.where((m) => !ownIds.contains(m.eventOrganizerId)).toList();
+    final joined = _memberships
+        .where((m) => !ownIds.contains(m.eventOrganizerId))
+        .toList();
     final session = AuthService.currentSession;
-    final isOrganizerAccount = hasEvents ||
+    final isOrganizerAccount =
+        hasEvents ||
         (session?.isOrganizer ?? false) ||
         (session?.isSuperAdmin ?? false);
     final ready = !_loading && _error == null;
-    final tab = _tabIndex ??
-        (hasEvents || _pendingOrganizer != null ? 0 : 2);
+    final tab = _tabIndex ?? (hasEvents || _pendingOrganizer != null ? 0 : 2);
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
@@ -291,20 +290,18 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         ),
       ),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: kAccent),
-            )
+          ? const Center(child: CircularProgressIndicator(color: kAccent))
           : _error != null
-              ? _errorBox()
-              : AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: _tabBody(
-                    tab: tab,
-                    organizer: organizer,
-                    ownIds: ownIds,
-                    joined: joined,
-                  ),
-                ),
+          ? _errorBox()
+          : AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: _tabBody(
+                tab: tab,
+                organizer: organizer,
+                ownIds: ownIds,
+                joined: joined,
+              ),
+            ),
       bottomNavigationBar: ready
           ? NavigationBar(
               selectedIndex: tab,
@@ -397,7 +394,11 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
                   color: Colors.white.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.storefront, color: Colors.white, size: 28),
+                child: const Icon(
+                  Icons.storefront,
+                  color: Colors.white,
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -513,16 +514,14 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
               _filterChip(
                 label: 'Approved',
                 selected: _statusFilter == EventStatus.approved,
-                onTap: () => setState(
-                  () => _statusFilter = EventStatus.approved,
-                ),
+                onTap: () =>
+                    setState(() => _statusFilter = EventStatus.approved),
               ),
               _filterChip(
                 label: 'Pending',
                 selected: _statusFilter == EventStatus.pending,
-                onTap: () => setState(
-                  () => _statusFilter = EventStatus.pending,
-                ),
+                onTap: () =>
+                    setState(() => _statusFilter = EventStatus.pending),
               ),
               _filterChip(
                 label: 'Denied',
@@ -574,12 +573,8 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         backgroundColor: Colors.white,
         checkmarkColor: Colors.white,
         showCheckmark: false,
-        side: BorderSide(
-          color: selected ? kAccent : const Color(0xFFD5D2EC),
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        side: BorderSide(color: selected ? kAccent : const Color(0xFFD5D2EC)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         onSelected: (_) => onTap(),
       ),
     );
@@ -612,21 +607,25 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
           _emptyCard(
             icon: Icons.event_available_outlined,
             title: 'No events yet',
-            message: 'Tap "Create Event" to add your first event, with its photos, '
+            message:
+                'Tap "Create Event" to add your first event, with its photos, '
                 'categories, sponsors, ticket types and questions.',
           )
         else if (visible.isEmpty)
           _emptyCard(
             icon: Icons.search_off,
             title: 'No matching events',
-            message: 'No events match your search and filters. Clear them to see '
+            message:
+                'No events match your search and filters. Clear them to see '
                 'everything.',
           )
         else
-          ...visible.map((e) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _eventCard(e),
-              )),
+          ...visible.map(
+            (e) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _eventCard(e),
+            ),
+          ),
       ],
     );
   }
@@ -705,7 +704,11 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
                 ),
                 IconButton(
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.delete_outline, color: _kRed, size: 20),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: _kRed,
+                    size: 20,
+                  ),
                   tooltip: 'Remove',
                   onPressed: () => _confirmDeleteEvent(event),
                 ),
@@ -797,7 +800,10 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
               const SizedBox(height: 4),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF3E0),
                   borderRadius: BorderRadius.circular(10),
@@ -841,11 +847,7 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          color: fg,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-        ),
+        style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w800),
       ),
     );
   }
@@ -885,7 +887,6 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     );
   }
 
-
   Widget _tabBody({
     required int tab,
     required EventOrganizer? organizer,
@@ -900,7 +901,8 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
                 key: const ValueKey('no-org-events'),
                 icon: Icons.event_outlined,
                 title: 'Create your own events',
-                message: 'Want to create your own events and sell tickets? '
+                message:
+                    'Want to create your own events and sell tickets? '
                     'Become your own Organizer.',
               );
       case 1:
@@ -914,7 +916,8 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
                 key: const ValueKey('no-org-team'),
                 icon: Icons.groups_2_outlined,
                 title: 'Build your own team',
-                message: 'Want your own organization and team? Become your '
+                message:
+                    'Want your own organization and team? Become your '
                     'own Organizer, then invite people and assign roles.',
               );
       default:
@@ -984,7 +987,11 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         Text(
           message,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: _kTextGrey, fontSize: 13.5, height: 1.5),
+          style: const TextStyle(
+            color: _kTextGrey,
+            fontSize: 13.5,
+            height: 1.5,
+          ),
         ),
         const SizedBox(height: 22),
         FilledButton.icon(
@@ -1036,7 +1043,9 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         ),
         const SizedBox(height: 20),
         Text(
-          denied ? 'Organization not approved' : 'Organization pending approval',
+          denied
+              ? 'Organization not approved'
+              : 'Organization pending approval',
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: _kTextDark,
@@ -1048,12 +1057,16 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         Text(
           denied
               ? '“${organizer.name}” was not approved. Please contact '
-                  'support if you think this is a mistake.'
+                    'support if you think this is a mistake.'
               : '“${organizer.name}” has been submitted. An admin or employee '
-                  'needs to approve your organization before you can create '
-                  'events or build a team.',
+                    'needs to approve your organization before you can create '
+                    'events or build a team.',
           textAlign: TextAlign.center,
-          style: const TextStyle(color: _kTextGrey, fontSize: 13.5, height: 1.5),
+          style: const TextStyle(
+            color: _kTextGrey,
+            fontSize: 13.5,
+            height: 1.5,
+          ),
         ),
         const SizedBox(height: 20),
         OutlinedButton.icon(
@@ -1099,7 +1112,8 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
           if (joined.isEmpty)
             _infoCard(
               icon: Icons.groups_2_outlined,
-              text: 'You have not joined another organization yet. When an '
+              text:
+                  'You have not joined another organization yet. When an '
                   'organization invites you, it shows up under Pending Org.',
             ),
           for (final m in joined) ...[
@@ -1125,7 +1139,11 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
           Text(
             text,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: _kTextGrey, fontSize: 13, height: 1.5),
+            style: const TextStyle(
+              color: _kTextGrey,
+              fontSize: 13,
+              height: 1.5,
+            ),
           ),
         ],
       ),
@@ -1179,8 +1197,9 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   }
 
   Widget _inviteCard(OrganizerMemberDetail invite) {
-    final name =
-        invite.organizerName.isEmpty ? 'Organization' : invite.organizerName;
+    final name = invite.organizerName.isEmpty
+        ? 'Organization'
+        : invite.organizerName;
     final desc = invite.organizerDescription ?? '';
     return Material(
       color: Colors.white,
@@ -1372,7 +1391,8 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     return match.isEmpty ? 'Organizer #$organizerId' : match.first.name;
   }
 
-  String _fmt(DateTime dt) => '${dt.year}-'
+  String _fmt(DateTime dt) =>
+      '${dt.year}-'
       '${dt.month.toString().padLeft(2, '0')}-'
       '${dt.day.toString().padLeft(2, '0')}  '
       '${dt.hour.toString().padLeft(2, '0')}:'

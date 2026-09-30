@@ -179,7 +179,7 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
     }
 
     if (!widget.canBrowseAttendees) {
-      await _resolveAndCheckIn(attendeeId);
+      await _resolveScanned(attendeeId);
       return;
     }
 
@@ -201,10 +201,10 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
       _openDetail(attendee);
       return;
     }
-    await _checkIn(attendee);
+    _openDetail(attendee);
   }
 
-  Future<void> _resolveAndCheckIn(int attendeeId) async {
+  Future<void> _resolveScanned(int attendeeId) async {
     if (_working) return;
     setState(() => _working = true);
     try {
@@ -228,9 +228,7 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
       }
       if (!resolved.isValid) {
         _snack('${resolved.fullName}\'s ticket has been revoked.');
-        return;
       }
-      await _checkInScanned(resolved);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -322,7 +320,10 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => _AttendeeDetailSheet(attendee: attendee),
+      builder: (context) => _AttendeeDetailSheet(
+        attendee: attendee,
+        onCheckIn: () => _checkIn(attendee),
+      ),
     );
   }
 
@@ -476,6 +477,11 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
               ],
               if (!scanned.checkedIn && scanned.isValid) ...[
                 const SizedBox(height: 12),
+                const Text(
+                  'Compare the guest\'s ID with the name above, then confirm.',
+                  style: TextStyle(color: _kTextGrey, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
                 SizedBox(
                   height: 42,
                   width: double.infinity,
@@ -489,7 +495,7 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    child: const Text('Check in'),
+                    child: const Text('Confirm check-in'),
                   ),
                 ),
               ],
@@ -644,7 +650,7 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  child: const Text('Check in'),
+                  child: const Text('Look up'),
                 ),
               ),
             ],
@@ -866,9 +872,57 @@ class _TeamCheckInPageState extends State<TeamCheckInPage> {
 }
 
 class _AttendeeDetailSheet extends StatelessWidget {
-  const _AttendeeDetailSheet({required this.attendee});
+  const _AttendeeDetailSheet({required this.attendee, this.onCheckIn});
 
   final EventAttendee attendee;
+  final VoidCallback? onCheckIn;
+
+  Widget _confirmArea(BuildContext context) {
+    if (!attendee.isValid) {
+      return const Text(
+        'This ticket has been revoked.',
+        style: TextStyle(color: _kRed, fontWeight: FontWeight.w700),
+      );
+    }
+    if (attendee.checkedIn) {
+      final at = attendee.checkedInAt;
+      return Text(
+        at == null ? 'Already checked in.' : 'Already checked in at $at.',
+        style: const TextStyle(color: _kGreen, fontWeight: FontWeight.w700),
+      );
+    }
+    final callback = onCheckIn;
+    if (callback == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Compare the guest\'s ID with the details above, then confirm.',
+          style: TextStyle(color: _kTextGrey, fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 44,
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              callback();
+            },
+            icon: const Icon(Icons.event_available, size: 20),
+            label: const Text('Confirm check-in'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -921,6 +975,8 @@ class _AttendeeDetailSheet extends StatelessWidget {
                   _row('Phone', attendee.phoneNum),
                   if (attendee.nationalId != null)
                     _row('National ID', attendee.nationalId!),
+                  const SizedBox(height: 10),
+                  _confirmArea(context),
                 ],
               ),
             ),
