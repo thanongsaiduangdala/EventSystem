@@ -58,8 +58,8 @@ async def create_event(req_data: AddEventQuestionInfo, current=Depends(get_curre
                 req_data.SortOrder,
                 _serialize_options(req_data.Options),
             ))
-            con.commit()
             eventquestion_id = cur.lastrowid
+            con.commit()
 
         return {"msg": "Event question created successfully", "EventQuestionID": eventquestion_id}
 
@@ -205,8 +205,8 @@ async def create_eventquestiontype(req_data: AddEventQuestionType, current=Depen
         with con.cursor() as cur:
             sql = "INSERT INTO eventquestiontype (EventQuestionType) VALUES (%s)"
             cur.execute(sql, (req_data.EventQuestionType,))
-            con.commit()
             eventquestiontype_id = cur.lastrowid
+            con.commit()
 
         return {"msg": "Event question type created successfully", "EventQuestionTypeID": eventquestiontype_id}
 

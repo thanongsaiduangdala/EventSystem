@@ -60,8 +60,8 @@ async def signup(req_data: SignUpRequest):
                 VALUES (%s, %s, %s, %s, %s, %s)
             """
             cur.execute(sql, (req_data.firstname, req_data.lastname, req_data.phonenum, req_data.email, 1, hash_pwd))
-            con.commit()
             account_id = cur.lastrowid
+            con.commit()
 
         del signup_otp_store[req_data.email]
 
@@ -81,7 +81,7 @@ async def login(req_data: LoginRequest):
                 SELECT AccountID, FirstName, LastName,
                        PhoneNum, ProfileImagePath, Email, StatusID, PasswordEnc
                 FROM accountinfo
-                WHERE Email = %s
+                WHERE LOWER(Email) = LOWER(%s)
             """
             cur.execute(sql, (req_data.email,))
             user = cur.fetchone()
@@ -129,7 +129,7 @@ async def send_forgot_otp(req_data: SendOtpRequest):
         con = getConnect()
         with con.cursor() as cur:
             cur.execute(
-                "SELECT AccountID FROM accountinfo WHERE Email = %s AND (StatusID = 1 OR StatusID = 2 OR StatusID = 3 OR StatusID = 4)",
+                "SELECT AccountID FROM accountinfo WHERE LOWER(Email) = LOWER(%s) AND (StatusID = 1 OR StatusID = 2 OR StatusID = 3 OR StatusID = 4)",
                 (req_data.email,)
             )
             user = cur.fetchone()
@@ -164,7 +164,7 @@ async def reset_password(req_data: ResetPasswordRequest):
             sql = """
                 UPDATE accountinfo
                 SET PasswordEnc = %s
-                WHERE Email = %s
+                WHERE LOWER(Email) = LOWER(%s)
             """
             cur.execute(sql, (hash_pwd, req_data.email))
             if cur.rowcount == 0:
@@ -186,7 +186,7 @@ async def send_signup_otp(req_data: SignupOtpRequest):
     try:
         con = getConnect()
         with con.cursor() as cur:
-            cur.execute("SELECT AccountID FROM accountinfo WHERE Email = %s", (req_data.email,))
+            cur.execute("SELECT AccountID FROM accountinfo WHERE LOWER(Email) = LOWER(%s)", (req_data.email,))
             existing = cur.fetchone()
 
         if existing is not None:

@@ -13,15 +13,17 @@ async def create_follow(req_data: AddFollowRequest):
                 VALUES (%s, %s)
             """
             cur.execute(sql, (req_data.AccountID, req_data.EventOrganizerID))
-            con.commit()
             follow_id = cur.lastrowid
+            con.commit()
 
         return {"msg": "Organizer followed successfully", "FollowID": follow_id}
 
     except HTTPException:
         raise
-    except pymysql.err.IntegrityError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Organizer already followed by this account")
+    except pymysql.err.IntegrityError as err:
+        if err.args[0] == 1062:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Organizer already followed by this account")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
     except pymysql.MySQLError as err:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 

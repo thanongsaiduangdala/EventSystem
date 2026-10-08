@@ -16,8 +16,8 @@ async def create_teamrole(req_data: AddTeamRoleRequest):
             cur.execute(sql, (
                 req_data.TeamRoleName,
             ))
-            con.commit()
             TeamRole_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Team role created successfully", "TeamRoleID": TeamRole_ID}
 

@@ -4,6 +4,7 @@ python-dotenv
 python-jose[cryptography]
 bcrypt
 pymysql
+cryptography
 pydantic
 aiofiles
 Pillow

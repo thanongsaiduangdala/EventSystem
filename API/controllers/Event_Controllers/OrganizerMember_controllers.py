@@ -91,8 +91,8 @@ async def create_organizermember(req_data: AddOrganizerMemberRequest, current=De
                 req_data.TeamRoleID,
                 req_data.MemberStatusID,
             ))
-            con.commit()
             Member_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Organizer member created successfully", "MemberID": Member_ID}
 
@@ -239,8 +239,8 @@ async def invite_organizermember(req_data: InviteOrganizerMemberRequest, current
                 req_data.TeamRoleID,
                 MEMBER_STATUS_PENDING,
             ))
-            con.commit()
             member_id = cur.lastrowid
+            con.commit()
 
             org_name = _organization_name(cur, req_data.EventOrganizerID)
             role_name = _role_name(cur, req_data.TeamRoleID)
@@ -751,12 +751,12 @@ async def assign_member_to_event(req_data: AssignMemberEventRequest, current=Dep
                 return {"msg": "Member is already assigned to this event", "AssigmentID": existing["AssigmentID"]}
 
             cur.execute(
-                "INSERT INTO eventstaff (EventID, MemberID, EventRoleID, AssignedAtYMDT) "
-                "VALUES (%s, %s, %s, CURRENT_TIMESTAMP)",
+                ("INSERT INTO eventstaff (EventID, MemberID, EventRoleID, AssignedAtYMDT) "
+                "VALUES (%s, %s, %s, CURRENT_TIMESTAMP)"),
                 (req_data.EventID, req_data.MemberID, req_data.EventRoleID),
             )
-            con.commit()
             assigment_id = cur.lastrowid
+            con.commit()
 
         return {"msg": "Member assigned to event", "AssigmentID": assigment_id}
 

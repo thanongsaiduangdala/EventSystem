@@ -15,8 +15,8 @@ async def create_event_view(req_data: AddEventViewRequest):
                 VALUES (%s, %s)
             """
             cur.execute(sql, (req_data.AccountID, req_data.EventID))
-            con.commit()
             view_id = cur.lastrowid
+            con.commit()
 
         return {"msg": "Event viewed successfully", "ViewID": view_id}
 

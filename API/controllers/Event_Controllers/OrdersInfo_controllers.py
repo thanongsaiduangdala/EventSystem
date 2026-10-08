@@ -19,8 +19,8 @@ async def create_order(req_data: AddOrdersInfoRequest):
                 req_data.PaymentDateYMDT,
                 req_data.ProveOfPayment,
             ))
-            con.commit()
             Order_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Order created successfully", "OrderID": Order_ID}
 

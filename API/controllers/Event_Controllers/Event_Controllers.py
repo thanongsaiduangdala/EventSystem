@@ -52,8 +52,8 @@ async def create_event(req_data: AddEventInfoRequest, current=Depends(get_curren
                 1 if req_data.OnePerPerson else 0,
                 _event_status_for(current),
             ))
-            con.commit()
             event_id = cur.lastrowid
+            con.commit()
 
         notify_accounts(
             staff_account_ids(),

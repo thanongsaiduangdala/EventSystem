@@ -1,22 +1,27 @@
 import os
+
 import pymysql
 from pymysql.cursors import DictCursor
-from pymysql.constants import CLIENT
+
 
 def getConnect():
+    """Return a MySQL connection (rows come back as dicts), or None on failure."""
     try:
-        db = pymysql.connect(
-            host=os.environ.get('DB_HOST', 'localhost'),
-            user=os.environ.get('DB_USER', 'root'),
-            password=os.environ.get('DB_PASSWORD', ''),
-            database=os.environ.get('DB_NAME', 'reservation_system'),
+        return pymysql.connect(
+            host=os.environ.get("DB_HOST", "localhost"),
+            port=int(os.environ.get("DB_PORT", "3306")),
+            user=os.environ.get("DB_USER", "root"),
+            password=os.environ.get("DB_PASSWORD", ""),
+            database=os.environ.get("DB_NAME", "reservation_system"),
+            charset="utf8mb4",
             cursorclass=DictCursor,
-            client_flag=CLIENT.FOUND_ROWS
+            autocommit=False,
         )
-        return db
-    except Exception as e:
-        print(f'Error : {e}')
+    except Exception:
+        # Never print the exception: it can contain credentials.
+        print("MySQL connection failed")
         return None
+
 
 if __name__ == "__main__":
     db = getConnect()

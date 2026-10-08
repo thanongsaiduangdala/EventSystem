@@ -177,10 +177,9 @@ async def stream_notifications(current=Depends(get_current_account)):
                 try:
                     if con is None:
                         con = getConnect()
-                        # IMPORTANT: this connection stays open for the whole
-                        # stream. Without autocommit MySQL keeps one snapshot
-                        # (REPEATABLE READ) for the connection's lifetime, so
-                        # rows inserted later would never be seen.
+                        # This connection stays open for the whole stream.
+                        # Autocommit prevents a long-lived idle transaction and
+                        # ensures subsequent polls see newly committed rows.
                         con.autocommit(True)
                     unread, newest, fresh = await asyncio.to_thread(
                         _read_stream_state,
@@ -257,8 +256,8 @@ async def create_notification(req_data: AddNotificationRequest):
                 req_data.Body,
                 req_data.Link,
             ))
-            con.commit()
             notification_id = cur.lastrowid
+            con.commit()
 
         _wake_streams([req_data.AccountID])
         return {"msg": "Notification created successfully", "NotificationID": notification_id}
@@ -414,8 +413,8 @@ async def generate_for_account(account_id: int):
                 JOIN tickettype t ON t.TicketTypeID = ta.TicketTypeID
                 JOIN eventinfo e ON e.EventID = t.EventID
                 WHERE o.AccountID = %s
-                  AND e.EventStartingYMDT >= DATE_ADD(CURDATE(), INTERVAL 1 DAY)
-                  AND e.EventStartingYMDT < DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+                  AND e.EventStartingYMDT >= (CURRENT_DATE + INTERVAL 1 DAY)
+                  AND e.EventStartingYMDT < (CURRENT_DATE + INTERVAL 2 DAY)
             """, (account_id,))
             for row in cur.fetchall():
                 time = pretty_time(row["EventStartingYMDT"])
@@ -432,8 +431,8 @@ async def generate_for_account(account_id: int):
                 FROM wishlistinfo w
                 JOIN eventinfo e ON e.EventID = w.EventID
                 WHERE w.AccountID = %s
-                  AND e.EventStartingYMDT >= DATE_ADD(CURDATE(), INTERVAL 1 DAY)
-                  AND e.EventStartingYMDT < DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+                  AND e.EventStartingYMDT >= (CURRENT_DATE + INTERVAL 1 DAY)
+                  AND e.EventStartingYMDT < (CURRENT_DATE + INTERVAL 2 DAY)
             """, (account_id,))
             for row in cur.fetchall():
                 time = pretty_time(row["EventStartingYMDT"])
@@ -450,7 +449,7 @@ async def generate_for_account(account_id: int):
                 FROM wishlistinfo w
                 JOIN eventinfo e ON e.EventID = w.EventID
                 WHERE w.AccountID = %s
-                  AND e.EventStartingYMDT BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY)
+                  AND e.EventStartingYMDT BETWEEN NOW() AND (CURRENT_TIMESTAMP + INTERVAL 7 DAY)
             """, (account_id,))
             for row in cur.fetchall():
                 start = pretty_start(row["EventStartingYMDT"])

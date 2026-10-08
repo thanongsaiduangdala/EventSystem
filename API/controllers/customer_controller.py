@@ -28,7 +28,7 @@ async def check_duplicate(req_data: CheckDuplicateRequest):
         con = getConnect()
         with con.cursor() as cur:
             cur.execute(
-                "SELECT Email, PhoneNum FROM accountinfo WHERE Email = %s OR PhoneNum = %s",
+                "SELECT Email, PhoneNum FROM accountinfo WHERE LOWER(Email) = LOWER(%s) OR PhoneNum = %s",
                 (req_data.email, req_data.phonenum)
             )
             existing = cur.fetchone()

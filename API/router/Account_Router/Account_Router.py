@@ -8,6 +8,6 @@ router = APIRouter(prefix="/Account", tags=["Account"])
 
 router.post("/create")(create_account)
 router.get("/all")(get_all_accounts)
-router.get("/{event_id}")(get_account_by_id)
+router.get("/{account_id}")(get_account_by_id)
 router.put("/update")(update_account)
-router.delete("/{event_id}")(delete_account)
+router.delete("/{account_id}")(delete_account)

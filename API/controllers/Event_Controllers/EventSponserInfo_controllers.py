@@ -40,8 +40,8 @@ async def create_sponser(req_data: AddSponserInfoRequest):
                 req_data.SponserName,
                 req_data.SponserLogoPath
             ))
-            con.commit()
             Sponser_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Event created successfully", "Sponser_ID": Sponser_ID}
 
@@ -71,8 +71,8 @@ async def upload_sponser(
                 VALUES (%s, %s)
             """
             cur.execute(sql, (SponserName, logo_path))
-            con.commit()
             Sponser_ID = cur.lastrowid
+            con.commit()
 
         return {
             "msg": "Sponsor created successfully",
@@ -239,8 +239,8 @@ async def create_EventSponser(req_data: AddEventSponserInfoRequest, current=Depe
                 req_data.EventID,
                 req_data.SponserID
             ))
-            con.commit()
             EventSponser_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Event created successfully", "EventSponser_ID": EventSponser_ID}
 

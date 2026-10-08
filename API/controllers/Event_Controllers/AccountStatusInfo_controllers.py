@@ -16,8 +16,8 @@ async def create_accountstatusinfo(req_data: AddAccountStatusInfoRequest):
             cur.execute(sql, (
                 req_data.StatusType,
             ))
-            con.commit()
             StatusID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Account status created successfully", "Status ID": StatusID}
 

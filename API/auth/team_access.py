@@ -158,13 +158,14 @@ def ensure_member_row(con, account_id: int, org_id: int, team_role_id: int = TEA
             return row["MemberID"]
 
         cur.execute(
-            "INSERT INTO organizermember "
+            ("INSERT INTO organizermember "
             "(AccountID, EventOrganizerID, TeamRoleID, MemberStatusID) "
-            "VALUES (%s, %s, %s, %s)",
+            "VALUES (%s, %s, %s, %s)"),
             (account_id, org_id, team_role_id, MEMBER_STATUS_ACTIVE),
         )
+        member_id = cur.lastrowid
         con.commit()
-        return cur.lastrowid
+        return member_id
 
 
 def event_org_id(con, event_id: int):

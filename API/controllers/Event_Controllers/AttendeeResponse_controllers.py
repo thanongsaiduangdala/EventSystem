@@ -101,8 +101,8 @@ async def create_attendeeresponse(req_data: AddAttendeeResponseRequest, current=
                 req_data.attendeeID,
                 req_data.attendeeAnswer,
             ))
-            con.commit()
             Response_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Attendee response created successfully", "ResponseID": Response_ID}
 

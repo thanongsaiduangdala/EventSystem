@@ -27,8 +27,8 @@ async def create_account(req_data: AddAccountInfoRequest, current=Depends(requir
                 req_data.StatusID,
                 hash_pwd
             ))
-            con.commit()
             account_id = cur.lastrowid
+            con.commit()
 
         return {"msg": "Account created successfully", "account_id": account_id}
 

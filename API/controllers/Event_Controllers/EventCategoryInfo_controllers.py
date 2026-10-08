@@ -20,8 +20,8 @@ async def create_eventcategory(req_data: AddEventCategoryInfoRequest, current=De
                 req_data.EventID,
                 req_data.CategoryID
             ))
-            con.commit()
             EventCategory_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Event category created successfully", "EventCategoryID": EventCategory_ID}
 

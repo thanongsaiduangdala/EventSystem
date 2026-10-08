@@ -49,15 +49,17 @@ async def add_account_category(req_data: AddAccountCategoryRequest):
                 VALUES (%s, %s)
             """
             cur.execute(sql, (req_data.AccountID, req_data.CategoryID))
-            con.commit()
             account_category_id = cur.lastrowid
+            con.commit()
 
         return {"msg": "Category favorited successfully", "AccountCategoryID": account_category_id}
 
     except HTTPException:
         raise
-    except pymysql.err.IntegrityError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category already favorited by this account")
+    except pymysql.err.IntegrityError as err:
+        if err.args[0] == 1062:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category already favorited by this account")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
     except pymysql.MySQLError as err:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 

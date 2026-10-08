@@ -19,7 +19,7 @@ async def create_eventstaff(req_data: AddEventStaffRequest):
             # actually be "eventinfo". Fix the table name below if so.
             cur.execute("""
                 SELECT ev.EventOrganizerID AS event_org, om.EventOrganizerID AS member_org
-                FROM event ev, organizermember om
+                FROM eventinfo ev, organizermember om
                 WHERE ev.EventID = %s AND om.MemberID = %s
             """, (req_data.EventID, req_data.MemberID))
             match_row = cur.fetchone()
@@ -62,8 +62,8 @@ async def create_eventstaff(req_data: AddEventStaffRequest):
                 req_data.EventRoleID,
                 req_data.AssignedAtYMDT,
             ))
-            con.commit()
             Assignment_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Event staff created successfully", "AssignmentID": Assignment_ID}
 
@@ -140,7 +140,7 @@ async def update_eventstaff(req_data: UpdateEventStaffRequest):
             # about the events table name.
             cur.execute("""
                 SELECT ev.EventOrganizerID AS event_org, om.EventOrganizerID AS member_org
-                FROM event ev, organizermember om
+                FROM eventinfo ev, organizermember om
                 WHERE ev.EventID = %s AND om.MemberID = %s
             """, (req_data.EventID, req_data.MemberID))
             match_row = cur.fetchone()

@@ -16,8 +16,8 @@ async def create_paymenttype(req_data: AddPaymentTypeInfoRequest):
             cur.execute(sql, (
                 req_data.PaymentTypeName,
             ))
-            con.commit()
             PaymentType_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Payment type created successfully", "PaymentTypeID": PaymentType_ID}
 

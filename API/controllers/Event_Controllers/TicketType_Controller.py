@@ -24,8 +24,8 @@ async def create_TicketType(req_data: AddTicketTypeRequest, current=Depends(get_
                 req_data.SaleStart,
                 req_data.SaleEnd,
             ))
-            con.commit()
             tickettype_id = cur.lastrowid
+            con.commit()
         return {"msg": "Ticket type created successfully", "TicketTypeID": tickettype_id, "event_id": tickettype_id}
     except HTTPException:
         raise

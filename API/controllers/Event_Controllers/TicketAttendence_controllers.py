@@ -81,8 +81,8 @@ async def create_ticketattendee(req_data: AddTicketAttendenceRequest):
                 req_data.Email,
                 req_data.NationalID,
             ))
-            con.commit()
             Attendee_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Ticket attendee created successfully", "attendeeID": Attendee_ID}
 
@@ -323,11 +323,11 @@ async def check_in_attendee(req_data: CheckInAttendeeRequest, current=Depends(ge
                 )
 
             cur.execute(
-                "INSERT INTO ticketcheckin (attendeeID, EventID, CheckedInByMemberID) VALUES (%s, %s, %s)",
+                ("INSERT INTO ticketcheckin (attendeeID, EventID, CheckedInByMemberID) VALUES (%s, %s, %s)"),
                 (req_data.AttendeeID, req_data.EventID, member_id),
             )
-            con.commit()
             check_in_id = cur.lastrowid
+            con.commit()
 
             cur.execute(
                 "SELECT CheckedInAtYMDT FROM ticketcheckin WHERE CheckInID = %s",
@@ -348,7 +348,7 @@ async def check_in_attendee(req_data: CheckInAttendeeRequest, current=Depends(ge
     except HTTPException:
         raise
     except pymysql.MySQLError as err:
-        if err.args and err.args[0] == 1062:
+        if err.sqlstate == "23505":
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This attendee has already been checked in")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 

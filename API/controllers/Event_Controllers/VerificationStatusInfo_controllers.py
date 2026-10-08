@@ -16,8 +16,8 @@ async def create_Verificationstatus(req_data: AddVerificationStatusInfoRequest):
             cur.execute(sql, (
                 req_data.StatusName,
             ))
-            con.commit()
             VerificationStatus_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Verification status created successfully", "VerificationStatusID": VerificationStatus_ID}
 

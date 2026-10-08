@@ -18,8 +18,8 @@ async def create_category(req_data: AddCategoryInfoRequest, current=Depends(requ
                 req_data.CategoryName,
                 req_data.CategoryIconPath
             ))
-            con.commit()
             Category_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Category created successfully", "CategoryID": Category_ID}
 

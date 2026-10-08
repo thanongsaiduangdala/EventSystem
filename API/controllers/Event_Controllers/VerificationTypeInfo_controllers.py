@@ -16,8 +16,8 @@ async def create_Verificationtype(req_data: AddVerificationTypeInfoRequest):
             cur.execute(sql, (
                 req_data.IDType,
             ))
-            con.commit()
             VerificationType_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Verification type created successfully", "VerificationTypeID": VerificationType_ID}
 

@@ -115,8 +115,8 @@ async def create_eventimage(req_data: AddEventImageInfoRequest, current=Depends(
                 req_data.ImageName,
                 req_data.ImagePath,
             ))
-            con.commit()
             Image_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Event created successfully", "Image_ID": Image_ID}
 
@@ -143,8 +143,8 @@ async def upload_eventimage(event_id: int, file: UploadFile, image_name: Optiona
                 VALUES (%s, %s, %s)
             """
             cur.execute(sql, (event_id, display_name, relative_path))
-            con.commit()
             Image_ID = cur.lastrowid
+            con.commit()
 
         return {
             "msg": "Event image uploaded successfully",

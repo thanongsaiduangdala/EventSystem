@@ -16,8 +16,8 @@ async def create_eventrole(req_data: AddEventRoleRequest):
             cur.execute(sql, (
                 req_data.RoleName,
             ))
-            con.commit()
             EventRole_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Event role created successfully", "EventRoleID": EventRole_ID}
 

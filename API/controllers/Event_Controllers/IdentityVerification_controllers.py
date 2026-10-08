@@ -37,8 +37,8 @@ async def create_identityverification(req_data: AddIdentityVerificationRequest):
                 req_data.SubmittedAtYMDT,
                 req_data.ReviewedAtYMDT,
             ))
-            con.commit()
             Verification_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Identity verification created successfully", "VerificationID": Verification_ID}
 
@@ -119,7 +119,7 @@ async def get_identityverifications_with_accounts(
                        a.StatusID AS AccountStatusID
                 FROM identityverification iv
                 INNER JOIN accountinfo a ON a.AccountID = iv.AccountID
-                ORDER BY FIELD(iv.VerificationStatusID, 1, 3, 2),
+                ORDER BY CASE iv.VerificationStatusID WHEN 1 THEN 1 WHEN 3 THEN 2 WHEN 2 THEN 3 ELSE 4 END,
                          iv.SubmittedAtYMDT DESC
             """
             cur.execute(sql)

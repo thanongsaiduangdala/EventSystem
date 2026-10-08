@@ -73,8 +73,9 @@ async def assign_permission_to_role(req: AssignRolePermissionRequest, current=De
                 "INSERT IGNORE INTO rolepermissioninfo (StatusID, PermissionID) VALUES (%s, %s)",
                 (req.status_id, req.permission_id),
             )
+            assigned = cur.rowcount > 0
             con.commit()
-        return {"msg": "Permission assigned" if cur.rowcount > 0 else "Permission already assigned"}
+        return {"msg": "Permission assigned" if assigned else "Permission already assigned"}
     except pymysql.MySQLError as err:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 

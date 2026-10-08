@@ -43,8 +43,8 @@ async def create_eventorganizer(req_data: AddEventOrganizerInfoRequest, current=
                 req_data.CreatedByAccountID,
                 req_data.EventOrganizerDiscription,
             ))
-            con.commit()
             EventOrganizer_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Event organizer created successfully", "EventOrganizerID": EventOrganizer_ID}
 
@@ -79,8 +79,8 @@ async def upload_eventorganizer(
                 CreatedByAccountID,
                 EventOrganizerDiscription,
             ))
-            con.commit()
             EventOrganizer_ID = cur.lastrowid
+            con.commit()
 
         return {"msg": "Event organizer created successfully", "EventOrganizer_ID": EventOrganizer_ID}
 
@@ -139,8 +139,8 @@ async def apply_eventorganizer(
                 CreatedByAccountID,
                 EventOrganizerDiscription,
             ))
-            con.commit()
             EventOrganizer_ID = cur.lastrowid
+            con.commit()
 
             cur.execute(
                 "SELECT CONCAT(FirstName, ' ', LastName) AS FullName "
