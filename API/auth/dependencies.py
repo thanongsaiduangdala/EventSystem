@@ -20,6 +20,22 @@ ROLE_NAMES = {
 }
 
 
+# Shown when the token was issued before the account's role changed (for
+# example an admin approved the identity verification after the user logged
+# in). The JWT carries the role from login time, so the user has to log in
+# again to get a token that matches their new role.
+RELOGIN_REQUIRED_MESSAGE = (
+    "Your account access was updated. Please log out and log back in to "
+    "use organization pages."
+)
+
+
+def token_is_stale(token_status_id, db_status_id) -> bool:
+    """True when the role inside the JWT no longer matches the account's
+    current role in the database."""
+    return db_status_id is not None and token_status_id != db_status_id
+
+
 def role_name(status_id):
     """Returns the canonical role name for a status id, or None if unknown."""
     return ROLE_NAMES.get(status_id)
@@ -80,6 +96,37 @@ async def get_current_account(
     return {"account_id": int(account_id), "status_id": status_id}
 
 
+async def get_fresh_account(
+    current=Depends(get_current_account),
+) -> dict:
+    """Like get_current_account, but also rejects a token whose role is out
+    of date (see RELOGIN_REQUIRED_MESSAGE). Use it on organization/team
+    routes so a freshly approved organizer cannot use them until they log
+    out and back in."""
+    con = getConnect()
+    try:
+        with con.cursor() as cur:
+            cur.execute(
+                "SELECT StatusID FROM accountinfo WHERE AccountID = %s",
+                (current["account_id"],),
+            )
+            row = cur.fetchone()
+    finally:
+        con.close()
+
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account not found",
+        )
+    if token_is_stale(current["status_id"], row["StatusID"]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=RELOGIN_REQUIRED_MESSAGE,
+        )
+    return current
+
+
 async def require_superadmin(
     current=Depends(get_current_account),
 ) -> dict:
@@ -127,6 +174,35 @@ async def require_employee_or_superadmin(
     return current
 
 
+def require_reviewer_or_permission(permission_name: str):
+    """Like require_permission, but EMPLOYEE and SUPERADMIN accounts always
+    pass. Used for review screens (e.g. the Employee Dashboard's Events tab)
+    that employees need without being granted the organizer-only permission
+    (create_event / update_event) that would also let them create events.
+    Everyone else still needs `permission_name`."""
+    fallback = require_permission(permission_name)
+
+    async def _dependency(
+        current=Depends(get_current_account),
+    ) -> dict:
+        con = getConnect()
+        try:
+            with con.cursor() as cur:
+                cur.execute(
+                    "SELECT StatusID FROM accountinfo WHERE AccountID = %s",
+                    (current["account_id"],),
+                )
+                row = cur.fetchone()
+        finally:
+            con.close()
+
+        if row is not None and row["StatusID"] in (ROLE_SUPERADMIN, ROLE_EMPLOYEE):
+            return current
+        return await fallback(current)
+
+    return _dependency
+
+
 def require_permission(permission_name: str):
     """Dependency factory. Usage: `current=Depends(require_permission("create_event"))`.
 
@@ -171,6 +247,28 @@ def require_permission(permission_name: str):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permission '{permission_name}' required",
             )
+
+        # The role was upgraded after this token was issued (e.g. identity
+        # verification approved): only grant what the token's own role
+        # already allowed until the user logs in again.
+        token_status_id = current.get("status_id")
+        if token_is_stale(token_status_id, status_id):
+            with con.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) AS cnt
+                    FROM rolepermissioninfo rp
+                    JOIN permissioninfo p ON rp.PermissionID = p.PermissionID
+                    WHERE rp.StatusID = %s AND p.PermissionName = %s
+                    """,
+                    (token_status_id, permission_name),
+                )
+                token_row = cur.fetchone()
+            if token_row is None or token_row["cnt"] == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=RELOGIN_REQUIRED_MESSAGE,
+                )
 
         return current
 

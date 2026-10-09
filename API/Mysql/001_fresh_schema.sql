@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS eventorganizerinfo (
   CreatedByAccountID INT NOT NULL,
   EventOrganizerDiscription TEXT,
   OrganizerStatusID INT NOT NULL DEFAULT 1,
+  DenyReason TEXT NULL,
   PRIMARY KEY (EventOrganizerID),
   CONSTRAINT fk_eventorganizerinfo_1 FOREIGN KEY (CreatedByAccountID) REFERENCES accountinfo (AccountID),
   CONSTRAINT fk_eventorganizerinfo_2 FOREIGN KEY (OrganizerStatusID) REFERENCES organizerstatusinfo (OrganizerStatusID)
@@ -125,6 +126,7 @@ CREATE TABLE IF NOT EXISTS eventinfo (
   EventStatusID INT NOT NULL DEFAULT 2,
   EventVisible TINYINT NOT NULL DEFAULT 1 CHECK (EventVisible IN (0, 1)),
   ScanEnabled TINYINT NOT NULL DEFAULT 0 CHECK (ScanEnabled IN (0, 1)),
+  DenyReason TEXT NULL,
   PRIMARY KEY (EventID),
   KEY idx_eventinfo_public (EventStatusID, EventVisible, EventStartingYMDT),
   CONSTRAINT fk_eventinfo_1 FOREIGN KEY (EventOrganizerID) REFERENCES eventorganizerinfo (EventOrganizerID),
@@ -350,7 +352,7 @@ INSERT INTO accountstatusinfo (StatusID, StatusType) VALUES
   (1, 'CUSTOMER'), (2, 'ORGANIZER'), (3, 'SUPERADMIN'), (4, 'EMPLOYEE'), (5, 'Ban')
 ON DUPLICATE KEY UPDATE StatusType = VALUES(StatusType);
 INSERT INTO eventstatusinfo (EventStatusID, StatusName) VALUES
-  (1, 'Pending'), (2, 'Approved'), (3, 'Denied')
+  (1, 'Pending'), (2, 'Approved'), (3, 'Denied'), (4, 'Draft')
 ON DUPLICATE KEY UPDATE StatusName = VALUES(StatusName);
 INSERT INTO organizerstatusinfo (OrganizerStatusID, StatusName) VALUES
   (1, 'Pending'), (2, 'Approved'), (3, 'Denied')

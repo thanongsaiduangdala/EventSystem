@@ -14,7 +14,7 @@ from models.schema import (
     SetEventScanRequest,
     SetMemberScanRequest,
 )
-from auth.dependencies import require_permission, get_current_account
+from auth.dependencies import require_permission, get_fresh_account
 from auth.team_access import (
     TEAM_ROLE_ORG_OWNER,
     active_membership,
@@ -180,7 +180,7 @@ async def get_organizermembers_with_accounts(current=Depends(require_permission(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def invite_organizermember(req_data: InviteOrganizerMemberRequest, current=Depends(get_current_account)):
+async def invite_organizermember(req_data: InviteOrganizerMemberRequest, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         await ensure_org_manager(con, current, req_data.EventOrganizerID)
@@ -260,7 +260,7 @@ async def invite_organizermember(req_data: InviteOrganizerMemberRequest, current
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def accept_organizermember(member_id: int, current=Depends(get_current_account)):
+async def accept_organizermember(member_id: int, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -300,7 +300,7 @@ async def accept_organizermember(member_id: int, current=Depends(get_current_acc
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def decline_organizermember(member_id: int, current=Depends(get_current_account)):
+async def decline_organizermember(member_id: int, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -401,7 +401,7 @@ async def update_organizermember(req_data: UpdateOrganizerMemberRequest, current
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def delete_organizermember(member_id: int, current=Depends(get_current_account)):
+async def delete_organizermember(member_id: int, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -441,7 +441,7 @@ async def delete_organizermember(member_id: int, current=Depends(get_current_acc
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def get_my_memberships(current=Depends(get_current_account)):
+async def get_my_memberships(current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         sync_owner_memberships(con, current["account_id"])
@@ -451,7 +451,7 @@ async def get_my_memberships(current=Depends(get_current_account)):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def get_my_invites(current=Depends(get_current_account)):
+async def get_my_invites(current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -480,7 +480,7 @@ async def get_my_invites(current=Depends(get_current_account)):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def get_my_team_member_events(org_id: Optional[int] = None, current=Depends(get_current_account)):
+async def get_my_team_member_events(org_id: Optional[int] = None, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         sync_owner_memberships(con, current["account_id"])
@@ -550,7 +550,7 @@ async def get_my_team_member_events(org_id: Optional[int] = None, current=Depend
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def get_org_team(org_id: int, current=Depends(get_current_account)):
+async def get_org_team(org_id: int, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         await ensure_org_manager(con, current, org_id)
@@ -618,7 +618,7 @@ async def get_org_team(org_id: int, current=Depends(get_current_account)):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def change_member_role(req_data: ChangeMemberRoleRequest, current=Depends(get_current_account)):
+async def change_member_role(req_data: ChangeMemberRoleRequest, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -663,7 +663,7 @@ async def change_member_role(req_data: ChangeMemberRoleRequest, current=Depends(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def transfer_org_ownership(req_data: TransferOwnershipRequest, current=Depends(get_current_account)):
+async def transfer_org_ownership(req_data: TransferOwnershipRequest, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         await ensure_org_owner(con, current, req_data.EventOrganizerID)
@@ -723,7 +723,7 @@ async def transfer_org_ownership(req_data: TransferOwnershipRequest, current=Dep
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def assign_member_to_event(req_data: AssignMemberEventRequest, current=Depends(get_current_account)):
+async def assign_member_to_event(req_data: AssignMemberEventRequest, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -766,7 +766,7 @@ async def assign_member_to_event(req_data: AssignMemberEventRequest, current=Dep
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def unassign_member_from_event(req_data: UnassignMemberEventRequest, current=Depends(get_current_account)):
+async def unassign_member_from_event(req_data: UnassignMemberEventRequest, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         with con.cursor() as cur:
@@ -790,7 +790,7 @@ async def unassign_member_from_event(req_data: UnassignMemberEventRequest, curre
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def get_event_scan_access(event_id: int, current=Depends(get_current_account)):
+async def get_event_scan_access(event_id: int, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         org_id = event_org_id(con, event_id)
@@ -838,7 +838,7 @@ async def get_event_scan_access(event_id: int, current=Depends(get_current_accou
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def set_event_scan_enabled(req_data: SetEventScanRequest, current=Depends(get_current_account)):
+async def set_event_scan_enabled(req_data: SetEventScanRequest, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         org_id = event_org_id(con, req_data.EventID)
@@ -861,7 +861,7 @@ async def set_event_scan_enabled(req_data: SetEventScanRequest, current=Depends(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def set_member_scan_access(req_data: SetMemberScanRequest, current=Depends(get_current_account)):
+async def set_member_scan_access(req_data: SetMemberScanRequest, current=Depends(get_fresh_account)):
     try:
         con = getConnect()
         org_id = event_org_id(con, req_data.EventID)

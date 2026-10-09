@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_com/DeveloperPage/deny_reason_dialog.dart';
 import 'package:ticket_com/HomePage/event_form_page.dart';
 import 'package:ticket_com/services/account_api_service.dart';
+import 'package:ticket_com/services/api_errors.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/identity_verification_api_service.dart';
@@ -420,7 +422,9 @@ class _OrganizersPageState extends State<OrganizersPage> {
               ),
             ],
           ),
-          if (_canApprove && event.eventStatusId != EventStatus.approved) ...[
+          // Only a pending event can be decided; a denied one goes back to
+          // pending when its organizer edits and saves it again.
+          if (_canApprove && event.eventStatusId == EventStatus.pending) ...[
             const SizedBox(height: 12),
             Row(
               children: [
@@ -470,6 +474,7 @@ class _OrganizersPageState extends State<OrganizersPage> {
     final (bg, fg, label) = switch (statusId) {
       EventStatus.approved => (_kGreen, Colors.white, 'Approved'),
       EventStatus.denied => (_kRed, Colors.white, 'Denied'),
+      EventStatus.draft => (const Color(0xFFECEFF1), _kTextGrey, 'Draft'),
       _ => (const Color(0xFFFFF3E0), _kAmber, 'Pending Approval'),
     };
     return Container(
@@ -546,13 +551,30 @@ class _OrganizersPageState extends State<OrganizersPage> {
 
   Future<void> _setEventStatus(EventModel event, int status, String msg) async {
     final approved = status == EventStatus.approved;
+    String? reason;
+    if (!approved) {
+      reason = await showDenyReasonDialog(
+        context,
+        title: 'Reject event?',
+        message: '"${event.name}" will stay hidden. The organizer will see '
+            'your comment and must fix the event and press Save to send it '
+            'for review again.',
+      );
+      if (reason == null) return;
+    }
     try {
       await EventApiService.setEventStatus(
         eventId: event.id,
         eventStatusId: status,
+        reason: reason,
       );
       if (!mounted) return;
       _snack(msg);
+      _load();
+    } on ReviewConflictException catch (e) {
+      // Another reviewer already decided it: show their result.
+      if (!mounted) return;
+      _snack(e.message);
       _load();
     } catch (e) {
       _snack('${approved ? 'Approve' : 'Reject'} failed: $e');

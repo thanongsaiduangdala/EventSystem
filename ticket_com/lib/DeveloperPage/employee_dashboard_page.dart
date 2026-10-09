@@ -19,25 +19,33 @@ const int _kStatusDenied = 3;
 /// accounts. Both tabs are kept alive in an [IndexedStack] so switching
 /// tabs doesn't re-fetch or lose scroll position.
 class EmployeeDashboardPage extends StatefulWidget {
-  const EmployeeDashboardPage({super.key});
+  const EmployeeDashboardPage({super.key, this.initialTab = 0, this.focusId});
+
+  /// 0 = Verifications, 1 = Organizations, 2 = Events. Used when opening the
+  /// dashboard from a notification.
+  final int initialTab;
+
+  /// ID of the item to open right away (verification / organization / event
+  /// ID, matching [initialTab]). Optional.
+  final int? focusId;
 
   @override
   State<EmployeeDashboardPage> createState() => _EmployeeDashboardPageState();
 }
 
 class _EmployeeDashboardPageState extends State<EmployeeDashboardPage> {
-  int _tabIndex = 0;
-
-  static const _tabs = [
-    _VerificationsTab(),
-    OrganizerApprovalsTab(),
-    EventApprovalsTab(),
-  ];
+  late int _tabIndex = widget.initialTab.clamp(0, 2);
 
   @override
   Widget build(BuildContext context) {
+    final focus = widget.focusId;
+    final tabs = [
+      _VerificationsTab(focusId: widget.initialTab == 0 ? focus : null),
+      OrganizerApprovalsTab(focusId: widget.initialTab == 1 ? focus : null),
+      EventApprovalsTab(focusId: widget.initialTab == 2 ? focus : null),
+    ];
     return Scaffold(
-      body: IndexedStack(index: _tabIndex, children: _tabs),
+      body: IndexedStack(index: _tabIndex, children: tabs),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
         onDestinationSelected: (index) => setState(() => _tabIndex = index),
@@ -69,7 +77,10 @@ class _EmployeeDashboardPageState extends State<EmployeeDashboardPage> {
 /// requests and approve (grants the applicant ORGANIZER access) or deny
 /// them. Shown as one tab of [EmployeeDashboardPage].
 class _VerificationsTab extends StatefulWidget {
-  const _VerificationsTab();
+  const _VerificationsTab({this.focusId});
+
+  /// Verification to open as soon as the list has loaded (from a notification).
+  final int? focusId;
 
   @override
   State<_VerificationsTab> createState() => _VerificationsTabState();
@@ -84,6 +95,7 @@ class _VerificationsTabState extends State<_VerificationsTab> {
   String? _error;
 
   int _filterStatusId = 0; // 0 = all, else a VerificationStatusID
+  bool _focusHandled = false;
 
   @override
   void initState() {
@@ -109,12 +121,28 @@ class _VerificationsTabState extends State<_VerificationsTab> {
         _statuses = results[2] as List<VerificationStatusModel>;
         _loading = false;
       });
+      _openFocused();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
       });
+    }
+  }
+
+  /// Opens the verification a notification pointed at, once.
+  void _openFocused() {
+    final id = widget.focusId;
+    if (id == null || _focusHandled) return;
+    _focusHandled = true;
+    for (final item in _items) {
+      if (item.verification.id == id) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openDetail(item);
+        });
+        return;
+      }
     }
   }
 

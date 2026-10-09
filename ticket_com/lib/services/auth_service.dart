@@ -108,6 +108,12 @@ class AuthService {
   static UserSession? currentSession;
   static String? currentToken;
 
+  /// True when the role stored in the login token no longer matches the
+  /// account's role on the server (e.g. identity verification was approved
+  /// after login). Organization pages stay locked until the user logs out and
+  /// back in. Updated by [checkSessionStale] and [refreshRbac].
+  static bool sessionStale = false;
+
   static Future<UserSession> login(String email, String password) async {
     final response = await http.post(
       Uri.parse('$baseUrl/login'),
@@ -122,6 +128,7 @@ class AuthService {
 
       currentSession = session;
       currentToken = token;
+      sessionStale = false;
 
       return session;
     } else {
@@ -169,6 +176,7 @@ class AuthService {
     await _secureStorage.delete(key: _tokenKey);
     currentSession = null;
     currentToken = null;
+    sessionStale = false;
   }
 
   // now sends the JWT, and hits the developer-protected endpoint directly
@@ -188,6 +196,25 @@ class AuthService {
     return false; // 401/403 = not valid or not a developer
   }
 
+  /// Asks the server whether the login token is out of date for this account
+  /// (see [sessionStale]). Returns false when not logged in or when the check
+  /// itself fails, so a flaky network never locks anyone out.
+  static Future<bool> checkSessionStale() async {
+    if (currentToken == null || currentSession == null) return false;
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/rbac/me'),
+        headers: {'Authorization': 'Bearer $currentToken'},
+      );
+      if (response.statusCode != 200) return false;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      sessionStale = data['RequiresRelogin'] == true;
+      return sessionStale;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Re-fetches role + permissions from /rbac/me and updates the stored session.
   /// Returns true if the session was refreshed, false if not logged in/authorized.
   static Future<bool> refreshRbac() async {
@@ -201,6 +228,12 @@ class AuthService {
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final old = currentSession!;
+
+    // Becoming an organizer after login (identity approved) must not take
+    // effect until the user logs in again, so keep the old session.
+    sessionStale = data['RequiresRelogin'] == true;
+    if (sessionStale && (data['StatusID'] as int) == 2) return false;
+
     final updated = UserSession(
       accountId: data['AccountID'] as int,
       statusId: data['StatusID'] as int,

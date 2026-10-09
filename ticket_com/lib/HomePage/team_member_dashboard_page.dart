@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_com/services/event_api_service.dart'
+    show EventStatus;
 import 'package:ticket_com/services/event_image_api_service.dart';
 import 'package:ticket_com/services/organizer_member_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
 
 import 'pill_toggle.dart';
+import 'search_filter_bar.dart';
 import 'team_manage_page.dart';
 import 'team_event_page.dart';
 import 'team_images.dart';
@@ -45,6 +48,53 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
   MyEventsResult? _result;
   Map<int, EventImageModel> _covers = {};
   _TeamSection _section = _TeamSection.events;
+
+  // Team Events search + filters.
+  final _eventSearch = TextEditingController();
+  int? _statusFilter; // EventStatus.*
+  String? _timeFilter; // 'upcoming' | 'past'
+  String? _dutyFilter; // 'assigned' | 'unassigned'
+
+  @override
+  void dispose() {
+    _eventSearch.dispose();
+    super.dispose();
+  }
+
+  void _resetEventFilters() {
+    _eventSearch.clear();
+    _statusFilter = null;
+    _timeFilter = null;
+    _dutyFilter = null;
+  }
+
+  bool _onDuty(TeamMembership membership, MemberEvent event) =>
+      membership.isManager || event.canCheckIn;
+
+  List<MemberEvent> _applyEventFilters(
+    TeamMembership membership,
+    List<MemberEvent> all,
+  ) {
+    final query = _eventSearch.text.trim().toLowerCase();
+    final now = DateTime.now();
+    return all.where((e) {
+      if (_statusFilter != null && e.eventStatusId != _statusFilter) {
+        return false;
+      }
+      if (_timeFilter == 'upcoming' && e.end.isBefore(now)) return false;
+      if (_timeFilter == 'past' && !e.end.isBefore(now)) return false;
+      final onDuty = _onDuty(membership, e);
+      if (_dutyFilter == 'assigned' && !onDuty) return false;
+      if (_dutyFilter == 'unassigned' && onDuty) return false;
+      if (query.isNotEmpty) {
+        final haystack =
+            '${e.eventName} ${e.address} ${e.eventRoleName ?? ''}'
+                .toLowerCase();
+        if (!haystack.contains(query)) return false;
+      }
+      return true;
+    }).toList();
+  }
 
   TeamMembership? get _membership =>
       _selected ?? (_memberships.isNotEmpty ? _memberships.first : null);
@@ -160,6 +210,7 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
           ],
           onChanged: (id) {
             if (id != null && id != _membership?.eventOrganizerId) {
+              _resetEventFilters();
               _load(orgId: id);
             }
           },
@@ -263,6 +314,14 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
 
   Widget _eventsSection(TeamMembership membership) {
     final events = _result?.events ?? [];
+    final visible = _applyEventFilters(membership, events);
+    final filtering = _eventSearch.text.trim().isNotEmpty ||
+        _statusFilter != null ||
+        _timeFilter != null ||
+        _dutyFilter != null;
+    final statusIds = events.map((e) => e.eventStatusId).toSet();
+    final hasOnDuty = events.any((e) => _onDuty(membership, e));
+    final hasOffDuty = events.any((e) => !_onDuty(membership, e));
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView(
@@ -283,20 +342,73 @@ class _TeamMemberDashboardPageState extends State<TeamMemberDashboardPage> {
               ),
               const Spacer(),
               Text(
-                '${events.length}',
+                filtering
+                    ? '${visible.length} / ${events.length}'
+                    : '${events.length}',
                 style: const TextStyle(color: _kTextGrey, fontSize: 13),
               ),
             ],
           ),
           const SizedBox(height: 12),
+          if (events.isNotEmpty) ...[
+            SearchFilterBar(
+              controller: _eventSearch,
+              hint: 'Search events by name, address or duty...',
+              onChanged: (_) => setState(() {}),
+              onClearAll: () => setState(_resetEventFilters),
+              groups: [
+                FilterGroup(
+                  label: 'When',
+                  selected: _timeFilter,
+                  onChanged: (v) => setState(() => _timeFilter = v as String?),
+                  options: const [
+                    FilterOption('All', null),
+                    FilterOption('Upcoming', 'upcoming'),
+                    FilterOption('Past', 'past'),
+                  ],
+                ),
+                if (statusIds.length > 1)
+                  FilterGroup(
+                    label: 'Status',
+                    selected: _statusFilter,
+                    onChanged: (v) =>
+                        setState(() => _statusFilter = v as int?),
+                    options: [
+                      const FilterOption('All', null),
+                      if (statusIds.contains(EventStatus.approved))
+                        const FilterOption('Approved', EventStatus.approved),
+                      if (statusIds.contains(EventStatus.pending))
+                        const FilterOption('Pending', EventStatus.pending),
+                      if (statusIds.contains(EventStatus.denied))
+                        const FilterOption('Denied', EventStatus.denied),
+                    ],
+                  ),
+                if (hasOnDuty && hasOffDuty)
+                  FilterGroup(
+                    label: 'Duty',
+                    selected: _dutyFilter,
+                    onChanged: (v) =>
+                        setState(() => _dutyFilter = v as String?),
+                    options: const [
+                      FilterOption('All', null),
+                      FilterOption('Assigned', 'assigned'),
+                      FilterOption('Not assigned', 'unassigned'),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           if (events.isEmpty)
             _EmptyCard(
               text: membership.isManager
                   ? 'No events in your organization yet.'
                   : 'You are not assigned to any events yet. Ask an Admin to assign you.',
             )
+          else if (visible.isEmpty)
+            const _EmptyCard(text: 'No events match your search and filters.')
           else
-            for (final event in events) ...[
+            for (final event in visible) ...[
               _eventCard(context, membership, event),
               const SizedBox(height: 12),
             ],

@@ -3,7 +3,7 @@ from controllers.Event_Controllers.EventOrganizerInfo_controllers import (
     create_eventorganizer, get_all_EventOrganizers, get_eventorganizer_by_id,
     update_eventorganizer, delete_eventorganizer,
     upload_eventorganizer, replace_eventorganizer_logo, apply_eventorganizer,
-    approve_eventorganizer, deny_eventorganizer
+    approve_eventorganizer, deny_eventorganizer, resubmit_eventorganizer
 )
 from controllers.Event_Controllers.OrganizerMember_controllers import (
     create_organizermember, get_all_OrganizerMembers, get_organizermember_by_id,
@@ -22,6 +22,7 @@ router.post("/organizer/create")(create_eventorganizer)
 router.post("/organizer/upload")(upload_eventorganizer)
 router.post("/organizer/apply")(apply_eventorganizer)
 router.put("/organizer/replace")(replace_eventorganizer_logo)
+router.put("/organizer/resubmit")(resubmit_eventorganizer)
 router.post("/organizer/{event_organizer_id}/approve")(approve_eventorganizer)
 router.post("/organizer/{event_organizer_id}/deny")(deny_eventorganizer)
 router.get("/organizer/all")(get_all_EventOrganizers)

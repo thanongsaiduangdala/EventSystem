@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/account_api_service.dart';
+import 'account_delete_dependencies_dialog.dart';
 
 class AccountInfoForm extends StatefulWidget {
   const AccountInfoForm({super.key});
@@ -209,15 +210,46 @@ class AccountInfoFormState extends State<AccountInfoForm> {
       ),
     );
     if (confirmed == true) {
+      await _deleteAccount(account);
+    }
+  }
+
+  /// Tries the delete. If other records still point at the account, shows the
+  /// "linked records" pop-up where the admin can delete the chosen links,
+  /// everything connected, or just the account. Repeats until the account is
+  /// gone or the admin cancels.
+  Future<void> _deleteAccount(
+    AccountModel account, {
+    String mode = 'normal',
+    List<String> targets = const [],
+  }) async {
+    try {
+      await AccountApiService.deleteAccount(
+        account.id,
+        mode: mode,
+        targets: targets,
+      );
+      if (!mounted) return;
+      _loadAccounts();
+    } on AccountHasDependenciesException catch (e) {
+      if (!mounted) return;
+      // First attempt: no message needed. After a partial clean-up: tell why we're back.
+      if (mode != 'normal') _snack(e.message);
       try {
-        await AccountApiService.deleteAccount(account.id);
-        _loadAccounts();
-      } catch (e) {
+        final deps = await AccountApiService.getAccountDependencies(account.id);
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        final choice = await showAccountDependenciesDialog(context, deps);
+        if (choice == null) {
+          // Cancelled - still refresh, a partial clean-up may have changed data.
+          if (mode != 'normal') _loadAccounts();
+          return;
+        }
+        await _deleteAccount(account, mode: choice.mode, targets: choice.targets);
+      } catch (err) {
+        _snack('Error: $err');
       }
+    } catch (e) {
+      _snack('Error: $e');
     }
   }
 

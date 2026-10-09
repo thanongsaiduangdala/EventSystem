@@ -5,28 +5,58 @@ from models.schema import (
     AddEventInfoRequest, UpdateEventInfoRequest, UpdateEventStatusRequest,
     UpdateEventVisibilityRequest,
 )
-from auth.dependencies import require_permission, ROLE_SUPERADMIN, get_current_account
-from auth.team_access import ensure_event_editor, ensure_org_editor
+from auth.dependencies import (
+    require_permission, require_reviewer_or_permission, ROLE_SUPERADMIN, get_current_account,
+)
+from auth.team_access import (
+    ensure_event_editor, ensure_org_editor, effective_role_for, is_manager, is_editor,
+)
 from controllers.Event_Controllers.Notification_controllers import (
     notify_accounts, staff_account_ids
 )
+from realtime.review_events import publish_review_change
 
-# EventStatusID values: 1 = Pending, 2 = Approved, 3 = Denied.
+# EventStatusID values: 1 = Pending, 2 = Approved, 3 = Denied, 4 = Draft.
+# A Draft is saved on the server (photos included) but is private to the
+# organization's owner/admins/editors until it is submitted for approval.
 EVENT_STATUS_PENDING = 1
 EVENT_STATUS_APPROVED = 2
 EVENT_STATUS_DENIED = 3
+EVENT_STATUS_DRAFT = 4
 
 EVENT_SELECT_COLUMNS = """
     EventID, EventName, EventStartingYMDT, EventEndingYMDT,
     EventAddress, Latitude, Longitude, EventDescription, EventOrganizerID,
-    OnePerPerson, EventStatusID, EventVisible
+    OnePerPerson, EventStatusID, EventVisible, DenyReason
 """
+
+MAX_DENY_REASON_LENGTH = 1000
+
+
+def _owner_of_organizer(con, organizer_id):
+    """AccountID of the organization's owner (None if unknown)."""
+    with con.cursor() as cur:
+        cur.execute(
+            "SELECT CreatedByAccountID FROM eventorganizerinfo WHERE EventOrganizerID = %s",
+            (organizer_id,),
+        )
+        row = cur.fetchone()
+    return row["CreatedByAccountID"] if row else None
 
 
 def _event_status_for(current) -> int:
     """New/edited events need approval. Only a SUPERADMIN creating directly
     gets an immediately-Approved event; everyone else starts as Pending."""
     return EVENT_STATUS_APPROVED if current.get("status_id") == ROLE_SUPERADMIN else EVENT_STATUS_PENDING
+
+
+def _can_view_drafts(con, current, org_id) -> bool:
+    """Drafts are visible to SUPERADMINs and to the organization's own
+    owner / admins / page editors -- nobody else."""
+    if current.get("status_id") == ROLE_SUPERADMIN:
+        return True
+    roles = effective_role_for(con, current["account_id"], org_id)
+    return is_manager(roles) or is_editor(roles)
 
 
 async def create_event(req_data: AddEventInfoRequest, current=Depends(get_current_account)):
@@ -50,17 +80,26 @@ async def create_event(req_data: AddEventInfoRequest, current=Depends(get_curren
                 req_data.EventDescription,
                 req_data.EventOrganizerID,
                 1 if req_data.OnePerPerson else 0,
-                _event_status_for(current),
+                EVENT_STATUS_DRAFT if req_data.AsDraft else _event_status_for(current),
             ))
             event_id = cur.lastrowid
             con.commit()
+
+        if req_data.AsDraft:
+            # Drafts are private: no one is asked to review it yet.
+            return {"msg": "Draft saved successfully", "event_id": event_id,
+                    "EventStatusID": EVENT_STATUS_DRAFT}
 
         notify_accounts(
             staff_account_ids(),
             "event",
             "New event awaiting approval",
             f"'{req_data.EventName}' has been submitted for approval.",
-            link=f"event:{event_id}",
+            link=f"event_review:{event_id}",
+        )
+        await publish_review_change(
+            kind="event", item_id=event_id, status_id=_event_status_for(current),
+            owner_account_id=_owner_of_organizer(con, req_data.EventOrganizerID),
         )
 
         return {"msg": "Event created successfully", "event_id": event_id}
@@ -92,7 +131,7 @@ async def get_all_events(current=Depends(require_permission("view_events"))):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def get_events_with_status(current=Depends(require_permission("create_event"))):
+async def get_events_with_status(current=Depends(require_reviewer_or_permission("create_event"))):
     """Management view: every event including Pending/Denied ones, so
     organizers can track approval and admins can review submissions."""
     try:
@@ -105,7 +144,19 @@ async def get_events_with_status(current=Depends(require_permission("create_even
             """)
             events = cur.fetchall()
 
-        return {"events": events}
+        # Hide other organizations' drafts.
+        allowed = {}
+        visible = []
+        for ev in events:
+            if ev["EventStatusID"] == EVENT_STATUS_DRAFT:
+                org = ev["EventOrganizerID"]
+                if org not in allowed:
+                    allowed[org] = _can_view_drafts(con, current, org)
+                if not allowed[org]:
+                    continue
+            visible.append(ev)
+
+        return {"events": visible}
 
     except pymysql.MySQLError as err:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
@@ -123,6 +174,11 @@ async def get_event_by_id(event_id: int, current=Depends(require_permission("vie
             event = cur.fetchone()
 
         if event is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+
+        if event["EventStatusID"] == EVENT_STATUS_DRAFT and not _can_view_drafts(
+            con, current, event["EventOrganizerID"]
+        ):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
 
         return {"event": event}
@@ -169,6 +225,10 @@ async def update_event(req_data: UpdateEventInfoRequest, current=Depends(get_cur
                     EventDescription = %s,
                     EventOrganizerID = %s,
                     OnePerPerson = %s,
+                    -- Must come BEFORE the EventStatusID line: MySQL applies
+                    -- SET assignments left to right, so by the time the status
+                    -- changes below this CASE has already seen the old value.
+                    DenyReason = CASE WHEN EventStatusID = %s THEN NULL ELSE DenyReason END,
                     EventStatusID = CASE WHEN EventStatusID = %s THEN %s ELSE EventStatusID END
                 WHERE EventID = %s
             """
@@ -182,6 +242,7 @@ async def update_event(req_data: UpdateEventInfoRequest, current=Depends(get_cur
                 req_data.EventDescription,
                 req_data.EventOrganizerID,
                 1 if req_data.OnePerPerson else 0,
+                EVENT_STATUS_DENIED,
                 EVENT_STATUS_DENIED,
                 EVENT_STATUS_PENDING,
                 req_data.EventID,
@@ -197,7 +258,11 @@ async def update_event(req_data: UpdateEventInfoRequest, current=Depends(get_cur
                 "Edited event resubmitted for approval",
                 f"'{req_data.EventName}' was previously denied. It has been "
                 "edited and is now pending approval again.",
-                link=f"event:{req_data.EventID}",
+                link=f"event_review:{req_data.EventID}",
+            )
+            await publish_review_change(
+                kind="event", item_id=req_data.EventID, status_id=EVENT_STATUS_PENDING,
+                owner_account_id=_owner_of_organizer(con, req_data.EventOrganizerID),
             )
 
         return {
@@ -250,27 +315,71 @@ async def set_event_visibility(req_data: UpdateEventVisibilityRequest, current=D
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-async def update_event_status(req_data: UpdateEventStatusRequest, current=Depends(require_permission("update_event"))):
-    """Admin/employee action: approve (2) or deny (3) a pending event."""
-    if req_data.EventStatusID not in (EVENT_STATUS_PENDING, EVENT_STATUS_APPROVED, EVENT_STATUS_DENIED):
+async def update_event_status(req_data: UpdateEventStatusRequest, current=Depends(require_reviewer_or_permission("update_event"))):
+    """Admin/employee action: approve (2) or deny (3) a PENDING event.
+
+    Two reviewers can have the same event open. The decision is written with
+    `WHERE EventStatusID = Pending`, so only the first one wins; the second
+    gets a 409 telling them it was already decided instead of silently
+    overwriting the first reviewer's decision. A denial must carry a reason,
+    which the organizer sees on their dashboard.
+    """
+    if req_data.EventStatusID not in (EVENT_STATUS_APPROVED, EVENT_STATUS_DENIED):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="EventStatusID must be 1 (pending), 2 (approved) or 3 (denied)",
+            detail="EventStatusID must be 2 (approved) or 3 (denied)",
         )
+
+    denying = req_data.EventStatusID == EVENT_STATUS_DENIED
+    reason = (req_data.Reason or "").strip()
+    if denying:
+        if not reason:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please give a reason when denying an event.",
+            )
+        if len(reason) > MAX_DENY_REASON_LENGTH:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The reason is too long (max {MAX_DENY_REASON_LENGTH} characters).",
+            )
 
     try:
         con = getConnect()
         with con.cursor() as cur:
             cur.execute(
-                "UPDATE eventinfo SET EventStatusID = %s WHERE EventID = %s",
-                (req_data.EventStatusID, req_data.EventID),
+                "UPDATE eventinfo SET EventStatusID = %s, DenyReason = %s "
+                "WHERE EventID = %s AND EventStatusID = %s",
+                (
+                    req_data.EventStatusID,
+                    reason if denying else None,
+                    req_data.EventID,
+                    EVENT_STATUS_PENDING,
+                ),
             )
-
-            if cur.rowcount == 0:
-                con.rollback()
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
-
+            changed = cur.rowcount
             con.commit()
+
+            if changed == 0:
+                # Lost the race, wrong state, or no such event: say which.
+                cur.execute("SELECT EventStatusID FROM eventinfo WHERE EventID = %s", (req_data.EventID,))
+                row = cur.fetchone()
+                if row is None:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+                if row["EventStatusID"] == EVENT_STATUS_DRAFT:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="This event is still a draft. The organizer has not submitted it for approval yet.",
+                    )
+                decided = {
+                    EVENT_STATUS_APPROVED: "approved",
+                    EVENT_STATUS_DENIED: "denied",
+                }.get(row["EventStatusID"], "reviewed")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"This event was already {decided} by another reviewer. "
+                           "The list has been refreshed.",
+                )
 
             cur.execute(
                 """
@@ -283,30 +392,37 @@ async def update_event_status(req_data: UpdateEventStatusRequest, current=Depend
             )
             event_row = cur.fetchone()
 
-        if event_row is not None and event_row["OwnerAccountID"]:
-            if req_data.EventStatusID == EVENT_STATUS_APPROVED:
+        owner_id = event_row["OwnerAccountID"] if event_row else None
+        if event_row is not None and owner_id:
+            if not denying:
                 title, body = (
                     "Event approved",
                     f"Your event '{event_row['EventName']}' was approved and "
                     "is now visible to everyone.",
                 )
-            elif req_data.EventStatusID == EVENT_STATUS_DENIED:
+            else:
                 title, body = (
                     "Event not approved",
-                    f"Your event '{event_row['EventName']}' was not approved. "
-                    "Please review the details and resubmit.",
+                    f"Your event '{event_row['EventName']}' was not approved.\n"
+                    f"Reason: {reason}\n"
+                    "Please fix it, then open the event and press Save to "
+                    "send it for review again.",
                 )
-            else:
-                title, body = None, None
+            notify_accounts(
+                [owner_id],
+                "event",
+                title,
+                body,
+                link=f"event:{req_data.EventID}",
+            )
 
-            if title is not None:
-                notify_accounts(
-                    [event_row["OwnerAccountID"]],
-                    "event",
-                    title,
-                    body,
-                    link=f"event:{req_data.EventID}",
-                )
+        await publish_review_change(
+            kind="event",
+            item_id=req_data.EventID,
+            status_id=req_data.EventStatusID,
+            owner_account_id=owner_id,
+            deny_reason=reason if denying else None,
+        )
 
         return {"msg": "Event status updated successfully", "event_id": req_data.EventID, "EventStatusID": req_data.EventStatusID}
 
@@ -329,6 +445,48 @@ async def delete_event(event_id: int, current=Depends(get_current_account)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
 
         return {"msg": "Event deleted successfully", "event_id": event_id}
+
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def submit_event_draft(event_id: int, current=Depends(get_current_account)):
+    """Turns a saved Draft into a real submission: Pending for review (or
+    Approved straight away for a SUPERADMIN), and tells the reviewers."""
+    try:
+        con = getConnect()
+        await ensure_event_editor(con, current, event_id, "create_event")
+        with con.cursor() as cur:
+            cur.execute(
+                "SELECT EventName, EventStatusID FROM eventinfo WHERE EventID = %s",
+                (event_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+            if row["EventStatusID"] != EVENT_STATUS_DRAFT:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Only a draft can be submitted.",
+                )
+            new_status = _event_status_for(current)
+            cur.execute(
+                "UPDATE eventinfo SET EventStatusID = %s WHERE EventID = %s",
+                (new_status, event_id),
+            )
+            con.commit()
+
+        notify_accounts(
+            staff_account_ids(),
+            "event",
+            "New event awaiting approval",
+            f"'{row['EventName']}' has been submitted for approval.",
+            link=f"event_review:{event_id}",
+        )
+        await publish_review_change(kind="event", item_id=event_id, status_id=new_status)
+        return {"msg": "Event submitted successfully", "event_id": event_id, "EventStatusID": new_status}
 
     except HTTPException:
         raise

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../models/sponser_models.dart';
 import '../config/api_config.dart';
+import 'auth_service.dart';
 
 class SponserApiService {
   // TODO: point this at the same base URL / config your EventApiService and
@@ -10,6 +11,18 @@ class SponserApiService {
   static String get baseUrl => ApiConfig.baseUrl;
 
   static Uri _u(String path) => Uri.parse('$baseUrl$path');
+
+  /// Same bearer-token header every other service sends. Without it the
+  /// backend answers "Not authenticated" (e.g. when linking sponsors to an
+  /// event). Pass json: false for multipart requests so http can set the
+  /// multipart Content-Type (with its boundary) itself.
+  static Map<String, String> _authHeaders({bool json = true}) {
+    final headers = <String, String>{};
+    if (json) headers['Content-Type'] = 'application/json';
+    final token = AuthService.currentToken;
+    if (token != null) headers['Authorization'] = 'Bearer $token';
+    return headers;
+  }
 
   static String fullImageUrl(String path) {
     if (path.startsWith('http')) return path;
@@ -19,7 +32,7 @@ class SponserApiService {
   // ---------------- sponsor CRUD ----------------
 
   static Future<List<SponserModel>> getAllSponsers() async {
-    final res = await http.get(_u('/eventsponser/sponser/all'));
+    final res = await http.get(_u('/eventsponser/sponser/all'), headers: _authHeaders());
     if (res.statusCode != 200) throw Exception(res.body);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final list = (data['sponserinfo'] as List).cast<Map<String, dynamic>>();
@@ -27,7 +40,7 @@ class SponserApiService {
   }
 
   static Future<SponserModel> getSponserById(int id) async {
-    final res = await http.get(_u('/eventsponser/sponser/$id'));
+    final res = await http.get(_u('/eventsponser/sponser/$id'), headers: _authHeaders());
     if (res.statusCode != 200) throw Exception(res.body);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     return SponserModel.fromJson(data['sponserinfo'] as Map<String, dynamic>);
@@ -47,6 +60,7 @@ class SponserApiService {
     req.files.add(
       http.MultipartFile.fromBytes('logo', bytes, filename: filename),
     );
+    req.headers.addAll(_authHeaders(json: false));
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
     if (res.statusCode != 200) throw Exception(res.body);
@@ -75,6 +89,7 @@ class SponserApiService {
         ),
       );
     }
+    req.headers.addAll(_authHeaders(json: false));
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
     if (res.statusCode != 200) throw Exception(res.body);
@@ -89,7 +104,7 @@ class SponserApiService {
   }) async {
     final res = await http.put(
       _u('/eventsponser/sponser/update'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _authHeaders(),
       body: jsonEncode({
         'SponserID': sponserId,
         'SponserName': name,
@@ -100,14 +115,17 @@ class SponserApiService {
   }
 
   static Future<void> deleteSponser(int sponserId) async {
-    final res = await http.delete(_u('/eventsponser/sponser/$sponserId'));
+    final res = await http.delete(
+      _u('/eventsponser/sponser/$sponserId'),
+      headers: _authHeaders(),
+    );
     if (res.statusCode != 200) throw Exception(res.body);
   }
 
   // ---------------- event <-> sponsor linking ----------------
 
   static Future<List<EventSponserModel>> getAllEventSponsers() async {
-    final res = await http.get(_u('/eventsponser/eventsponser/all'));
+    final res = await http.get(_u('/eventsponser/eventsponser/all'), headers: _authHeaders());
     if (res.statusCode != 200) throw Exception(res.body);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final list = (data['eventsponserinfo'] as List)
@@ -121,7 +139,7 @@ class SponserApiService {
   }) async {
     final res = await http.post(
       _u('/eventsponser/eventsponser/createsponser'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _authHeaders(),
       body: jsonEncode({'EventID': eventId, 'SponserID': sponserId}),
     );
     if (res.statusCode != 200) throw Exception(res.body);
@@ -135,7 +153,7 @@ class SponserApiService {
   }) async {
     final res = await http.put(
       _u('/eventsponser/eventsponser/update'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _authHeaders(),
       body: jsonEncode({
         'EventSponserID': eventSponserId,
         'EventID': eventId,
@@ -148,6 +166,7 @@ class SponserApiService {
   static Future<void> deleteEventSponserLink(int eventSponserId) async {
     final res = await http.delete(
       _u('/eventsponser/eventsponser/$eventSponserId'),
+      headers: _authHeaders(),
     );
     if (res.statusCode != 200) throw Exception(res.body);
   }

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import '../config/api_config.dart';
+import 'api_errors.dart';
 
 class EventOrganizer {
   final int id;
@@ -15,6 +16,9 @@ class EventOrganizer {
   /// 3 Denied. Older API responses without the field count as Approved.
   final int statusId;
 
+  /// Why a reviewer denied this organization (only set while it is Denied).
+  final String? denyReason;
+
   bool get isApproved => statusId == 2;
   bool get isPending => statusId == 1;
   bool get isDenied => statusId == 3;
@@ -26,6 +30,7 @@ class EventOrganizer {
     required this.createdByAccountId,
     this.description,
     this.statusId = 2,
+    this.denyReason,
   });
 
   factory EventOrganizer.fromJson(Map<String, dynamic> json) {
@@ -36,6 +41,7 @@ class EventOrganizer {
       createdByAccountId: json['CreatedByAccountID'] as int,
       description: json['EventOrganizerDiscription'] as String?,
       statusId: (json['OrganizerStatusID'] as int?) ?? 2,
+      denyReason: json['DenyReason'] as String?,
     );
   }
 }
@@ -122,25 +128,72 @@ class EventOrganizerApiService {
     }
   }
 
-  /// Employee/Superadmin: approve a submitted organization.
+  /// Employee/Superadmin: approve a pending organization. Throws
+  /// [ReviewConflictException] when another reviewer already decided it.
   static Future<void> approveOrganizer(int id) async {
     final response = await http.post(
       Uri.parse('$baseUrl/eventorganizer/organizer/$id/approve'),
       headers: _authHeaders(),
     );
+    if (response.statusCode == 409) {
+      throw ReviewConflictException(
+        errorDetailOf(response) ??
+            'This organization was already reviewed by someone else.',
+      );
+    }
     if (response.statusCode != 200) {
       throw _handleError(response, 'Failed to approve organization');
     }
   }
 
-  /// Employee/Superadmin: deny a submitted organization.
-  static Future<void> denyOrganizer(int id) async {
+  /// Employee/Superadmin: deny a pending organization. [reason] is required
+  /// and is shown to the owner. Throws [ReviewConflictException] when another
+  /// reviewer already decided it.
+  static Future<void> denyOrganizer(int id, {required String reason}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/eventorganizer/organizer/$id/deny'),
       headers: _authHeaders(),
+      body: jsonEncode({'Reason': reason}),
     );
+    if (response.statusCode == 409) {
+      throw ReviewConflictException(
+        errorDetailOf(response) ??
+            'This organization was already reviewed by someone else.',
+      );
+    }
     if (response.statusCode != 200) {
       throw _handleError(response, 'Failed to deny organization');
+    }
+  }
+
+  /// Owner: save a denied organization again. Updates its details and sends
+  /// it back to Pending so reviewers look at it again. [bytes] is only
+  /// needed when the logo is being replaced.
+  static Future<void> resubmitOrganizer({
+    required int id,
+    required String name,
+    String? description,
+    Uint8List? bytes,
+    String filename = 'logo.jpg',
+  }) async {
+    final request = http.MultipartRequest(
+      'PUT',
+      Uri.parse('$baseUrl/eventorganizer/organizer/resubmit'),
+    );
+    request.headers.addAll(_multipartAuthHeaders());
+    request.fields['EventOrganizerID'] = id.toString();
+    request.fields['EventOrganizerName'] = name;
+    if (description != null) {
+      request.fields['EventOrganizerDiscription'] = description;
+    }
+    if (bytes != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes('logo', bytes, filename: filename),
+      );
+    }
+    final response = await http.Response.fromStream(await request.send());
+    if (response.statusCode != 200) {
+      throw _handleError(response, 'Failed to resubmit organization');
     }
   }
 

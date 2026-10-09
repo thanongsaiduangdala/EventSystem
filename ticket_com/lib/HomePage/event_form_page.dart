@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,10 +12,12 @@ import 'package:ticket_com/services/category_api_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
 import 'package:ticket_com/services/event_question_api_service.dart';
+import 'package:ticket_com/services/location_service.dart';
 import 'package:ticket_com/services/sponser_api_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
 import 'package:ticket_com/utils/category_icons.dart';
+import 'package:ticket_com/utils/event_draft_store.dart';
 
 const Color _kLavender = Color(0xFFEFEEFC);
 const Color _kTextDark = Color(0xFF212121);
@@ -94,6 +98,18 @@ class _EventFormPageState extends State<EventFormPage> {
 
   // ---- loading the current details of an event being edited ----
   bool _existingReady = true;
+
+  // True while this event is a server-side draft (saved, not yet submitted).
+  bool _isDraftEvent = false;
+
+  // Address suggestion from the map pin (reverse geocoding).
+  bool _resolvingAddress = false;
+  String? _suggestedAddress; // shown as a tap-to-use chip
+  String? _autoFilledAddress; // last text we put in the field ourselves
+
+  // Unsaved-changes tracking: the form as it looked when it was opened (or
+  // last saved as a draft). Anything different from this counts as a change.
+  String _baseline = '';
   bool _loadingExisting = false;
   String? _existingError;
 
@@ -131,12 +147,17 @@ class _EventFormPageState extends State<EventFormPage> {
       _selectedOrganizerId = ev.organizerId;
       _onePerPerson = ev.onePerPerson;
       _existingReady = false;
+      _isDraftEvent = ev.eventStatusId == EventStatus.draft;
     } else {
       _selectedOrganizerId = widget.organizerId;
     }
+    _baseline = _snapshot();
     _loadOrganizers();
     _loadLookups();
     if (ev != null) _loadExisting();
+    if (ev == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _offerSavedDraft());
+    }
 
     // The permission list in the saved session can be stale (e.g. an admin
     // changed the organizer role after login), so refresh it quietly.
@@ -174,6 +195,7 @@ class _EventFormPageState extends State<EventFormPage> {
               .toList()
           : organizers;
       if (!mounted) return;
+      final wasClean = !_isDirty;
       setState(() {
         _organizers = visible;
         if (_selectedOrganizerId != null &&
@@ -181,6 +203,9 @@ class _EventFormPageState extends State<EventFormPage> {
           _selectedOrganizerId = null;
         }
       });
+      // Loading the list may drop an unavailable pre-selected organizer; that
+      // is not a change the organizer made.
+      if (wasClean) _baseline = _snapshot();
     } catch (e) {
       _snack('Failed to load organizers: $e');
     } finally {
@@ -271,6 +296,7 @@ class _EventFormPageState extends State<EventFormPage> {
       questions.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
 
       if (!mounted) return;
+      final wasClean = !_isDirty;
       setState(() {
         _images
           ..clear()
@@ -303,6 +329,7 @@ class _EventFormPageState extends State<EventFormPage> {
         _existingReady = true;
         _loadingExisting = false;
       });
+      if (wasClean) _baseline = _snapshot();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -562,44 +589,73 @@ class _EventFormPageState extends State<EventFormPage> {
   }
 
   Future<void> _save() async {
-    if (_isSubmitting) return;
+    await _persist(asDraft: false);
+  }
+
+  /// Saves the form to the server. With [asDraft] the event is stored as a
+  /// private Draft (photos, tickets, questions and all) that the
+  /// organization's owner/admins can open and review before it is submitted;
+  /// otherwise it is submitted (or, for an existing draft, submitted now).
+  /// Returns true when everything was saved.
+  Future<bool> _persist({required bool asDraft, bool quiet = false}) async {
+    if (_isSubmitting) return false;
     if (!_existingReady) {
       _snack(
         "This event's current details haven't loaded yet. "
         'Tap Retry at the top, then save.',
       );
-      return;
+      return false;
     }
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      _snack('Fill in the event name and description');
-      return;
-    }
-    if (_startDateTime == null || _endDateTime == null) {
-      _snack('Select both start and end date/time');
-      return;
-    }
-    if (!_endDateTime!.isAfter(_startDateTime!)) {
-      _snack('The event must end after it starts');
-      return;
-    }
-    if (_selectedOrganizerId == null) {
-      _snack('Select the organizer for this event');
-      return;
-    }
-    if (!_validateCoords(_latitudeController.text, isLat: true) ||
-        !_validateCoords(_longitudeController.text)) {
-      _snack('Enter valid coordinates for the event location');
-      return;
+    if (asDraft) {
+      if (_accountId == null) {
+        _snack('Log in to save a draft');
+        return false;
+      }
+      if (_nameController.text.trim().isEmpty) {
+        _snack('Give the event a name before saving a draft');
+        return false;
+      }
+      if (_selectedOrganizerId == null) {
+        _snack('Select the organizer for this draft');
+        return false;
+      }
+    } else {
+      if (!(_formKey.currentState?.validate() ?? false)) {
+        _snack('Fill in the event name and description');
+        return false;
+      }
+      if (_startDateTime == null || _endDateTime == null) {
+        _snack('Select both start and end date/time');
+        return false;
+      }
+      if (!_endDateTime!.isAfter(_startDateTime!)) {
+        _snack('The event must end after it starts');
+        return false;
+      }
+      if (_selectedOrganizerId == null) {
+        _snack('Select the organizer for this event');
+        return false;
+      }
+      if (!_validateCoords(_latitudeController.text, isLat: true) ||
+          !_validateCoords(_longitudeController.text)) {
+        _snack('Enter valid coordinates for the event location');
+        return false;
+      }
     }
 
     setState(() => _isSubmitting = true);
+    final wasCreating = _eventId == null;
 
     // Step 1: the event itself.
     try {
-      final start = formatDateTimeForApi(_startDateTime!);
-      final end = formatDateTimeForApi(_endDateTime!);
-      final lat = double.parse(_latitudeController.text.trim());
-      final lng = double.parse(_longitudeController.text.trim());
+      // A draft may be incomplete, but the server still needs a value for
+      // every field, so fill the gaps with placeholders until it is finished.
+      final startAt = _startDateTime ?? DateTime.now();
+      final endAt = _endDateTime ?? startAt.add(const Duration(hours: 1));
+      final start = formatDateTimeForApi(startAt);
+      final end = formatDateTimeForApi(endAt);
+      final lat = double.tryParse(_latitudeController.text.trim()) ?? 0.0;
+      final lng = double.tryParse(_longitudeController.text.trim()) ?? 0.0;
       if (_eventId != null) {
         await EventApiService.updateEvent(
           eventId: _eventId!,
@@ -624,21 +680,29 @@ class _EventFormPageState extends State<EventFormPage> {
           eventDescription: _descriptionController.text.trim(),
           eventOrganizerID: _selectedOrganizerId!,
           onePerPerson: _onePerPerson,
+          asDraft: asDraft,
         );
         final newId = _readId(created, ['event_id', 'EventID']);
         if (newId == null) {
           throw Exception('The server did not return the new event id.');
         }
         _eventId = newId;
+        if (asDraft) _isDraftEvent = true;
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() => _isSubmitting = false);
       _snack('Save failed: ${friendlyError(e)}');
-      return;
+      return false;
     }
-    if (!mounted) return;
+    if (!mounted) return false;
     setState(() => _hasSavedSomething = true);
+    // The event now exists on the server, so an old on-device draft of it is
+    // obsolete.
+    final draftOwner = _accountId;
+    if (wasCreating && draftOwner != null) {
+      EventDraftStore.clear(draftOwner).catchError((Object _) {});
+    }
 
     // Step 2: everything attached to the event. Each part is independent, so
     // one failing (say, a missing permission) doesn't lose the others.
@@ -657,13 +721,41 @@ class _EventFormPageState extends State<EventFormPage> {
     await step('Questions', _syncQuestions);
     await step('Photos', _syncImages);
 
-    if (!mounted) return;
+    if (!mounted) return false;
     if (problems.isEmpty) {
+      if (asDraft) {
+        setState(() {
+          _isSubmitting = false;
+          _baseline = _snapshot();
+        });
+        if (!quiet) {
+          _snack(
+            'Draft saved. Your organization\u2019s owner and admins can open '
+            'it before you submit.',
+          );
+        }
+        return true;
+      }
+      if (_isDraftEvent) {
+        // A finished draft becomes a real submission only once every part
+        // of it reached the server.
+        try {
+          await EventApiService.submitEventDraft(_eventId!);
+          _isDraftEvent = false;
+        } catch (e) {
+          if (!mounted) return false;
+          setState(() => _isSubmitting = false);
+          _snack('Saved, but it could not be submitted: ${friendlyError(e)}');
+          return false;
+        }
+      }
+      if (!mounted) return false;
       Navigator.pop(context, true);
-      return;
+      return true;
     }
     setState(() => _isSubmitting = false);
     await _showSaveProblems(problems);
+    return false;
   }
 
   Future<void> _syncCategories() async {
@@ -869,6 +961,223 @@ class _EventFormPageState extends State<EventFormPage> {
     if (closeAnyway == true && mounted) Navigator.pop(context, true);
   }
 
+  // ---------------- unsaved changes & drafts ----------------
+
+  /// Everything the organizer can change, as one comparable string.
+  String _snapshot() => jsonEncode({
+    'n': _nameController.text.trim(),
+    'a': _addressController.text.trim(),
+    'd': _descriptionController.text.trim(),
+    'lat': _latitudeController.text.trim(),
+    'lng': _longitudeController.text.trim(),
+    's': _startDateTime?.toIso8601String(),
+    'e': _endDateTime?.toIso8601String(),
+    'o': _selectedOrganizerId,
+    'p': _onePerPerson,
+    'c': (_selectedCategoryIds.toList()..sort()),
+    'sp': (_selectedSponsorIds.toList()..sort()),
+    't': [
+      for (final t in _tickets)
+        [
+          t.id,
+          t.name,
+          t.price,
+          t.capacity,
+          t.saleStart.toIso8601String(),
+          t.saleEnd.toIso8601String(),
+        ],
+    ],
+    'q': [
+      for (final q in _questions)
+        [q.id, q.text, q.typeId, q.isRequired, q.options],
+    ],
+    'i': [
+      for (final i in _images) [i.id, i.filename, i.bytes?.length, i.isCover],
+    ],
+    'di': _deletedImageIds,
+    'dt': _deletedTicketIds,
+    'dq': _deletedQuestionIds,
+  });
+
+  bool get _isDirty => _snapshot() != _baseline;
+
+  int? get _accountId => AuthService.currentSession?.accountId;
+
+  void _applyDraft(Map<String, dynamic> d) {
+    DateTime? date(Object? v) => v is String ? DateTime.tryParse(v) : null;
+    List<int> ids(Object? v) =>
+        v is List ? [for (final x in v) if (x is num) x.toInt()] : <int>[];
+
+    setState(() {
+      _nameController.text = (d['name'] ?? '').toString();
+      _addressController.text = (d['address'] ?? '').toString();
+      _descriptionController.text = (d['description'] ?? '').toString();
+      _latitudeController.text = (d['lat'] ?? '').toString();
+      _longitudeController.text = (d['lng'] ?? '').toString();
+      _startDateTime = date(d['start']);
+      _endDateTime = date(d['end']);
+      final org = d['organizerId'];
+      if (org is num) _selectedOrganizerId = org.toInt();
+      _onePerPerson = d['onePerPerson'] == true;
+      _selectedCategoryIds
+        ..clear()
+        ..addAll(ids(d['categories']));
+      _selectedSponsorIds
+        ..clear()
+        ..addAll(ids(d['sponsors']));
+      _tickets
+        ..clear()
+        ..addAll([
+          for (final t in (d['tickets'] as List? ?? const []))
+            if (t is Map)
+              TicketTypeDraft(
+                name: (t['name'] ?? '').toString(),
+                price: (t['price'] as num?)?.toInt() ?? 0,
+                capacity: (t['capacity'] as num?)?.toInt() ?? 0,
+                saleStart: date(t['saleStart']) ?? DateTime.now(),
+                saleEnd: date(t['saleEnd']) ?? DateTime.now(),
+              ),
+        ]);
+      _questions
+        ..clear()
+        ..addAll([
+          for (final q in (d['questions'] as List? ?? const []))
+            if (q is Map)
+              QuestionDraft(
+                text: (q['text'] ?? '').toString(),
+                typeId: (q['typeId'] as num?)?.toInt() ?? 1,
+                isRequired: q['required'] != false,
+                options: [
+                  for (final o in (q['options'] as List? ?? const []))
+                    o.toString(),
+                ],
+              ),
+        ]);
+    });
+    _baseline = _snapshot();
+  }
+
+  static String _two(int n) => n.toString().padLeft(2, '0');
+
+  String _when(DateTime t) =>
+      '${t.year}-${_two(t.month)}-${_two(t.day)} ${_two(t.hour)}:${_two(t.minute)}';
+
+  /// When "Create Event" opens and an unfinished draft exists, offer to
+  /// continue it.
+  Future<void> _offerSavedDraft() async {
+    final accountId = _accountId;
+    if (accountId == null || !mounted) return;
+    final draft = await EventDraftStore.load(accountId);
+    if (draft == null || !mounted) return;
+
+    final name = (draft['name'] ?? '').toString();
+    final savedAt = DateTime.tryParse((draft['savedAt'] ?? '').toString());
+    final useDraft = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text(
+          'Continue your draft?',
+          style: TextStyle(color: _kTextDark, fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          'You have an unfinished event'
+          '${name.isEmpty ? '' : ' "$name"'}'
+          '${savedAt == null ? '' : ' saved on ${_when(savedAt)}'}. '
+          'Photos are not kept in drafts.',
+          style: const TextStyle(color: _kTextGrey, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Start new'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: kAccent),
+            child: const Text('Continue draft'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (useDraft == true) {
+      _applyDraft(draft);
+    } else if (useDraft == false) {
+      await EventDraftStore.clear(accountId);
+    }
+  }
+
+  /// Saves the form to the server as a draft without submitting it, so the
+  /// organization's owner/admins can open it (photos included) before it is
+  /// submitted. Returns true when it was saved.
+  Future<bool> _saveDraft({bool quiet = false}) =>
+      _persist(asDraft: true, quiet: quiet);
+
+  /// Leaves the form, telling the dashboard to refresh if anything already
+  /// reached the server.
+  void _leave() {
+    Navigator.pop(context, _hasSavedSomething ? true : null);
+  }
+
+  /// Back button / back gesture: leave straight away when nothing changed,
+  /// otherwise ask first.
+  Future<void> _handleBack() async {
+    if (_isSubmitting) return;
+    if (!_isDirty) {
+      _leave();
+      return;
+    }
+    final canDraft = !_isEditing || _isDraftEvent;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text(
+          canDraft ? 'Leave without submitting?' : 'Discard your changes?',
+          style: const TextStyle(
+            color: _kTextDark,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        content: Text(
+          canDraft
+              ? 'If you exit now, your changes will be deleted. You can save '
+                    'them as a draft to finish later. Drafts are saved to the '
+                    'server with their photos, so your organization\u2019s '
+                    'owner and admins can see them before you submit.'
+              : 'If you exit now, your changes will be deleted.',
+          style: const TextStyle(color: _kTextGrey, height: 1.4),
+        ),
+        actionsOverflowButtonSpacing: 4,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, 'stay'),
+            child: const Text('Keep editing'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, 'discard'),
+            style: TextButton.styleFrom(foregroundColor: _kRed),
+            child: const Text('Exit & delete changes'),
+          ),
+          if (canDraft)
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, 'draft'),
+              style: FilledButton.styleFrom(backgroundColor: kAccent),
+              child: const Text('Save draft & exit'),
+            ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'discard') {
+      _leave();
+    } else if (choice == 'draft') {
+      if (await _saveDraft(quiet: true) && mounted) _leave();
+    }
+  }
+
   void _snack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -877,11 +1186,12 @@ class _EventFormPageState extends State<EventFormPage> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      // Once the event exists on the server, leaving must tell the dashboard
-      // to refresh -- even if the organizer backs out after a partial save.
-      canPop: !_hasSavedSomething,
+      // Always intercept back: _handleBack asks before throwing away changes,
+      // and (via _leave) still tells the dashboard to refresh once the event
+      // exists on the server -- even after a partial save.
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) Navigator.pop(context, true);
+        if (!didPop) _handleBack();
       },
       child: Scaffold(
         backgroundColor: Colors.white,
@@ -891,7 +1201,11 @@ class _EventFormPageState extends State<EventFormPage> {
               key: _formKey,
               child: ListView(
                 padding: EdgeInsets.zero,
-                children: [_heroWithNameCard(context), _body(context)],
+                children: [
+                  _heroWithNameCard(context),
+                  _deniedBanner(),
+                  _body(context),
+                ],
               ),
             ),
             Positioned(
@@ -961,12 +1275,13 @@ class _EventFormPageState extends State<EventFormPage> {
               children: [
                 _circleIconButton(
                   icon: Icons.arrow_back_ios_new,
-                  onTap: () =>
-                      Navigator.pop(context, _hasSavedSomething ? true : null),
+                  onTap: _handleBack,
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  _isEditing ? 'Edit Event' : 'Create Event',
+                  _isDraftEvent
+                      ? 'Draft Event'
+                      : (_isEditing ? 'Edit Event' : 'Create Event'),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -1009,7 +1324,6 @@ class _EventFormPageState extends State<EventFormPage> {
 
   Widget _nameCard() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -1032,6 +1346,7 @@ class _EventFormPageState extends State<EventFormPage> {
         decoration: const InputDecoration(
           border: InputBorder.none,
           isDense: true,
+          contentPadding: EdgeInsets.fromLTRB(18, 16, 18, 16),
           hintText: 'Event name',
           hintStyle: TextStyle(
             color: _kTextGrey,
@@ -1046,6 +1361,61 @@ class _EventFormPageState extends State<EventFormPage> {
   }
 
   // ---------------- body ----------------
+
+  /// When a reviewer denied this event, show their comment right on the form
+  /// and tell the organizer what to do: fix it and press Save, which sends it
+  /// back for review (the server moves a denied event back to Pending on save).
+  Widget _deniedBanner() {
+    final ev = widget.event;
+    if (ev == null || ev.eventStatusId != EventStatus.denied) {
+      return const SizedBox.shrink();
+    }
+    final comment = ev.denyReason?.trim() ?? '';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _kRed.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _kRed.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.feedback_outlined, color: _kRed, size: 18),
+                SizedBox(width: 6),
+                Text(
+                  'This event was denied',
+                  style: TextStyle(
+                    color: _kRed,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              comment.isNotEmpty ? comment : 'No comment was left.',
+              style: const TextStyle(
+                color: _kTextDark,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Fix this, then press Save Changes to send the event for '
+              'review again.',
+              style: TextStyle(color: _kTextGrey, fontSize: 12.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _body(BuildContext context) {
     final notice = _permissionNotice();
@@ -1273,30 +1643,129 @@ class _EventFormPageState extends State<EventFormPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _mapPicker(),
+              const SizedBox(height: 10),
               TextFormField(
                 controller: _addressController,
+                minLines: 1,
+                maxLines: 3,
                 style: const TextStyle(
                   color: _kTextDark,
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                 ),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   border: InputBorder.none,
                   isDense: true,
-                  hintText: 'Event location / address',
-                  hintStyle: TextStyle(color: _kTextGrey, fontSize: 15),
+                  hintText: _resolvingAddress
+                      ? 'Finding address...'
+                      : 'Event location / address',
+                  hintStyle: const TextStyle(color: _kTextGrey, fontSize: 15),
+                  suffixIcon: _resolvingAddress
+                      ? const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: kAccent,
+                            ),
+                          ),
+                        )
+                      : null,
+                  suffixIconConstraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
                 ),
                 validator: (v) => v == null || v.trim().isEmpty
                     ? 'Enter the event address'
                     : null,
               ),
-              const SizedBox(height: 10),
-              _mapPicker(),
+              if (_suggestedAddress != null) _suggestedAddressChip(),
             ],
           ),
         ),
       ],
     );
+  }
+
+  /// Shown when the field already holds text the organizer typed themselves:
+  /// we offer the pin's address instead of overwriting their work.
+  Widget _suggestedAddressChip() {
+    final suggestion = _suggestedAddress!;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => setState(() {
+          _addressController.text = suggestion;
+          _autoFilledAddress = suggestion;
+          _suggestedAddress = null;
+        }),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: _kLavender,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.auto_awesome, color: kAccent, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Use suggested address: $suggestion',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: kAccent,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Looks up an address for the picked pin. An empty field (or one that
+  /// still holds our own earlier suggestion) is filled in automatically; if
+  /// the organizer has typed something else it is kept, and the suggestion is
+  /// offered as a tap-to-use chip instead. The field stays editable.
+  Future<void> _suggestAddressFor(LatLng point) async {
+    setState(() {
+      _resolvingAddress = true;
+      _suggestedAddress = null;
+    });
+    final label = await LocationService.reverseGeocode(point);
+    if (!mounted) return;
+
+    final suggestion = (label ?? '').trim();
+    final current = _addressController.text.trim();
+    setState(() {
+      _resolvingAddress = false;
+      if (suggestion.isEmpty) return;
+      if (current.isEmpty || current == _autoFilledAddress) {
+        _addressController.text = suggestion;
+        _autoFilledAddress = suggestion;
+      } else if (current != suggestion) {
+        _suggestedAddress = suggestion;
+      }
+    });
+    if (suggestion.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Couldn't find an address for this spot. You can type it in.",
+          ),
+        ),
+      );
+    }
   }
 
   bool get _hasCoords =>
@@ -1424,6 +1893,7 @@ class _EventFormPageState extends State<EventFormPage> {
       _latitudeController.text = picked.latitude.toStringAsFixed(6);
       _longitudeController.text = picked.longitude.toStringAsFixed(6);
     });
+    _suggestAddressFor(picked);
   }
 
   Widget _organizerRow() {
@@ -2066,6 +2536,61 @@ class _EventFormPageState extends State<EventFormPage> {
   // ---------------- save bar ----------------
 
   Widget _saveBar(BuildContext context) {
+    // Editing an existing event already saves straight to the server, so the
+    // draft button only appears while creating.
+    if (_isEditing && !_isDraftEvent) return _submitPill(context);
+    return Row(
+      children: [
+        Expanded(flex: 4, child: _draftButton()),
+        const SizedBox(width: 10),
+        Expanded(flex: 6, child: _submitPill(context)),
+      ],
+    );
+  }
+
+  Widget _draftButton() {
+    return Material(
+      elevation: 6,
+      shadowColor: kAccent.withValues(alpha: 0.3),
+      borderRadius: BorderRadius.circular(30),
+      color: Colors.white,
+      child: InkWell(
+        onTap: _isSubmitting ? null : _saveDraft,
+        borderRadius: BorderRadius.circular(30),
+        child: Container(
+          height: 58,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: kAccent, width: 1.6),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.bookmark_border, color: kAccent, size: 20),
+              SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'SAVE DRAFT',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: kAccent,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _submitPill(BuildContext context) {
     return Material(
       elevation: 8,
       shadowColor: kAccent.withValues(alpha: 0.4),
@@ -2090,7 +2615,7 @@ class _EventFormPageState extends State<EventFormPage> {
                         ),
                       )
                     : Text(
-                        (_isEditing ? 'Save Changes' : 'Submit Event')
+                        (_isEditing && !_isDraftEvent ? 'Save Changes' : 'Submit Event')
                             .toUpperCase(),
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -2110,7 +2635,9 @@ class _EventFormPageState extends State<EventFormPage> {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  _isEditing ? Icons.check : Icons.arrow_forward,
+                  _isEditing && !_isDraftEvent
+                      ? Icons.check
+                      : Icons.arrow_forward,
                   color: kAccent,
                   size: 20,
                 ),

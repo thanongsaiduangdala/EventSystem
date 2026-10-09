@@ -3,13 +3,19 @@ import uuid
 import pymysql
 from fastapi import HTTPException, status, Depends, UploadFile, File, Form
 from DB.DBConnect import getConnect
-from models.schema import AddEventOrganizerInfoRequest, UpdateEventOrganizerInfoRequest
+from models.schema import (
+    AddEventOrganizerInfoRequest, UpdateEventOrganizerInfoRequest, DenyOrganizerRequest,
+)
 from auth.dependencies import (
     require_permission, get_current_account, require_employee_or_superadmin
 )
 from controllers.Event_Controllers.Notification_controllers import (
     notify_accounts, staff_account_ids
 )
+from realtime.review_events import publish_review_change
+
+ORG_PENDING, ORG_APPROVED, ORG_DENIED = 1, 2, 3
+MAX_DENY_REASON_LENGTH = 1000
 
 # Mirrors the sponsor logo upload convention: files land in static/<subfolder>,
 # and the DB stores the path relative to that -- fullImageUrl() on the Flutter
@@ -157,6 +163,11 @@ async def apply_eventorganizer(
             f"{full_name} submitted a Become Organizer application for "
             f"'{EventOrganizerName}'. Review the organization in the Employee "
             "Dashboard (Organizations tab).",
+            link=f"org_review:{EventOrganizer_ID}",
+        )
+        await publish_review_change(
+            kind="organization", item_id=EventOrganizer_ID, status_id=ORG_PENDING,
+            owner_account_id=CreatedByAccountID,
         )
 
         return {"msg": "Event organizer application received", "EventOrganizerID": EventOrganizer_ID}
@@ -167,24 +178,41 @@ async def apply_eventorganizer(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
 
 
-def _review_eventorganizer(organizer_id: int, new_status_id: int):
-    """Sets OrganizerStatusID on a pending/denied organization and returns
-    (CreatedByAccountID, EventOrganizerName) so the owner can be notified."""
+def _review_eventorganizer(organizer_id: int, new_status_id: int, reason: str | None = None):
+    """Moves a PENDING organization to Approved / Denied and returns
+    (CreatedByAccountID, EventOrganizerName) so the owner can be notified.
+
+    The write is `WHERE OrganizerStatusID = Pending`, so when two reviewers
+    act on the same organization only the first one wins; the other gets a
+    409 instead of silently overwriting the first decision.
+    """
     con = getConnect()
     with con.cursor() as cur:
         cur.execute(
-            "SELECT CreatedByAccountID, EventOrganizerName FROM eventorganizerinfo "
-            "WHERE EventOrganizerID = %s",
+            "UPDATE eventorganizerinfo SET OrganizerStatusID = %s, DenyReason = %s "
+            "WHERE EventOrganizerID = %s AND OrganizerStatusID = %s",
+            (new_status_id, reason if new_status_id == ORG_DENIED else None,
+             organizer_id, ORG_PENDING),
+        )
+        changed = cur.rowcount
+        con.commit()
+
+        cur.execute(
+            "SELECT CreatedByAccountID, EventOrganizerName, OrganizerStatusID "
+            "FROM eventorganizerinfo WHERE EventOrganizerID = %s",
             (organizer_id,),
         )
         row = cur.fetchone()
-        if row is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event organizer not found")
-        cur.execute(
-            "UPDATE eventorganizerinfo SET OrganizerStatusID = %s WHERE EventOrganizerID = %s",
-            (new_status_id, organizer_id),
+
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event organizer not found")
+    if changed == 0:
+        decided = {ORG_APPROVED: "approved", ORG_DENIED: "denied"}.get(row["OrganizerStatusID"], "reviewed")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This organization was already {decided} by another reviewer. "
+                   "The list has been refreshed.",
         )
-        con.commit()
     return row["CreatedByAccountID"], row["EventOrganizerName"]
 
 
@@ -192,16 +220,20 @@ async def approve_eventorganizer(
     event_organizer_id: int,
     current=Depends(require_employee_or_superadmin),
 ):
-    """Employee/Superadmin action: approves a submitted organization
+    """Employee/Superadmin action: approves a pending organization
     (OrganizerStatusID = 2) so it becomes visible and usable."""
     try:
-        owner_id, org_name = _review_eventorganizer(event_organizer_id, 2)
+        owner_id, org_name = _review_eventorganizer(event_organizer_id, ORG_APPROVED)
         notify_accounts(
             [owner_id],
             "system",
             "Organization approved",
             f"Your organization '{org_name}' has been approved. You can now "
             "create events and build your team.",
+        )
+        await publish_review_change(
+            kind="organization", item_id=event_organizer_id, status_id=ORG_APPROVED,
+            owner_account_id=owner_id,
         )
         return {"msg": "Organization approved", "EventOrganizerID": event_organizer_id}
     except HTTPException:
@@ -212,20 +244,115 @@ async def approve_eventorganizer(
 
 async def deny_eventorganizer(
     event_organizer_id: int,
+    req_data: DenyOrganizerRequest,
     current=Depends(require_employee_or_superadmin),
 ):
-    """Employee/Superadmin action: rejects a submitted organization
-    (OrganizerStatusID = 3)."""
+    """Employee/Superadmin action: rejects a pending organization
+    (OrganizerStatusID = 3). A reason is required; the owner sees it and has
+    to fix the organization and press Save to send it for review again."""
+    reason = (req_data.Reason or "").strip()
+    if not reason:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please give a reason when denying an organization.",
+        )
+    if len(reason) > MAX_DENY_REASON_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The reason is too long (max {MAX_DENY_REASON_LENGTH} characters).",
+        )
     try:
-        owner_id, org_name = _review_eventorganizer(event_organizer_id, 3)
+        owner_id, org_name = _review_eventorganizer(event_organizer_id, ORG_DENIED, reason)
         notify_accounts(
             [owner_id],
             "system",
-            "Organization denied",
-            f"Your organization '{org_name}' was not approved. Please contact "
-            "support if you think this is a mistake.",
+            "Organization not approved",
+            f"Your organization '{org_name}' was not approved.\n"
+            f"Reason: {reason}\n"
+            "Please fix it, then open your organization page and press Save "
+            "to send it for review again.",
+        )
+        await publish_review_change(
+            kind="organization", item_id=event_organizer_id, status_id=ORG_DENIED,
+            owner_account_id=owner_id, deny_reason=reason,
         )
         return {"msg": "Organization denied", "EventOrganizerID": event_organizer_id}
+    except HTTPException:
+        raise
+    except pymysql.MySQLError as err:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"data error": str(err)})
+
+
+async def resubmit_eventorganizer(
+    EventOrganizerID: int = Form(...),
+    EventOrganizerName: str = Form(...),
+    EventOrganizerDiscription: str | None = Form(None),
+    logo: UploadFile | None = File(None),
+    current=Depends(get_current_account),
+):
+    """The owner's "Save" after a denial: updates the organization and puts it
+    back to Pending so reviewers look at it again. Only the owner can do it,
+    and only while the organization is Denied."""
+    try:
+        con = getConnect()
+        with con.cursor() as cur:
+            cur.execute(
+                "SELECT CreatedByAccountID, EventOrganizerLogoPath, OrganizerStatusID "
+                "FROM eventorganizerinfo WHERE EventOrganizerID = %s",
+                (EventOrganizerID,),
+            )
+            row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event organizer not found")
+        if row["CreatedByAccountID"] != current["account_id"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the owner of this organization can resubmit it",
+            )
+        if row["OrganizerStatusID"] != ORG_DENIED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This organization is not denied, so there is nothing to resubmit.",
+            )
+
+        logo_path = _save_logo_file(logo) if logo is not None else row["EventOrganizerLogoPath"]
+
+        with con.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE eventorganizerinfo
+                SET EventOrganizerName = %s,
+                    EventOrganizerLogoPath = %s,
+                    EventOrganizerDiscription = %s,
+                    OrganizerStatusID = %s,
+                    DenyReason = NULL
+                WHERE EventOrganizerID = %s AND OrganizerStatusID = %s
+                """,
+                (EventOrganizerName, logo_path, EventOrganizerDiscription,
+                 ORG_PENDING, EventOrganizerID, ORG_DENIED),
+            )
+            changed = cur.rowcount
+            con.commit()
+        if changed == 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This organization changed while you were editing. Please reload.",
+            )
+
+        notify_accounts(
+            staff_account_ids(),
+            "system",
+            "Organization resubmitted",
+            f"'{EventOrganizerName}' was edited after being denied and is "
+            "pending approval again.",
+            link=f"org_review:{EventOrganizerID}",
+        )
+        await publish_review_change(
+            kind="organization", item_id=EventOrganizerID, status_id=ORG_PENDING,
+            owner_account_id=row["CreatedByAccountID"],
+        )
+        return {"msg": "Organization resubmitted for approval", "EventOrganizerID": EventOrganizerID}
+
     except HTTPException:
         raise
     except pymysql.MySQLError as err:

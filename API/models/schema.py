@@ -46,6 +46,8 @@ class AddEventInfoRequest(BaseModel):
     Longitude: float
     Latitude: float
     OnePerPerson: bool = False
+    # True = save on the server as a private Draft (not sent for approval).
+    AsDraft: bool = False
 
 class UpdateEventInfoRequest(BaseModel):
     EventID: int
@@ -62,6 +64,11 @@ class UpdateEventInfoRequest(BaseModel):
 class UpdateEventStatusRequest(BaseModel):
     EventID: int
     EventStatusID: int
+    # Required when denying (EventStatusID == 3): shown to the organizer.
+    Reason: Optional[str] = None
+
+class DenyOrganizerRequest(BaseModel):
+    Reason: str
 
 class UpdateEventVisibilityRequest(BaseModel):
     EventID: int

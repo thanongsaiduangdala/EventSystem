@@ -3,7 +3,7 @@ from fastapi import HTTPException, status, Depends
 from DB.DBConnect import getConnect
 from auth.dependencies import (
     require_superadmin, get_current_account, get_account_role_and_permissions,
-    get_permissions_for_status, role_name,
+    get_permissions_for_status, role_name, token_is_stale,
 )
 from models.schema import AssignRolePermissionRequest
 
@@ -53,6 +53,11 @@ async def get_me(current=Depends(get_current_account)):
         return {
             "AccountID": row["AccountID"],
             "StatusID": row["StatusID"],
+            # Role the JWT was issued with, and whether it is out of date.
+            # The app uses RequiresRelogin to lock organization pages until
+            # the user logs out and back in.
+            "TokenStatusID": current["status_id"],
+            "RequiresRelogin": token_is_stale(current["status_id"], row["StatusID"]),
             "ProfileImagePath": row["ProfileImagePath"],
             "Role": role_info["Role"],
             "Permissions": role_info["Permissions"],

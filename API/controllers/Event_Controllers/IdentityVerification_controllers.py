@@ -6,7 +6,7 @@ from fastapi import HTTPException, UploadFile, File, Depends, status
 from DB.DBConnect import getConnect
 from models.schema import AddIdentityVerificationRequest, UpdateIdentityVerificationRequest
 from auth.dependencies import require_employee_or_superadmin
-from controllers.Event_Controllers.Notification_controllers import notify_accounts
+from controllers.Event_Controllers.Notification_controllers import notify_accounts, staff_account_ids
 
 # Relative to the backend's working directory / static file mount, matching
 # the same "<baseUrl>/static/<path>" convention CategoryIconPath already uses.
@@ -39,6 +39,26 @@ async def create_identityverification(req_data: AddIdentityVerificationRequest):
             ))
             Verification_ID = cur.lastrowid
             con.commit()
+
+            cur.execute(
+                "SELECT CONCAT(FirstName, ' ', LastName) AS FullName "
+                "FROM accountinfo WHERE AccountID = %s",
+                (req_data.AccountID,),
+            )
+            name_row = cur.fetchone()
+
+        # Tell employees/superadmins there is something to review. Best-effort:
+        # notify_accounts never raises, so a notification problem cannot fail
+        # the submission.
+        applicant = (name_row["FullName"] if name_row else "") or "Someone"
+        notify_accounts(
+            staff_account_ids(),
+            "system",
+            "New identity verification to review",
+            f"{applicant} submitted an identity verification. Review it in "
+            "the Employee Dashboard (Verifications tab).",
+            link=f"identity_review:{Verification_ID}",
+        )
 
         return {"msg": "Identity verification created successfully", "VerificationID": Verification_ID}
 

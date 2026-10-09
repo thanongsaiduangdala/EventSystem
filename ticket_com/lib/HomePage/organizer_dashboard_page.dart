@@ -1,17 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:ticket_com/HomePage/become_organizer_page.dart';
 import 'package:ticket_com/HomePage/event_analytics_page.dart';
 import 'package:ticket_com/HomePage/event_form_page.dart';
 import 'package:ticket_com/HomePage/organizer_invite_page.dart';
+import 'package:ticket_com/HomePage/organizer_resubmit_page.dart';
 import 'package:ticket_com/HomePage/pill_toggle.dart';
+import 'package:ticket_com/HomePage/search_filter_bar.dart';
 import 'package:ticket_com/HomePage/team_images.dart';
 import 'package:ticket_com/HomePage/team_member_dashboard_page.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
 import 'package:ticket_com/services/organizer_member_api_service.dart';
+import 'package:ticket_com/services/review_live_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
+import 'package:ticket_com/utils/relogin_guard.dart';
 
 const Color _kTextDark = Color(0xFF212121);
 const Color _kTextGrey = Color(0xFF757575);
@@ -28,6 +34,7 @@ class OrganizerDashboardPage extends StatefulWidget {
 
 class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   bool _loading = true;
+  bool _sessionStale = false;
   String? _error;
 
   int _accountId = 0;
@@ -48,6 +55,10 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   final _eventSearch = TextEditingController();
   int? _statusFilter;
   bool? _visibleFilter;
+
+  // Joined Org search + filter.
+  final _orgSearch = TextEditingController();
+  int? _orgRoleFilter; // teamRoleId
 
   List<EventModel> get _filteredEvents {
     final query = _eventSearch.text.trim().toLowerCase();
@@ -74,25 +85,57 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   EventOrganizer? get _primaryOrganizer =>
       _myOrganizers.isEmpty ? null : _myOrganizers.first;
 
+  // Live approval updates: when a reviewer approves / denies this account's
+  // organization or events, the dashboard updates without a manual refresh.
+  final ReviewLiveService _live = ReviewLiveService();
+  StreamSubscription<ReviewChange>? _liveSub;
+
+  // Only the newest load may write its result, so a slow response can never
+  // overwrite a fresher one when several live updates arrive back to back.
+  int _loadSeq = 0;
+
   @override
   void initState() {
     super.initState();
     _accountId = AuthService.currentSession?.accountId ?? 0;
     _load();
+    _liveSub = _live.changes.listen((_) => _load(silent: true));
+    _live.connect();
   }
 
   @override
   void dispose() {
+    _liveSub?.cancel();
+    _live.dispose();
     _eventSearch.dispose();
+    _orgSearch.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  /// [silent] reloads in the background (no spinner, errors ignored) -- used
+  /// for live updates.
+  Future<void> _load({bool silent = false}) async {
+    final seq = ++_loadSeq;
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
+      // Role changed after login (e.g. identity approved): lock this page
+      // until the user logs out and back in.
+      if (await AuthService.checkSessionStale()) {
+        if (!mounted) return;
+        setState(() {
+          _sessionStale = true;
+          _loading = false;
+        });
+        return;
+      }
+      if (seq != _loadSeq) return;
+      _sessionStale = false;
+
       final organizers =
           await EventApiService.getAllOrganizers(includeUnapproved: true);
       final mine = organizers
@@ -142,7 +185,7 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         }
       }
 
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       setState(() {
         _myOrganizers = myOrganizers;
         _pendingOrganizer = unapproved.isEmpty ? null : unapproved.first;
@@ -156,7 +199,9 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
+      // A failed background refresh keeps showing what we already have.
+      if (silent && !_loading) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -174,7 +219,7 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
       ),
     ).then((saved) {
       if (saved == true) {
-        _snack('Event created. It will be visible after approval.');
+        _snack('Event saved. Submitted events are visible after approval; drafts stay private to your team.');
         _load();
       }
     });
@@ -277,7 +322,7 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     final isOrganizerAccount = hasEvents ||
         (session?.isOrganizer ?? false) ||
         (session?.isSuperAdmin ?? false);
-    final ready = !_loading && _error == null;
+    final ready = !_loading && _error == null && !_sessionStale;
     final tab = _tabIndex ??
         (hasEvents || _pendingOrganizer != null ? 0 : 2);
     return Scaffold(
@@ -295,6 +340,8 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
           ? const Center(
               child: CircularProgressIndicator(color: kAccent),
             )
+          : _sessionStale
+              ? const ReloginRequiredView()
           : _error != null
               ? _errorBox()
               : AnimatedSwitcher(
@@ -529,6 +576,11 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
                 label: 'Denied',
                 selected: _statusFilter == EventStatus.denied,
                 onTap: () => setState(() => _statusFilter = EventStatus.denied),
+              ),
+              _filterChip(
+                label: 'Draft',
+                selected: _statusFilter == EventStatus.draft,
+                onTap: () => setState(() => _statusFilter = EventStatus.draft),
               ),
               const SizedBox(width: 6),
               const VerticalDivider(width: 16, color: _kTextGrey),
@@ -794,6 +846,14 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
                 ),
               ],
             ),
+            if (event.eventStatusId == EventStatus.denied) ...[
+              const SizedBox(height: 6),
+              _deniedNote(
+                event.denyReason,
+                'Tap Edit, fix what was mentioned, then press Save to send '
+                'it for review again.',
+              ),
+            ],
             if (needsTickets) ...[
               const SizedBox(height: 4),
               Container(
@@ -828,10 +888,56 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     );
   }
 
+  /// Red box telling the organizer why a reviewer denied something and what
+  /// to do next.
+  Widget _deniedNote(String? reason, String hint) {
+    final comment = reason?.trim() ?? '';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _kRed.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _kRed.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.feedback_outlined, color: _kRed, size: 16),
+              SizedBox(width: 6),
+              Text(
+                'Reviewer comment',
+                style: TextStyle(
+                  color: _kRed,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            comment.isNotEmpty ? comment : 'No comment was left.',
+            style: const TextStyle(
+              color: _kTextDark,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(hint, style: const TextStyle(color: _kTextGrey, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
   Widget _statusChip(int statusId) {
     final (bg, fg, label) = switch (statusId) {
       EventStatus.approved => (_kGreen, Colors.white, 'Approved'),
       EventStatus.denied => (_kRed, Colors.white, 'Denied'),
+      EventStatus.draft => (const Color(0xFFECEFF1), _kTextGrey, 'Draft'),
       _ => (const Color(0xFFFFF3E0), _kAmber, 'Pending Approval'),
     };
     return Container(
@@ -1004,6 +1110,20 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
     );
   }
 
+  Future<void> _openResubmitOrganization(EventOrganizer organizer) async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OrganizerResubmitPage(organizer: organizer),
+      ),
+    );
+    if (!mounted) return;
+    if (saved == true) {
+      _snack('Organization saved and sent for approval again.');
+    }
+    _load();
+  }
+
   Future<void> _openBecomeOrganizer() async {
     await Navigator.push(
       context,
@@ -1048,15 +1168,30 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
         const SizedBox(height: 8),
         Text(
           denied
-              ? '“${organizer.name}” was not approved. Please contact '
-                  'support if you think this is a mistake.'
+              ? '“${organizer.name}” was not approved. Fix what the '
+                  'reviewer mentioned below, then press Save to send it for '
+                  'review again.'
               : '“${organizer.name}” has been submitted. An admin or employee '
                   'needs to approve your organization before you can create '
                   'events or build a team.',
           textAlign: TextAlign.center,
           style: const TextStyle(color: _kTextGrey, fontSize: 13.5, height: 1.5),
         ),
-        const SizedBox(height: 20),
+        if (denied) ...[
+          const SizedBox(height: 16),
+          _deniedNote(
+            organizer.denyReason,
+            'Edit your organization and save it to request approval again.',
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => _openResubmitOrganization(organizer),
+            style: FilledButton.styleFrom(backgroundColor: kAccent),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Edit & resubmit'),
+          ),
+        ],
+        const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: _load,
           icon: const Icon(Icons.refresh),
@@ -1067,6 +1202,21 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
   }
 
   Widget _joinedOrganizations(List<TeamMembership> joined) {
+    final query = _orgSearch.text.trim().toLowerCase();
+    final visible = joined.where((m) {
+      if (_orgRoleFilter != null && m.teamRoleId != _orgRoleFilter) {
+        return false;
+      }
+      if (query.isEmpty) return true;
+      return '${m.organizerName} ${m.teamRoleName}'
+          .toLowerCase()
+          .contains(query);
+    }).toList();
+    final filtering = query.isNotEmpty || _orgRoleFilter != null;
+    final roleNames = <int, String>{
+      for (final m in joined) m.teamRoleId: m.teamRoleName,
+    };
+    final roleIds = roleNames.keys.toList()..sort();
     return RefreshIndicator(
       key: const ValueKey('member-orgs'),
       onRefresh: _load,
@@ -1086,7 +1236,9 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
               ),
               const Spacer(),
               Text(
-                '${joined.length}',
+                filtering
+                    ? '${visible.length} / ${joined.length}'
+                    : '${joined.length}',
                 style: const TextStyle(color: _kTextGrey, fontSize: 13),
               ),
             ],
@@ -1097,13 +1249,44 @@ class _OrganizerDashboardPageState extends State<OrganizerDashboardPage> {
             style: TextStyle(color: _kTextGrey, fontSize: 12.5),
           ),
           const SizedBox(height: 12),
+          if (joined.isNotEmpty) ...[
+            SearchFilterBar(
+              controller: _orgSearch,
+              hint: 'Search organizations by name or role...',
+              onChanged: (_) => setState(() {}),
+              onClearAll: () => setState(() {
+                _orgSearch.clear();
+                _orgRoleFilter = null;
+              }),
+              groups: [
+                if (roleIds.length > 1)
+                  FilterGroup(
+                    label: 'My role',
+                    selected: _orgRoleFilter,
+                    onChanged: (v) =>
+                        setState(() => _orgRoleFilter = v as int?),
+                    options: [
+                      const FilterOption('All', null),
+                      for (final id in roleIds)
+                        FilterOption(roleNames[id]!, id),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           if (joined.isEmpty)
             _infoCard(
               icon: Icons.groups_2_outlined,
               text: 'You have not joined another organization yet. When an '
                   'organization invites you, it shows up under Pending Org.',
+            )
+          else if (visible.isEmpty)
+            _infoCard(
+              icon: Icons.search_off,
+              text: 'No organizations match your search and filters.',
             ),
-          for (final m in joined) ...[
+          for (final m in visible) ...[
             _joinedOrgCard(m),
             const SizedBox(height: 10),
           ],

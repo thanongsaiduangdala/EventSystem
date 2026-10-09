@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_com/DeveloperPage/employee_dashboard_page.dart';
 import 'package:ticket_com/EngLoStyle/eng_lao_style.dart';
 import 'package:ticket_com/HomePage/event_detail_page.dart';
 import 'package:ticket_com/models/category_models.dart';
@@ -11,6 +12,7 @@ import 'package:ticket_com/services/follow_api_service.dart';
 import 'package:ticket_com/services/notification_service.dart';
 import 'package:ticket_com/services/ticket_type_api_service.dart';
 import 'package:ticket_com/services/wishlist_api_service.dart';
+import 'package:ticket_com/utils/relogin_guard.dart';
 
 import 'organizer_invite_page.dart';
 
@@ -124,6 +126,8 @@ class _NotificationPageState extends State<NotificationPage> {
 ///   * `org_invite:<MemberID>` -> the invite/join page
 /// Otherwise shows the detail dialog below.
 void openNotification(BuildContext context, AppNotification notification) {
+  if (_openStaffReview(context, notification)) return;
+
   final eventId = notification.eventId;
   if (eventId != null) {
     _openEventFromNotification(context, eventId);
@@ -134,15 +138,57 @@ void openNotification(BuildContext context, AppNotification notification) {
   if (notification.link.startsWith(prefix)) {
     final memberId = int.tryParse(notification.link.substring(prefix.length));
     if (memberId != null) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => OrganizerInvitePage(memberId: memberId),
-        ),
-      );
+      ensureOrgAccess(context).then((allowed) {
+        if (!allowed || !context.mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => OrganizerInvitePage(memberId: memberId),
+          ),
+        );
+      });
       return;
     }
   }
   _showNotificationDetail(context, notification);
+}
+
+/// Review notifications for employees / superadmins. Each opens the Employee
+/// Dashboard on the matching tab and, when it has an ID, the item itself:
+///   * `identity_review:<VerificationID>` -> Verifications tab
+///   * `org_review:<EventOrganizerID>`    -> Organizations tab
+///   * `event_review:<EventID>`           -> Events tab (review screen)
+/// Returns true when the notification was handled.
+bool _openStaffReview(BuildContext context, AppNotification notification) {
+  final session = AuthService.currentSession;
+  final isStaff = session != null && (session.isEmployee || session.isSuperAdmin);
+  if (!isStaff) return false;
+
+  const targets = <String, int>{
+    'identity_review:': 0,
+    'org_review:': 1,
+    'event_review:': 2,
+  };
+  int? tab;
+  int? focusId;
+  for (final entry in targets.entries) {
+    if (notification.link.startsWith(entry.key)) {
+      tab = entry.value;
+      focusId = int.tryParse(notification.link.substring(entry.key.length));
+      break;
+    }
+  }
+  // Notifications created before these links existed.
+  if (tab == null && notification.link.isEmpty) {
+    if (notification.title == 'New organizer application') tab = 1;
+  }
+  if (tab == null) return false;
+
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => EmployeeDashboardPage(initialTab: tab!, focusId: focusId),
+    ),
+  );
+  return true;
 }
 
 /// Loads everything [EventDetailPage] needs for one event (the same data the

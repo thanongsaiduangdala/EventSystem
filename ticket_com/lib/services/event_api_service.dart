@@ -2,6 +2,7 @@ import 'auth_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import 'api_errors.dart';
 
 class EventOrganizer {
   final int id;
@@ -14,6 +15,9 @@ class EventOrganizer {
   /// 3 Denied. Older API responses without the field count as Approved.
   final int statusId;
 
+  /// Why a reviewer denied this organization (only set while it is Denied).
+  final String? denyReason;
+
   bool get isApproved => statusId == 2;
   bool get isPending => statusId == 1;
   bool get isDenied => statusId == 3;
@@ -25,6 +29,7 @@ class EventOrganizer {
     required this.createdByAccountId,
     this.description,
     this.statusId = 2,
+    this.denyReason,
   });
 
   factory EventOrganizer.fromJson(Map<String, dynamic> json) {
@@ -35,6 +40,7 @@ class EventOrganizer {
       createdByAccountId: json['CreatedByAccountID'] as int,
       description: json['EventOrganizerDiscription'] as String?,
       statusId: (json['OrganizerStatusID'] as int?) ?? 2,
+      denyReason: json['DenyReason'] as String?,
     );
   }
 }
@@ -43,6 +49,10 @@ class EventStatus {
   static const int pending = 1;
   static const int approved = 2;
   static const int denied = 3;
+
+  /// Saved on the server but not submitted yet. Only the organization's
+  /// owner/admins/editors (and superadmins) can see it.
+  static const int draft = 4;
 }
 
 class EventModel {
@@ -59,6 +69,9 @@ class EventModel {
   final int eventStatusId;
   final bool eventVisible;
 
+  /// Why a reviewer denied this event (only set while it is Denied).
+  final String? denyReason;
+
   EventModel({
     required this.id,
     required this.name,
@@ -72,6 +85,7 @@ class EventModel {
     this.onePerPerson = false,
     this.eventStatusId = EventStatus.approved,
     this.eventVisible = true,
+    this.denyReason,
   });
 
   factory EventModel.fromJson(Map<String, dynamic> json) {
@@ -91,6 +105,7 @@ class EventModel {
       eventStatusId: (json['EventStatusID'] as int?) ?? EventStatus.approved,
       // Older responses (before this field existed) should behave as visible.
       eventVisible: rawVisible == null || rawVisible == 1 || rawVisible == true,
+      denyReason: json['DenyReason'] as String?,
     );
   }
 
@@ -111,6 +126,7 @@ class EventModel {
       onePerPerson: onePerPerson,
       eventStatusId: eventStatusId ?? this.eventStatusId,
       eventVisible: eventVisible ?? this.eventVisible,
+      denyReason: denyReason,
     );
   }
 }
@@ -205,10 +221,14 @@ class EventApiService {
     }
   }
 
-  /// Admin/employee action: approve (2) or deny (3) an event.
+  /// Admin/employee action: approve (2) or deny (3) a pending event.
+  ///
+  /// A denial needs a [reason] (the organizer sees it). Throws
+  /// [ReviewConflictException] when another reviewer already decided it.
   static Future<void> setEventStatus({
     required int eventId,
     required int eventStatusId,
+    String? reason,
   }) async {
     final url = Uri.parse('$baseUrl/event/status');
     final response = await http.put(
@@ -217,8 +237,15 @@ class EventApiService {
       body: jsonEncode({
         'EventID': eventId,
         'EventStatusID': eventStatusId,
+        if (reason != null) 'Reason': reason,
       }),
     );
+    if (response.statusCode == 409) {
+      throw ReviewConflictException(
+        errorDetailOf(response) ??
+            'This event was already reviewed by someone else.',
+      );
+    }
     if (response.statusCode != 200) {
       throw _handleError(response, 'Failed to update event status');
     }
@@ -304,6 +331,7 @@ class EventApiService {
     required String eventDescription,
     required int eventOrganizerID,
     bool onePerPerson = false,
+    bool asDraft = false,
   }) async {
     final url = Uri.parse('$baseUrl/event/create');
 
@@ -320,6 +348,7 @@ class EventApiService {
         'EventDescription': eventDescription,
         'EventOrganizerID': eventOrganizerID,
         'OnePerPerson': onePerPerson,
+        'AsDraft': asDraft,
       }),
     );
 
@@ -328,6 +357,18 @@ class EventApiService {
     } else {
       throw _handleError(response, 'Failed to create event');
     }
+  }
+
+  /// Turns a saved draft into a real submission (Pending review, or
+  /// Approved straight away for a superadmin). Returns the new EventStatusID.
+  static Future<int> submitEventDraft(int eventId) async {
+    final url = Uri.parse('$baseUrl/event/submit/$eventId');
+    final response = await http.put(url, headers: _authHeaders());
+    if (response.statusCode != 200) {
+      throw _handleError(response, 'Failed to submit the event');
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return (data['EventStatusID'] as int?) ?? EventStatus.pending;
   }
 
   static Future<void> updateOrganizer({

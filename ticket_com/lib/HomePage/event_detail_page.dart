@@ -11,6 +11,7 @@ import 'package:ticket_com/models/sponser_models.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/event_api_service.dart';
 import 'package:ticket_com/services/event_image_api_service.dart';
+import 'package:ticket_com/services/event_question_api_service.dart';
 import 'package:ticket_com/services/event_organizer_api_service.dart'
     show EventOrganizerApiService;
 import 'package:ticket_com/services/follow_api_service.dart';
@@ -40,6 +41,7 @@ class EventDetailPage extends StatefulWidget {
     this.onToggleFollow,
     this.minPrice,
     this.categories = const [],
+    this.reviewBar,
   });
 
   final EventModel event;
@@ -53,6 +55,11 @@ class EventDetailPage extends StatefulWidget {
   final int? minPrice;
   final List<CategoryModel> categories;
 
+  /// When set, the page is opened by an employee reviewing the event: the
+  /// save / follow / invite / buy controls are hidden and this widget is
+  /// shown in place of the buy bar (used for Approve / Deny).
+  final Widget Function(BuildContext context)? reviewBar;
+
   @override
   State<EventDetailPage> createState() => _EventDetailPageState();
 }
@@ -60,6 +67,7 @@ class EventDetailPage extends StatefulWidget {
 class _EventDetailPageState extends State<EventDetailPage> {
   bool _loading = true;
   bool _pinned = false;
+  bool get _reviewMode => widget.reviewBar != null;
   late bool _saved;
 
   List<TicketTypeModel> _ticketTypes = [];
@@ -71,6 +79,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
   List<EventImageModel> _heroImages = [];
   List<TicketPurchase> _purchases = [];
   List<SponserModel> _sponsors = [];
+
+  // Registration questions, loaded only for the employee review view.
+  List<EventQuestionModel> _questions = [];
+  Map<int, String> _questionTypeNames = {};
   final PageController _heroController = PageController();
   final ScrollController _scrollController = ScrollController();
   Timer? _carouselTimer;
@@ -166,11 +178,32 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
     final sorted = List<TicketTypeModel>.of(tickets)
       ..sort((a, b) => a.priceInKip.compareTo(b.priceInKip));
-    final purchases = await _loadPurchases(sorted);
+    final purchases = _reviewMode
+        ? const <TicketPurchase>[]
+        : await _loadPurchases(sorted);
     final sponsors = await _loadSponsors();
+    var questions = const <EventQuestionModel>[];
+    var questionTypeNames = const <int, String>{};
+    if (_reviewMode) {
+      questions = List<EventQuestionModel>.of(
+        await _optional(
+          () => EventQuestionApiService.getEventQuestionsByEvent(
+            widget.event.id,
+          ),
+          const <EventQuestionModel>[],
+        ),
+      )..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+      final types = await _optional(
+        EventQuestionApiService.getAllEventQuestionTypes,
+        const <EventQuestionTypeModel>[],
+      );
+      questionTypeNames = {for (final t in types) t.id: t.name};
+    }
 
     if (!mounted) return;
     setState(() {
+      _questions = questions;
+      _questionTypeNames = questionTypeNames;
       _ticketTypes = sorted;
       _paymentTypes = paymentTypes;
       _purchases = purchases;
@@ -385,7 +418,9 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   left: 16,
                   right: 16,
                   bottom: 12 + MediaQuery.paddingOf(context).bottom,
-                  child: _buyBar(context),
+                  child: _reviewMode
+                      ? widget.reviewBar!(context)
+                      : _buyBar(context),
                 ),
                 if (_pinned)
                   Positioned(
@@ -455,7 +490,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
               ],
             ),
           ),
-          Positioned(top: topPad + 12, right: 12, child: _saveButton()),
+          if (!_reviewMode)
+            Positioned(top: topPad + 12, right: 12, child: _saveButton()),
         ],
       ),
     );
@@ -615,7 +651,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
             onTap: () => Navigator.pop(context),
             pinned: true,
           ),
-          _saveButton(pinned: true),
+          if (!_reviewMode) _saveButton(pinned: true),
         ],
       ),
     );
@@ -628,7 +664,13 @@ class _EventDetailPageState extends State<EventDetailPage> {
       clipBehavior: Clip.none,
       children: [
         _hero(context),
-        Positioned(left: 20, right: 20, bottom: -4, child: _goingPill(context)),
+        if (!_reviewMode)
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: -4,
+            child: _goingPill(context),
+          ),
       ],
     );
   }
@@ -750,6 +792,12 @@ class _EventDetailPageState extends State<EventDetailPage> {
           if (_sponsors.isNotEmpty) ...[
             const SizedBox(height: 26),
             _sponsorsSection(context),
+          ],
+          if (_reviewMode) ...[
+            const SizedBox(height: 26),
+            _ticketReviewSection(),
+            const SizedBox(height: 26),
+            _questionReviewSection(),
           ],
           const SizedBox(height: 140),
         ],
@@ -1026,6 +1074,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
         avatar,
         const SizedBox(width: 14),
         Expanded(child: _twoLineText(name, l10n.organizer)),
+        if (!_reviewMode)
         GestureDetector(
           onTap: _toggleFollow,
           child: Container(
@@ -1078,6 +1127,287 @@ class _EventDetailPageState extends State<EventDetailPage> {
           fontWeight: FontWeight.bold,
         ),
       ),
+    );
+  }
+
+  // ---------------- tickets (review mode) ----------------
+
+  static String _kip(int value) {
+    if (value == 0) return 'Free';
+    final digits = value.abs().toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buf.write(',');
+      buf.write(digits[i]);
+    }
+    return '${value < 0 ? '-' : ''}$buf KIP';
+  }
+
+  static String _saleDate(String raw) {
+    final dt = DateTime.tryParse(raw.replaceFirst(' ', 'T'));
+    if (dt == null) return raw;
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
+        '${two(dt.hour)}:${two(dt.minute)}';
+  }
+
+  /// What the reviewer sees before approving or denying: every ticket type
+  /// the organizer set up, with price, quantity and sale window.
+  Widget _ticketReviewSection() {
+    final totalCapacity = _ticketTypes.fold<int>(0, (sum, t) => sum + t.capacity);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Tickets',
+                style: TextStyle(
+                  color: _kTextDark,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            if (_ticketTypes.isNotEmpty)
+              Text(
+                '${_ticketTypes.length} type'
+                '${_ticketTypes.length == 1 ? '' : 's'}  \u00b7  '
+                '$totalCapacity total',
+                style: const TextStyle(
+                  color: _kTextGrey,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (_ticketTypes.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF3E0),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Text(
+              'The organizer has not added any ticket types to this event.',
+              style: TextStyle(
+                color: Color(0xFFB26A00),
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+          )
+        else
+          for (final t in _ticketTypes)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _kLavender,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          t.typeName,
+                          style: const TextStyle(
+                            color: _kTextDark,
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        _kip(t.priceInKip),
+                        style: const TextStyle(
+                          color: _kIndigo,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _ticketLine(Icons.confirmation_number_outlined,
+                      '${t.capacity} tickets available'),
+                  const SizedBox(height: 4),
+                  _ticketLine(Icons.play_circle_outline,
+                      'Sales start  ${_saleDate(t.saleStart)}'),
+                  const SizedBox(height: 4),
+                  _ticketLine(Icons.stop_circle_outlined,
+                      'Sales end  ${_saleDate(t.saleEnd)}'),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+
+  /// The registration questions attendees will be asked, shown to the
+  /// reviewer beneath the ticket details.
+  Widget _questionReviewSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Event questions',
+                style: TextStyle(
+                  color: _kTextDark,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            if (_questions.isNotEmpty)
+              Text(
+                '${_questions.length} question'
+                '${_questions.length == 1 ? '' : 's'}',
+                style: const TextStyle(
+                  color: _kTextGrey,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (_questions.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _kLavender,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Text(
+              'This event has no questions for attendees.',
+              style: TextStyle(
+                color: _kTextGrey,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+          )
+        else
+          for (var i = 0; i < _questions.length; i++)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _kLavender,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${i + 1}. ${_questions[i].question}',
+                    style: const TextStyle(
+                      color: _kTextDark,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      _questionTag(
+                        _questionTypeNames[_questions[i].questionTypeId] ??
+                            'Type ${_questions[i].questionTypeId}',
+                        _kIndigo,
+                      ),
+                      _questionTag(
+                        _questions[i].isRequire ? 'Required' : 'Optional',
+                        _questions[i].isRequire
+                            ? const Color(0xFFE53935)
+                            : _kTextGrey,
+                      ),
+                    ],
+                  ),
+                  if (_questions[i].options != null &&
+                      _questions[i].options!.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    for (final option in _questions[i].options!)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(
+                                Icons.circle,
+                                size: 6,
+                                color: _kTextGrey,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                option,
+                                style: const TextStyle(
+                                  color: _kTextGrey,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+
+  Widget _questionTag(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _ticketLine(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: _kTextGrey),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(color: _kTextGrey, fontSize: 13),
+          ),
+        ),
+      ],
     );
   }
 

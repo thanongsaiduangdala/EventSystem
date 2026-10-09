@@ -11,6 +11,7 @@ import 'package:ticket_com/main.dart';
 import 'package:ticket_com/services/auth_service.dart';
 import 'package:ticket_com/services/organizer_member_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
+import 'package:ticket_com/utils/relogin_guard.dart';
 
 class SettingPanel extends StatefulWidget {
   const SettingPanel({super.key});
@@ -23,11 +24,19 @@ class _SettingPanelState extends State<SettingPanel> {
   bool _checkingDeveloper = false;
   List<TeamMembership> _teamMemberships = [];
   int _pendingInvites = 0;
+  bool _sessionStale = false;
 
   @override
   void initState() {
     super.initState();
     _loadMemberships();
+    _checkSessionStale();
+  }
+
+  Future<void> _checkSessionStale() async {
+    final stale = await AuthService.checkSessionStale();
+    if (!mounted) return;
+    setState(() => _sessionStale = stale);
   }
 
   Future<void> _loadMemberships() async {
@@ -222,6 +231,13 @@ class _SettingPanelState extends State<SettingPanel> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: _profileCard(session, roleName),
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (_sessionStale) ...[
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: ReloginBanner(),
               ),
               const SizedBox(height: 16),
             ],
@@ -440,7 +456,9 @@ class _SettingPanelState extends State<SettingPanel> {
               titleColor: const Color(0xFF212121),
               subtitleColor: const Color(0xFF757575),
               trailing: const Icon(Icons.chevron_right, color: Colors.black26),
-              onTap: () {
+              onTap: () async {
+                if (!await ensureOrgAccess(context)) return;
+                if (!mounted) return;
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -458,7 +476,9 @@ class _SettingPanelState extends State<SettingPanel> {
               titleColor: const Color(0xFF212121),
               subtitleColor: const Color(0xFF757575),
               trailing: const Icon(Icons.chevron_right, color: Colors.black26),
-              onTap: () {
+              onTap: () async {
+                if (!await ensureOrgAccess(context)) return;
+                if (!mounted) return;
                 Navigator.push(
                   context,
                   MaterialPageRoute(

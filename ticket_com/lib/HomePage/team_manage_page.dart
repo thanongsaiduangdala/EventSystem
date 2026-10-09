@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_com/HomePage/search_filter_bar.dart';
 import 'package:ticket_com/services/organizer_member_api_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
 
@@ -36,12 +37,29 @@ class _TeamManagePageState extends State<TeamManagePage> {
   List<TeamRoleModel> _roles = [];
   bool _working = false;
 
+  // Member search + filters.
+  final _search = TextEditingController();
+  int? _roleFilter; // teamRoleId
+  int? _statusFilter; // 1 = pending invite, 2 = active
+
   TeamMembership get _membership => widget.membership;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _resetFilters() {
+    _search.clear();
+    _roleFilter = null;
+    _statusFilter = null;
   }
 
   Future<void> _load() async {
@@ -442,11 +460,35 @@ class _TeamManagePageState extends State<TeamManagePage> {
       );
     }
 
-    final active = _team
+    final activeAll = _team
         .where((m) =>
             m.memberStatusId == 2 && m.memberStatusId != 4)
         .toList();
-    final pending = _team.where((m) => m.memberStatusId == 1).toList();
+    final pendingAll = _team.where((m) => m.memberStatusId == 1).toList();
+
+    final query = _search.text.trim().toLowerCase();
+    bool matches(OrgTeamMember m) {
+      if (_roleFilter != null && m.teamRoleId != _roleFilter) return false;
+      if (query.isEmpty) return true;
+      final haystack = '${m.fullName} ${m.email} ${m.teamRoleName} '
+              '${m.assignedEvents.map((e) => e.eventName).join(' ')}'
+          .toLowerCase();
+      return haystack.contains(query);
+    }
+
+    final showActive = _statusFilter == null || _statusFilter == 2;
+    final showPending = _statusFilter == null || _statusFilter == 1;
+    final active =
+        showActive ? activeAll.where(matches).toList() : <OrgTeamMember>[];
+    final pending =
+        showPending ? pendingAll.where(matches).toList() : <OrgTeamMember>[];
+    final filtering =
+        query.isNotEmpty || _roleFilter != null || _statusFilter != null;
+
+    final roleNames = <int, String>{
+      for (final m in _team) m.teamRoleId: m.teamRoleName,
+    };
+    final roleIds = roleNames.keys.toList()..sort();
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -465,7 +507,9 @@ class _TeamManagePageState extends State<TeamManagePage> {
               ),
             ),
             Text(
-              '${active.length}',
+              filtering
+                  ? '${active.length} / ${activeAll.length}'
+                  : '${active.length}',
               style: const TextStyle(color: _kTextGrey, fontSize: 13),
             ),
             if (widget.embedded) ...[
@@ -483,13 +527,51 @@ class _TeamManagePageState extends State<TeamManagePage> {
           ],
         ),
         const SizedBox(height: 10),
-        if (active.isEmpty)
-          const _EmptyCard(text: 'No team members yet. Tap + to invite someone.')
-        else
-          for (final member in active) ...[
-            _memberCard(member),
-            const SizedBox(height: 10),
-          ],
+        if (_team.isNotEmpty) ...[
+          SearchFilterBar(
+            controller: _search,
+            hint: 'Search members by name, email, role or event...',
+            onChanged: (_) => setState(() {}),
+            onClearAll: () => setState(_resetFilters),
+            groups: [
+              if (roleIds.length > 1)
+                FilterGroup(
+                  label: 'Role',
+                  selected: _roleFilter,
+                  onChanged: (v) => setState(() => _roleFilter = v as int?),
+                  options: [
+                    const FilterOption('All', null),
+                    for (final id in roleIds) FilterOption(roleNames[id]!, id),
+                  ],
+                ),
+              if (pendingAll.isNotEmpty)
+                FilterGroup(
+                  label: 'Status',
+                  selected: _statusFilter,
+                  onChanged: (v) => setState(() => _statusFilter = v as int?),
+                  options: const [
+                    FilterOption('All', null),
+                    FilterOption('Active', 2),
+                    FilterOption('Pending invites', 1),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (showActive) ...[
+          if (active.isEmpty)
+            _EmptyCard(
+              text: activeAll.isEmpty
+                  ? 'No team members yet. Tap + to invite someone.'
+                  : 'No members match your search and filters.',
+            )
+          else
+            for (final member in active) ...[
+              _memberCard(member),
+              const SizedBox(height: 10),
+            ],
+        ],
         if (pending.isNotEmpty) ...[
           const SizedBox(height: 20),
           const Text(
@@ -506,6 +588,10 @@ class _TeamManagePageState extends State<TeamManagePage> {
             const SizedBox(height: 10),
           ],
         ],
+        if (!showActive && pending.isEmpty)
+          const _EmptyCard(
+            text: 'No pending invitations match your search and filters.',
+          ),
       ],
     );
   }

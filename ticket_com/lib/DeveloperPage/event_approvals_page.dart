@@ -1,5 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:ticket_com/DeveloperPage/deny_reason_dialog.dart';
+import 'package:ticket_com/HomePage/event_detail_page.dart';
+import 'package:ticket_com/models/category_models.dart';
+import 'package:ticket_com/services/category_api_service.dart';
+import 'package:ticket_com/services/api_errors.dart';
 import 'package:ticket_com/services/event_api_service.dart';
+import 'package:ticket_com/services/review_live_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
 
 const Color _kTextDark = Color(0xFF212121);
@@ -13,7 +21,11 @@ const Color _kRed = Color(0xFFE53935);
 /// and approve or deny them. Approving makes the event visible to everyone;
 /// denying leaves it hidden. Shown as one tab of `EmployeeDashboardPage`.
 class EventApprovalsTab extends StatefulWidget {
-  const EventApprovalsTab({super.key});
+  const EventApprovalsTab({super.key, this.focusId});
+
+  /// Event to open for review as soon as the list has loaded (from a
+  /// notification).
+  final int? focusId;
 
   @override
   State<EventApprovalsTab> createState() => _EventApprovalsTabState();
@@ -22,38 +34,95 @@ class EventApprovalsTab extends StatefulWidget {
 class _EventApprovalsTabState extends State<EventApprovalsTab> {
   List<EventModel> _events = [];
   Map<int, String> _organizerNames = {};
+  Map<int, EventOrganizer> _organizers = {};
+  List<CategoryModel> _categories = [];
+  Map<int, List<int>> _eventCategories = {};
 
   bool _loading = true;
   String? _error;
 
   int _filterStatusId = 0;
+  bool _focusHandled = false;
+
+  // Live updates: another reviewer (or an organizer) changed something, so
+  // this list refreshes by itself instead of waiting for a manual reload.
+  final ReviewLiveService _live = ReviewLiveService();
+  StreamSubscription<ReviewChange>? _liveSub;
+
+  // Only the newest load may write its result, so a slow response can never
+  // overwrite a fresher one when several live updates arrive back to back.
+  int _loadSeq = 0;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _liveSub = _live.changes.listen((change) {
+      if (change.isResync || change.isEvent) _load(silent: true);
+    });
+    _live.connect();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  @override
+  void dispose() {
+    _liveSub?.cancel();
+    _live.dispose();
+    super.dispose();
+  }
+
+  /// [silent] reloads in the background (no spinner, errors ignored) -- used
+  /// for live updates and after an approve / deny.
+  Future<void> _load({bool silent = false}) async {
+    final seq = ++_loadSeq;
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final results = await Future.wait([
         EventApiService.getAllEventsWithStatus(),
-        EventApiService.getAllOrganizers(),
+        EventApiService.getAllOrganizers(includeUnapproved: true),
+        _optional(CategoryApiService.getAllCategories, const <CategoryModel>[]),
+        _optional(
+          CategoryApiService.getAllEventCategories,
+          const <EventCategoryModel>[],
+        ),
       ]);
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       final events = results[0] as List<EventModel>;
       final orgs = results[1] as List<EventOrganizer>;
+      final categories = results[2] as List<CategoryModel>;
+      final eventCats = results[3] as List<EventCategoryModel>;
+      final eventCategories = <int, List<int>>{};
+      for (final ec in eventCats) {
+        eventCategories.putIfAbsent(ec.eventId, () => []).add(ec.categoryId);
+      }
       setState(() {
         _events = events;
         _organizerNames = {for (final o in orgs) o.id: o.name};
+        _organizers = {for (final o in orgs) o.id: o};
+        _categories = categories;
+        _eventCategories = eventCategories;
         _loading = false;
       });
+      final focusId = widget.focusId;
+      if (focusId != null && !_focusHandled) {
+        _focusHandled = true;
+        for (final e in events) {
+          if (e.id == focusId) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _openEventDetail(e);
+            });
+            break;
+          }
+        }
+      }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
+      // A failed background refresh keeps showing what we already have.
+      if (silent && !_loading) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -71,7 +140,10 @@ class _EventApprovalsTabState extends State<EventApprovalsTab> {
       _events.where((e) => e.eventStatusId == EventStatus.denied).length;
 
   List<EventModel> get _filtered {
-    if (_filterStatusId == 0) return _events;
+    // Drafts haven't been submitted for review, so they never show here.
+    if (_filterStatusId == 0) {
+      return _events.where((e) => e.eventStatusId != EventStatus.draft).toList();
+    }
     return _events.where((e) => e.eventStatusId == _filterStatusId).toList();
   }
 
@@ -89,48 +161,205 @@ class _EventApprovalsTabState extends State<EventApprovalsTab> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _confirmReview(EventModel event, bool approve) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: Text(
-          approve ? 'Approve event?' : 'Deny event?',
-          style: const TextStyle(color: _kTextDark),
+  /// Category / link lookups are nice-to-have: never fail the tab over them.
+  static Future<T> _optional<T>(Future<T> Function() load, T fallback) async {
+    try {
+      return await load();
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  List<CategoryModel> _categoriesFor(int eventId) {
+    return [
+      for (final id in (_eventCategories[eventId] ?? const <int>[]))
+        for (final c in _categories)
+          if (c.id == id) c,
+    ];
+  }
+
+  /// Opens the same event page users see on the home screen, with the buy
+  /// bar replaced by Approve / Deny. The choice still goes through the usual
+  /// confirmation dialog.
+  Future<void> _openEventDetail(EventModel event) async {
+    final action = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventDetailPage(
+          event: event,
+          organizer: _organizers[event.organizerId],
+          categories: _categoriesFor(event.id),
+          reviewBar: (barContext) => _reviewBar(barContext, event),
         ),
-        content: Text(
-          approve
-              ? '"${event.name}" will become visible to everyone.'
-              : '"${event.name}" will stay hidden from the public.',
-          style: const TextStyle(color: _kTextGrey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              approve ? 'Approve' : 'Deny',
-              style: TextStyle(
-                color: approve ? _kGreen : Colors.redAccent,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
       ),
     );
-    if (confirmed != true) return;
+    if (!mounted || action == null) return;
+    await _confirmReview(event, action == 'approve');
+  }
+
+  Widget _reviewBar(BuildContext barContext, EventModel event) {
+    final status = event.eventStatusId;
+    if (status != EventStatus.pending) {
+      final approved = status == EventStatus.approved;
+      final color = approved ? _kGreen : _kRed;
+      return Material(
+        elevation: 8,
+        shadowColor: color.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(30),
+        color: Colors.white,
+        child: Container(
+          height: 58,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                approved ? Icons.check_circle : Icons.cancel,
+                color: color,
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                approved
+                    ? 'Approved -- visible to everyone'
+                    : 'Denied -- hidden from the public',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      elevation: 8,
+      shadowColor: const Color(0x44000000),
+      borderRadius: BorderRadius.circular(30),
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(7),
+        child: Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(barContext, 'deny'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _kRed,
+                    side: const BorderSide(color: Color(0x55E53935)),
+                    shape: const StadiumBorder(),
+                  ),
+                  icon: const Icon(Icons.cancel_outlined, size: 18),
+                  label: const Text(
+                    'DENY',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 44,
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.pop(barContext, 'approve'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _kGreen,
+                    foregroundColor: Colors.white,
+                    shape: const StadiumBorder(),
+                  ),
+                  icon: const Icon(Icons.check_circle_outline, size: 18),
+                  label: const Text(
+                    'APPROVE',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmReview(EventModel event, bool approve) async {
+    // The event page / card may be stale: if another reviewer has decided it
+    // in the meantime, say so instead of letting this click overwrite it.
+    final latest = _events.firstWhere((e) => e.id == event.id, orElse: () => event);
+    if (latest.eventStatusId != EventStatus.pending) {
+      _snack(
+        'This event was already '
+        '${latest.eventStatusId == EventStatus.approved ? 'approved' : 'denied'}'
+        ' by another reviewer.',
+      );
+      return;
+    }
+
+    String? reason;
+    if (approve) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            'Approve event?',
+            style: TextStyle(color: _kTextDark),
+          ),
+          content: Text(
+            '"${event.name}" will become visible to everyone.',
+            style: const TextStyle(color: _kTextGrey),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                'Approve',
+                style: TextStyle(
+                  color: _kGreen,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    } else {
+      reason = await showDenyReasonDialog(
+        context,
+        title: 'Deny event?',
+        message: '"${event.name}" will stay hidden from the public. The '
+            'organizer will see your comment and must fix the event and '
+            'press Save to send it for review again.',
+      );
+      if (reason == null) return;
+    }
 
     try {
       await EventApiService.setEventStatus(
         eventId: event.id,
         eventStatusId: approve ? EventStatus.approved : EventStatus.denied,
+        reason: reason,
       );
       _snack(approve ? 'Event approved' : 'Event denied');
-      await _load();
+      await _load(silent: true);
+    } on ReviewConflictException catch (e) {
+      // Someone else got there first: show their decision, not ours.
+      _snack(e.message);
+      await _load(silent: true);
     } catch (e) {
       _snack('Failed: $e');
     }
@@ -283,7 +512,6 @@ class _EventApprovalsTabState extends State<EventApprovalsTab> {
   Widget _eventCard(EventModel event) {
     final isPending = event.eventStatusId == EventStatus.pending;
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -295,7 +523,14 @@ class _EventApprovalsTabState extends State<EventApprovalsTab> {
           ),
         ],
       ),
-      child: Column(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openEventDetail(event),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -413,7 +648,19 @@ class _EventApprovalsTabState extends State<EventApprovalsTab> {
                 ],
               ),
             ),
+          if (event.eventStatusId == EventStatus.denied &&
+              (event.denyReason ?? '').isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Reason: ${event.denyReason}',
+                style: const TextStyle(color: _kTextGrey, fontSize: 12.5),
+              ),
+            ),
         ],
+            ),
+          ),
+        ),
       ),
     );
   }

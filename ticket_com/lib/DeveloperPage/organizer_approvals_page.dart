@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:ticket_com/DeveloperPage/deny_reason_dialog.dart';
+import 'package:ticket_com/services/api_errors.dart';
 import 'package:ticket_com/services/event_api_service.dart' show EventStatus;
 import 'package:ticket_com/services/event_organizer_api_service.dart';
+import 'package:ticket_com/services/review_live_service.dart';
 import 'package:ticket_com/utils/category_colors.dart';
 
 const Color _kTextDark = Color(0xFF212121);
@@ -14,7 +19,11 @@ const Color _kAmber = Color(0xFFFB8C00);
 /// organization (events, team); denying leaves it inactive. Shown as one tab
 /// of `EmployeeDashboardPage`.
 class OrganizerApprovalsTab extends StatefulWidget {
-  const OrganizerApprovalsTab({super.key});
+  const OrganizerApprovalsTab({super.key, this.focusId});
+
+  /// Organization to highlight (from a notification). The list switches to
+  /// that organization's status so it is visible straight away.
+  final int? focusId;
 
   @override
   State<OrganizerApprovalsTab> createState() => _OrganizerApprovalsTabState();
@@ -25,31 +34,66 @@ class _OrganizerApprovalsTabState extends State<OrganizerApprovalsTab> {
   bool _loading = true;
   String? _error;
   int _filterStatusId = EventStatus.pending;
+  bool _focusHandled = false;
+
+  // Live updates: another reviewer (or an applicant) changed something, so
+  // this list refreshes by itself instead of waiting for a manual reload.
+  final ReviewLiveService _live = ReviewLiveService();
+  StreamSubscription<ReviewChange>? _liveSub;
+
+  // Only the newest load may write its result, so a slow response can never
+  // overwrite a fresher one when several live updates arrive back to back.
+  int _loadSeq = 0;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _liveSub = _live.changes.listen((change) {
+      if (change.isResync || change.isOrganization) _load(silent: true);
+    });
+    _live.connect();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  @override
+  void dispose() {
+    _liveSub?.cancel();
+    _live.dispose();
+    super.dispose();
+  }
+
+  /// [silent] reloads in the background (no spinner, errors ignored) -- used
+  /// for live updates and after an approve / deny.
+  Future<void> _load({bool silent = false}) async {
+    final seq = ++_loadSeq;
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final orgs = await EventOrganizerApiService.getAllOrganizers(
         includeUnapproved: true,
       );
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       // Newest first.
       orgs.sort((a, b) => b.id.compareTo(a.id));
       setState(() {
         _orgs = orgs;
         _loading = false;
+        final focusId = widget.focusId;
+        if (focusId != null && !_focusHandled) {
+          _focusHandled = true;
+          for (final o in orgs) {
+            if (o.id == focusId) _filterStatusId = o.statusId;
+          }
+        }
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
+      // A failed background refresh keeps showing what we already have.
+      if (silent && !_loading) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -69,50 +113,74 @@ class _OrganizerApprovalsTabState extends State<OrganizerApprovalsTab> {
   }
 
   Future<void> _confirmReview(EventOrganizer org, bool approve) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: Text(
-          approve ? 'Approve organization?' : 'Deny organization?',
-          style: const TextStyle(color: _kTextDark),
-        ),
-        content: Text(
-          approve
-              ? '"${org.name}" will become active: its owner can create '
-                  'events and build a team.'
-              : '"${org.name}" will stay inactive and its owner will be '
-                  'notified.',
-          style: const TextStyle(color: _kTextGrey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+    // The card may be stale: if another reviewer has decided it in the
+    // meantime, say so instead of letting this click overwrite it.
+    final latest = _orgs.firstWhere((o) => o.id == org.id, orElse: () => org);
+    if (!latest.isPending) {
+      _snack(
+        'This organization was already '
+        '${latest.isApproved ? 'approved' : 'denied'} by another reviewer.',
+      );
+      return;
+    }
+
+    String? reason;
+    if (approve) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            'Approve organization?',
+            style: TextStyle(color: _kTextDark),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              approve ? 'Approve' : 'Deny',
-              style: TextStyle(
-                color: approve ? _kGreen : Colors.redAccent,
-                fontWeight: FontWeight.w700,
+          content: Text(
+            '"${org.name}" will become active: its owner can create '
+            'events and build a team.',
+            style: const TextStyle(color: _kTextGrey),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                'Approve',
+                style: TextStyle(
+                  color: _kGreen,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    } else {
+      reason = await showDenyReasonDialog(
+        context,
+        title: 'Deny organization?',
+        message: '"${org.name}" will stay inactive. The owner will see your '
+            'comment and must fix the organization and press Save to send '
+            'it for review again.',
+      );
+      if (reason == null) return;
+    }
 
     try {
       if (approve) {
         await EventOrganizerApiService.approveOrganizer(org.id);
       } else {
-        await EventOrganizerApiService.denyOrganizer(org.id);
+        await EventOrganizerApiService.denyOrganizer(org.id, reason: reason!);
       }
       _snack(approve ? 'Organization approved' : 'Organization denied');
-      await _load();
+      await _load(silent: true);
+    } on ReviewConflictException catch (e) {
+      // Someone else got there first: show their decision, not ours.
+      _snack(e.message);
+      await _load(silent: true);
     } catch (e) {
       _snack('Failed: $e');
     }
@@ -276,11 +344,13 @@ class _OrganizerApprovalsTabState extends State<OrganizerApprovalsTab> {
       _ => ('Pending', _kAmber),
     };
     final desc = org.description ?? '';
+    final focused = widget.focusId == org.id;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        border: focused ? Border.all(color: kAccent, width: 2) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -357,14 +427,22 @@ class _OrganizerApprovalsTabState extends State<OrganizerApprovalsTab> {
               style: const TextStyle(color: _kTextGrey, fontSize: 12.5),
             ),
           ],
-          if (!org.isApproved) ...[
+          if (org.isDenied && (org.denyReason ?? '').isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Reason: ${org.denyReason}',
+              style: const TextStyle(color: _kTextGrey, fontSize: 12.5),
+            ),
+          ],
+          // Only a pending organization can be decided. A denied one goes
+          // back to pending when its owner edits and saves it again.
+          if (org.isPending) ...[
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed:
-                        org.isDenied ? null : () => _confirmReview(org, false),
+                    onPressed: () => _confirmReview(org, false),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.redAccent,
                     ),
